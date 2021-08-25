@@ -1,3 +1,5 @@
+from typing import List
+
 from rdkit import Chem
 from rdkit.Chem import QED, rdMolDescriptors, Crippen
 
@@ -129,7 +131,7 @@ def calc_sas(mol: Chem.rdchem.Mol) -> float:
     # This form generates better results when 2 or more macrocycles are present
 
     if nMacrocycles > 0:
-    macrocyclePenalty = math.log10(2)
+        macrocyclePenalty = math.log10(2)
 
     score2 = 0. - sizePenalty - stereoPenalty - spiroPenalty - bridgePenalty - macrocyclePenalty
 
@@ -156,3 +158,8 @@ def calc_sas(mol: Chem.rdchem.Mol) -> float:
         sascore = 1.0
 
     return sascore
+
+def calc_valid_mols(mols: List[Chem.rdchem.Mol]) -> int:
+    valid_mols = [mol for mol in mols if mol is not None]
+
+    return len(valid_mols) / len(mols)
