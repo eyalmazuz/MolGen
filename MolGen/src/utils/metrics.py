@@ -1,3 +1,5 @@
+import math
+import pickle
 from typing import List
 
 from rdkit import Chem
@@ -25,7 +27,7 @@ def calc_novelty(train_set_mols: List[str], gen_mols: List[str]) -> float:
         The novelty score of the generated set.
         novlty score ranges between 0 and 1.
     """ 
-    new_molecuels = set(gen_mols) - set(train_set_mols)
+    new_molecules = set(gen_mols) - set(train_set_mols)
 
     return len(new_molecules) / len(gen_mols)
 
@@ -82,6 +84,10 @@ def calc_qed(mol: Chem.rdchem.Mol) -> float:
 
     return qed
 
+def numBridgeheadsAndSpiro(mol, ri=None):
+    nSpiro = rdMolDescriptors.CalcNumSpiroAtoms(mol)
+    nBridgehead = rdMolDescriptors.CalcNumBridgeheadAtoms(mol)
+    return nBridgehead, nSpiro
 
 def calc_sas(mol: Chem.rdchem.Mol) -> float:
     """
@@ -99,7 +105,15 @@ def calc_sas(mol: Chem.rdchem.Mol) -> float:
     Raises
 
     """ 
-    fp = rdMolDescriptors.GetMorganFingerprint(m, 2)  # <- 2 is the *radius* of the circular fingerprint
+    with open('../data/pickles/SA_score.pkl', 'rb') as f:
+        data = pickle.load(f)
+    outDict = {}
+    for i in data:
+        for j in range(1, len(i)):
+            outDict[i[j]] = float(i[0])
+    _fscores = outDict
+
+    fp = rdMolDescriptors.GetMorganFingerprint(mol, 2)  # <- 2 is the *radius* of the circular fingerprint
     fps = fp.GetNonzeroElements()
     score1 = 0.
     nf = 0
@@ -110,10 +124,10 @@ def calc_sas(mol: Chem.rdchem.Mol) -> float:
     score1 /= nf
 
     # features score
-    nAtoms = m.GetNumAtoms()
-    nChiralCenters = len(Chem.FindMolChiralCenters(m, includeUnassigned=True))
-    ri = m.GetRingInfo()
-    nBridgeheads, nSpiro = numBridgeheadsAndSpiro(m, ri)
+    nAtoms = mol.GetNumAtoms()
+    nChiralCenters = len(Chem.FindMolChiralCenters(mol, includeUnassigned=True))
+    ri = mol.GetRingInfo()
+    nBridgeheads, nSpiro = numBridgeheadsAndSpiro(mol, ri)
     nMacrocycles = 0
     for x in ri.AtomRings():
         if len(x) > 8:

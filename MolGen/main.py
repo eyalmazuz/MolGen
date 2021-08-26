@@ -41,7 +41,7 @@ def main():
     generated_molecules = generate_smiles(model, dataset, temprature=1)
     
 
-    get_stats(dataset.molecules, generated_molecules)
+    get_stats(dataset.molecules, generated_molecules, save_path='../data/results')
 
     
 if __name__ == "__main__":
