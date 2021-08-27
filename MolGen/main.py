@@ -24,7 +24,7 @@ def main():
     padding_idx = dataset.token2id['[PAD]']
 
     embedding_dim = 256
-    hidden_size = 256
+    hidden_size = 64
     num_layers = 2
 
     model = RecurrentModel(num_embeddings=num_embeddings,
