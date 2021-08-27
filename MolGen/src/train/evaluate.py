@@ -139,6 +139,20 @@ def get_stats(train_set, generated_smiles, save_path=None):
     with open(f'{generated_path}/stats.json', 'w') as f:
         json.dump(stats, f)
 
+def gen_till_train(model, dataset):
+    count = 0
+    not_train = True
+    while not_train:
+        smiles_set = generate_smiles(model, dataset)
+        for smiles in smiles_set:
+            if smiles not in dataset.molecules:
+                count += 1
+            else:
+                not_train = False
+                break
+        print(count)
+    return count
+
 def main():
     pass
 

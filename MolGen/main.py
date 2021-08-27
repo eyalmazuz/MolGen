@@ -8,7 +8,7 @@ import torch
 from src.datasets.dataset import CharSmilesDataset
 from src.models.recurrent import RecurrentModel
 from src.train.train import Trainer
-from src.train.evaluate import generate_smiles, get_stats
+from src.train.evaluate import generate_smiles, get_stats, gen_till_train
 
 RDLogger.DisableLog('rdApp.*')
 
@@ -38,11 +38,13 @@ def main():
 
     trainer = Trainer(dataset, model, optim, criterion)
     trainer.train(3, 1000, device)
-    generated_molecules = generate_smiles(model, dataset, temprature=1)
     
-
+    generated_molecules = generate_smiles(model, dataset, temprature=1)
     get_stats(dataset.molecules, generated_molecules, save_path='../data/results')
 
+    count = gen_till_train(model, dataset)
+    print(f'Took {count} Generations')
+    
     
 if __name__ == "__main__":
     main()
