@@ -18,15 +18,16 @@ class Trainer():
 
         for epoch in range(epochs):
 
-            for batch, (x, y) in enumerate(dataloader):
+            for batch, encodings in enumerate(dataloader):
                 self.optim.zero_grad()
             
-                x = x.to(device)
-                y = y.to(device)
-
-                y_pred = self.model(x)
-
-                loss = self.criterion(y_pred.transpose(1, 2), y)
+                input_ids = encodings['input_ids'].to(device)
+                attention_mask = encodings['attention_mask'].to(device)
+                labels = encodings['labels'].to(device)
+                
+                loss, logits = self.model(input_ids, attention_mask=attention_mask, labels=labels)
+                #logits = logits[..., :-1, :]
+                #loss = self.criterion(logits.transpose(1, 2), labels)
 
 
                 loss.backward()
@@ -36,4 +37,3 @@ class Trainer():
                     #print(self.dataset.decode(x[0].cpu().numpy()), self.dataset.decode(y[0].cpu().numpy()))
                     #print(y.size(), y_pred.size(), y_pred.transpose(1, 2).size())
                     print(f'epoch: {epoch + 1}, batch: {batch + 1}, loss: {loss.item()}')
-        

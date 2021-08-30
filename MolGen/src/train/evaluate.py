@@ -18,13 +18,13 @@ from tqdm import trange, tqdm
 from src.utils.metrics import *
 from src.utils.utils import convert_to_mols, filter_invalid_mols, generate_and_save_plot
 
-def generate_smiles(model, dataset, temprature=1, size=1000) -> List[Chem.rdchem.Mol]:
+def generate_smiles(model, tokenizer, temprature=1, size=1000) -> List[Chem.rdchem.Mol]:
     
     model.to('cpu')
     model.eval()
     gen_smiles = []
     for i in trange(size):
-        tokens = [dataset.token2id['[BOS]']]
+        tokens = [tokenizer.bos_token_id]
         next_token = ''
         while next_token != dataset.token2id['[EOS]']  and len(tokens) < 36:
             x = torch.tensor([tokens])
@@ -35,7 +35,7 @@ def generate_smiles(model, dataset, temprature=1, size=1000) -> List[Chem.rdchem
             next_token = np.random.choice(len(last_word_logits), p=p)
             tokens.append(next_token)
 
-        smiles = dataset.decode(tokens[1:-1])
+        smiles = tokenizer.decode(tokens[1:-1])
         gen_smiles.append(smiles)
 
     return gen_smiles

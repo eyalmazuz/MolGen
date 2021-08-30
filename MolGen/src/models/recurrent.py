@@ -30,13 +30,21 @@ class RecurrentModel(nn.Module):
         self.fc = nn.Linear(hidden_size, num_embeddings)
 
 
-    def forward(self, x, state=None):
+    def forward(self, inputs, attention_mask=None, state=None, labels=None):
         
-        embeddings = self.embedding(x)
+        embeddings = self.embedding(inputs)
         output, _ = self.lstm(embeddings)
         logits = self.fc(output)
 
-        return logits
+        if labels is not None:
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_labels = labels[..., 1:].contiguous()
+            loss_fct = torch.nn.CrossEntropyLoss()
+            loss = loss_fct(shift_logits.transpose(1, 2), shift_labels)
+            return loss, logits
+
+        else:
+            return logits
 
     def init_state(self, sequence_length):
         return (torch.zeros(self.num_layers, sequence_length, self.hidden_size),

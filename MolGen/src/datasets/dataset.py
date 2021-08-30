@@ -12,23 +12,16 @@ from tqdm import tqdm
 
 RDLogger.DisableLog('rdApp.*')
 
-class CharSmilesDataset(Dataset):
+class SmilesDataset(Dataset):
 
-    def __init__(self, data_path: str, tokenizer_path: str=None) -> None:
+    def __init__(self, data_path: str, tokenizer) -> None:
 
-        #self.molecules = SmilesMolSupplier(data_path)
         with open(data_path, 'r') as f:
             self.molecules = f.readlines()
             self.molecules = [smiles.strip() for smiles in self.molecules]
-
-        print(self.molecules[:5])
-        if tokenizer_path and os.path.exists(tokenizer_path):
-            with open(tokenizer_path, 'r') as f:
-                self.id2token = json.load(f)
-                self.id2token = {int(k): v for k, v in self.id2token.items()}
-        else:
-            self.id2token = self.build_tokenizer(tokenizer_path)
-        self.token2id = {v: k for k, v in self.id2token.items()}
+        
+        self.tokenizer = tokenizer
+        
         self.max_len = self.get_max_smiles_len()
 
     def __len__(self) -> int:
@@ -37,10 +30,12 @@ class CharSmilesDataset(Dataset):
     def __getitem__(self, idx):
 
         smiles = self.molecules[idx]
-        #mol_smiles = Chem.MolToSmiles(mol)
-        tokens = self.encode(smiles)
-
-        return torch.tensor(tokens[:-1]), torch.tensor(tokens[1:])
+        smiles = '[BOS]' + smiles + '[EOS]'
+        encodings = self.tokenizer(smiles, padding=True, max_length=self.max_len)
+        encodings['labels'] = encodings['input_ids']
+        #encodings['input_ids'] = encodings['input_ids']
+        encodings = {k: torch.tensor(v) for k, v in encodings.items()}
+        return encodings
     
     def get_max_smiles_len(self, ) -> int:
         max_len = 0
@@ -48,66 +43,6 @@ class CharSmilesDataset(Dataset):
             if len(smiles) > max_len:
                 max_len = len(smiles)
         return max_len + 2
-        #return max_len
-
-    def build_tokenizer(self, tokenizer_path: str) -> Dict[int, str]:
-        print('Building tokenzier')
-
-        tokens = set()
-        for smiles in tqdm(self.molecules):
-            if smiles:
-                tokens |= set(smiles)
-        print(tokens)
-
-        id2token = {}
-        for i, token in enumerate(tokens):
-            id2token[i] = token
-
-        len_tokens = len(id2token)
-
-        id2token[len_tokens + 0] = '[PAD]'
-        id2token[len_tokens + 1] = '[BOS]'
-        id2token[len_tokens + 2] = '[EOS]'
-        
-        print('Saving tokenizer')
-        if tokenizer_path:
-            with open(tokenizer_path, 'w') as f:
-                json.dump(id2token, f)
-
-        return id2token
-
-    def encode(self, smiles: str) -> List[int]:
-        encodings = []
-        for char in smiles:
-            encodings.append(self.token2id[char])
-        
-        encodings = [self.token2id['[BOS]']] + encodings + [self.token2id['[EOS]']]
-
-        if len(encodings) < self.max_len:
-            encodings += [self.token2id['[PAD]']] * (self.max_len - len(encodings))
-        return encodings
-        #return [self.token2id['[BOS]']] + encodings + [self.token2id['[EOS]']]
-    
-    def decode(self, encodings: List[int]) -> str:
-        chars = []
-        for id_ in encodings:
-            chars.append(self.id2token[id_])
-
-        return ''.join(chars)
-
-class BPESmilesDataset(Dataset):
-
-    def __init__(self, encodings) -> None:
-        self.encodings = encodings
-
-    def __len__(self) -> int:
-        return len(self.encodings['input_ids'])
-    
-    def __getitem__(self, idx):
-        item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
-        item['labels'] = torch.tensor(self.encodings['input_ids'])
-        return item
-
 
 def main():
 
