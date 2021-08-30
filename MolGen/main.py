@@ -44,11 +44,15 @@ def main():
     trainer = Trainer(dataset, model, optim, criterion)
     trainer.train(3, 1024, device)
 
-    #generated_molecules = generate_smiles(model, tokenizer, temprature=1)
-    #get_stats(dataset.molecules, generated_molecules, save_path='../data/results')
+    generated_molecules = generate_smiles(model, tokenizer, temprature=1)
+    print(generated_molecules)
+    get_stats(dataset.molecules, generated_molecules, save_path='../data/results')
 
-    # count = gen_till_train(model, dataset)
-    # print(f'Took {count} Generations')
+    count = gen_till_train(model, dataset, type='mol')
+    print(f'Took {count} Generations for generate a mol from the dataset.')
+    
+    count = gen_till_train(model, dataset, type='scaffold')
+    print(f'Took {count} Generations for generate a scaffold from the dataset.')
     
     
 if __name__ == "__main__":

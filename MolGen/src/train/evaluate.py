@@ -26,7 +26,7 @@ def generate_smiles(model, tokenizer, temprature=1, size=1000) -> List[Chem.rdch
     for i in trange(size):
         tokens = [tokenizer.bos_token_id]
         next_token = ''
-        while next_token != dataset.token2id['[EOS]']  and len(tokens) < 36:
+        while next_token != tokenizer.eos_token_id  and len(tokens) < 36:
             x = torch.tensor([tokens])
             y_pred = model(x)
 
@@ -139,7 +139,7 @@ def get_stats(train_set, generated_smiles, save_path=None):
     with open(f'{generated_path}/stats.json', 'w') as f:
         json.dump(stats, f)
 
-def gen_till_train(model, dataset):
+def gen_till_train(model, dataset, type='mol'):
     count = 0
     not_train = True
     while not_train:
