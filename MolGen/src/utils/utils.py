@@ -1,23 +1,20 @@
 import os
-from typing import List
+from typing import List, Set
 
 import matplotlib.pyplot as plt
 import pandas as pd
 from rdkit import Chem
+from rdkit.Chem.Scaffolds import MurckoScaffold
 import seaborn as sns
 from tqdm import tqdm
 
-def convert_smiles_to_csv(smiles):
-    pass
-
-
-def convert_to_mols(smiles_list: List[str]) -> List[Chem.rdchem.Mol]:
+def convert_to_molecules(smiles_list: List[str]) -> List[Chem.rdchem.Mol]:
     mols = [Chem.MolFromSmiles(smiles) for smiles in tqdm(smiles_list)]
 
     return mols
 
 
-def filter_invalid_mols(mols: List[Chem.rdchem.Mol]) -> List[Chem.rdchem.Mol]:
+def filter_invalid_molecules(mols: List[Chem.rdchem.Mol]) -> List[Chem.rdchem.Mol]:
     mols = list(filter(lambda x: x != None, mols))
 
     return mols
@@ -40,3 +37,15 @@ def generate_and_save_plot(values,
     plt.clf()
 
 
+def get_molecule_scaffold(mol: Chem.rdchem.Mol) -> str:
+    scaffold = MurckoScaffold.MurckoScaffoldSmiles(mol=mol)
+
+    return scaffold
+
+def convert_to_scaffolds(mols: List[Chem.rdchem.Mol]) -> Set[str]:
+    scaffolds = set()
+    for mol in tqdm(mols):
+        scaffold = get_molecule_scaffold(mol)
+        scaffolds.add(scaffold)
+
+    return scaffolds

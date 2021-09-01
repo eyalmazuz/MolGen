@@ -45,13 +45,12 @@ def main():
     trainer.train(3, 1024, device)
 
     generated_molecules = generate_smiles(model, tokenizer, temprature=1)
-    print(generated_molecules)
     get_stats(dataset.molecules, generated_molecules, save_path='../data/results')
 
-    count = gen_till_train(model, dataset, type='mol')
+    count = gen_till_train(model, dataset, compare_type='mol')
     print(f'Took {count} Generations for generate a mol from the dataset.')
     
-    count = gen_till_train(model, dataset, type='scaffold')
+    count = gen_till_train(model, dataset, compare_type='scaffold')
     print(f'Took {count} Generations for generate a scaffold from the dataset.')
     
     

@@ -16,7 +16,7 @@ import torch
 from tqdm import trange, tqdm
 
 from src.utils.metrics import *
-from src.utils.utils import convert_to_mols, filter_invalid_mols, generate_and_save_plot
+from src.utils.utils import convert_to_molecules, filter_invalid_molecules, generate_and_save_plot, convert_to_scaffolds, get_molecule_scaffold
 
 def generate_smiles(model, tokenizer, temprature=1, size=1000) -> List[Chem.rdchem.Mol]:
     
@@ -61,12 +61,12 @@ def calc_set_stat(mol_set: List[Chem.rdchem.Mol],
 
 def get_stats(train_set, generated_smiles, save_path=None):
     print('Converting smiles to mols')
-    train_mol_set = convert_to_mols(train_set)
-    generated_molecules = convert_to_mols(generated_smiles)
+    train_mol_set = convert_to_molecules(train_set)
+    generated_molecules = convert_to_molecules(generated_smiles)
 
     print('Filtering invlaid mols')
-    train_mol_set = filter_invalid_mols(train_mol_set)
-    generated_molecules = filter_invalid_mols(generated_molecules)
+    train_mol_set = filter_invalid_molecules(train_mol_set)
+    generated_molecules = filter_invalid_molecules(generated_molecules)
 
     cur_date = str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
     # Calculating statics on the train-set.
@@ -132,20 +132,32 @@ def get_stats(train_set, generated_smiles, save_path=None):
     stats['novelty'] = generated_novelty_score
 
     print('Calculating percentage of valid mols')
-    generated_set_valid_count = calc_valid_mols(generated_molecules)
+    generated_set_valid_count = calc_valid_molecules(generated_molecules)
     stats['validity'] = generated_set_valid_count
 
     print(stats)
     with open(f'{generated_path}/stats.json', 'w') as f:
         json.dump(stats, f)
 
-def gen_till_train(model, dataset, type='mol'):
+def gen_till_train(model, dataset, compare_type='mol'):
     count = 0
+    if compare_type == 'mol':
+        train_set = dataset.molecules
+    else:
+        print('Generating scaffolds')
+        molecules = convert_to_molecules(dataset.molecules)
+        train_set = convert_to_scaffolds(molecules)
     not_train = True
     while not_train:
-        smiles_set = generate_smiles(model, dataset)
+        smiles_set = generate_smiles(model, dataset.tokenizer)
         for smiles in smiles_set:
-            if smiles not in dataset.molecules:
+            if compare_type == 'mol':
+                smiles = smiles
+            else:
+                smiles = Chem.MolFromSmiles(smiles)
+                if smiles:
+                    smiles = get_molecule_scaffold(smiles)
+            if not smiles or smiles not in train_set:
                 count += 1
             else:
                 not_train = False
