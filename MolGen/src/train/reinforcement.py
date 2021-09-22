@@ -44,9 +44,9 @@ def policy_gradients(model, tokenizer, reward_fn, batch_size=16, epochs=100, ste
             log_preds = torch.nn.functional.log_softmax(y_hat[0], dim=1)
 
             action_values = log_preds.gather(dim=1, index=torch.tensor(tokens[1:], dtype=torch.long).view(-1, 1)).view(-1, 1)
-            expected_reward = torch.sum(action_values * discounted_returns.view(-1, 1))
+            expected_reward = -torch.sum(action_values * discounted_returns.view(-1, 1))
             batch_reward = batch_reward + reward
-            loss = loss - expected_reward
+            loss = loss + expected_reward
 
         loss /= batch_size
         batch_reward /= batch_size

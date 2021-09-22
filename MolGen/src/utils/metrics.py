@@ -173,7 +173,7 @@ def calc_sas(mol: Chem.rdchem.Mol) -> float:
 
     return sascore
 
-def calc_valid_molecules(molecules: List[Chem.rdchem.Mol]) -> int:
-    valid_molecules = [mol for mol in molecules if mol is not None]
+def calc_valid_molecules(molecules: List[str]) -> int:
+    valid_molecules = [mol for mol in molecules if Chem.MolFromSmiles(mol) is not None]
 
     return len(valid_molecules) / len(molecules)

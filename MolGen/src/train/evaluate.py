@@ -135,7 +135,7 @@ def get_stats(train_set, generated_smiles, save_path=None):
     stats['novelty'] = generated_novelty_score
 
     print('Calculating percentage of valid mols')
-    generated_set_valid_count = calc_valid_molecules(generated_molecules)
+    generated_set_valid_count = calc_valid_molecules(generated_smiles)
     stats['validity'] = generated_set_valid_count
 
     print(stats)

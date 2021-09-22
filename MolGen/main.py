@@ -48,8 +48,8 @@ def main():
     # generated_molecules = generate_smiles(model, tokenizer, temprature=1)
     # get_stats(dataset.molecules, generated_molecules, save_path='../data/results')
 
-    policy_gradients(model, tokenizer, reward_fn=calc_qed, batch_size=20, epochs=5, discount_factor=0.97)
-    generated_molecules = generate_smiles(model, tokenizer, temprature=1, size=10000)
+    policy_gradients(model, tokenizer, reward_fn=calc_qed, batch_size=100, epochs=25, discount_factor=0.99)
+    generated_molecules = generate_smiles(model, tokenizer, temprature=1, size=1000)
     get_stats(dataset.molecules, generated_molecules, save_path='./data/results')
 
     #count = gen_till_train(model, dataset)

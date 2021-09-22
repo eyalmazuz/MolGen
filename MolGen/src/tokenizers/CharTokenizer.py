@@ -2,10 +2,12 @@ import json
 import os
 from typing import Dict, List
 
+from tqdm import tqdm
+
 
 class CharTokenizer():
     
-    def __init__(self, tokenizer_path: str=None):
+    def __init__(self, tokenizer_path: str=None, data_path=None):
 
         if tokenizer_path and os.path.exists(tokenizer_path):
             with open(tokenizer_path, 'r') as f:
