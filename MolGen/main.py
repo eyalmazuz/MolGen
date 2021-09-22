@@ -6,37 +6,38 @@ from rdkit import RDLogger
 import torch
 
 from src.datasets.dataset import SmilesDataset
-from src.train.evaluate import generate_smiles, get_stats, gen_till_train
-from src.models.recurrent import RecurrentModel
+from src.models.model_builder import get_model, ModelOpt
 from src.tokenizers.CharTokenizer import CharTokenizer
 from src.train.train import Trainer
+from src.train.evaluate import generate_smiles, get_stats, gen_till_train
+from src.train.reinforcement import policy_gradients
+from src.utils.metrics import calc_qed, calc_sas
 
 RDLogger.DisableLog('rdApp.*')
-
+torch.autograd.set_detect_anomaly(True)
 def main():
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    tokenizer = CharTokenizer('../data/tokenizers/gdb13CharTokenizer.json')
-    dataset = SmilesDataset('../data/gdb/gdb13/gdb13.rand1M.smi',
+    tokenizer = CharTokenizer('./data/tokenizers/gdb13CharTokenizer.json')
+    dataset = SmilesDataset('./data/gdb/gdb13/gdb13.rand1M.smi',
                             tokenizer)
 
-    vocab_size = tokenizer.vocab_size
-    print(f'{vocab_size=}')
+    config = {
+        'n_emb': 256,
+        'd_model': 64,
+        'n_layers': 1,
+        'num_heads': 8,
+        'vocab_size': tokenizer.vocab_size,
+        'n_positions': 512,
+        'proj_size': 512,
+        'attn_dropout_rate': 0.1,
+        'proj_dropout_rate': 0.1,
+        'resid_dropout_rate': 0.1,
+        'padding_idx': tokenizer.pad_token_id
 
+    }
 
-    smiles = 'CC1C(C)C(C(CC#N)C=C)C1C'
-    print(f'{dataset.max_len=}')
-    padding_idx = tokenizer.pad_token_id
-
-    embedding_dim = 256
-    hidden_size = 64
-    num_layers = 2
-
-    model = RecurrentModel(num_embeddings=vocab_size,
-                           embedding_dim=embedding_dim,
-                           hidden_size=hidden_size,
-                           num_layers=num_layers,
-                           padding_idx=padding_idx).to(device)
+    model = get_model(ModelOpt.GPT, **config).to(device)
 
     optim = torch.optim.Adam(model.parameters())
     criterion = torch.nn.CrossEntropyLoss()
@@ -44,15 +45,15 @@ def main():
     trainer = Trainer(dataset, model, optim, criterion)
     trainer.train(3, 1024, device)
 
-    generated_molecules = generate_smiles(model, tokenizer, temprature=1)
-    get_stats(dataset.molecules, generated_molecules, save_path='../data/results')
+    # generated_molecules = generate_smiles(model, tokenizer, temprature=1)
+    # get_stats(dataset.molecules, generated_molecules, save_path='../data/results')
 
-    count = gen_till_train(model, dataset, compare_type='mol')
-    print(f'Took {count} Generations for generate a mol from the dataset.')
-    
-    count = gen_till_train(model, dataset, compare_type='scaffold')
-    print(f'Took {count} Generations for generate a scaffold from the dataset.')
-    
+    policy_gradients(model, tokenizer, reward_fn=calc_qed, batch_size=20, epochs=5, discount_factor=0.97)
+    generated_molecules = generate_smiles(model, tokenizer, temprature=1, size=10000)
+    get_stats(dataset.molecules, generated_molecules, save_path='./data/results')
+
+    #count = gen_till_train(model, dataset)
+    #print(f'Took {count} Generations for generate a mol from the test set.')
     
 if __name__ == "__main__":
     main()

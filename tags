@@ -1,0 +1,59 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+CharTokenizer	MolGen/src/tokenizers/CharTokenizer.py	/^class CharTokenizer():$/;"	c
+RecurrentModel	MolGen/src/models/recurrent.py	/^class RecurrentModel(nn.Module):$/;"	c
+SmilesDataset	MolGen/src/datasets/dataset.py	/^class SmilesDataset(Dataset):$/;"	c
+Trainer	MolGen/src/train/train.py	/^class Trainer():$/;"	c
+__call__	MolGen/src/tokenizers/CharTokenizer.py	/^    def __call__(self, smiles, padding=False, max_length=None):$/;"	m	class:CharTokenizer	file:
+__getitem__	MolGen/src/datasets/dataset.py	/^    def __getitem__(self, idx):$/;"	m	class:SmilesDataset	file:
+__init__	MolGen/src/datasets/dataset.py	/^    def __init__(self, data_path: str, tokenizer) -> None:$/;"	m	class:SmilesDataset
+__init__	MolGen/src/models/recurrent.py	/^    def __init__(self,$/;"	m	class:RecurrentModel
+__init__	MolGen/src/tokenizers/CharTokenizer.py	/^    def __init__(self, tokenizer_path: str=None):$/;"	m	class:CharTokenizer
+__init__	MolGen/src/train/train.py	/^    def __init__(self, dataset, model, optim, criterion):$/;"	m	class:Trainer
+__len__	MolGen/src/datasets/dataset.py	/^    def __len__(self) -> int:$/;"	m	class:SmilesDataset	file:
+bos_token	MolGen/src/tokenizers/CharTokenizer.py	/^    def bos_token(self):$/;"	m	class:CharTokenizer
+bos_token_id	MolGen/src/tokenizers/CharTokenizer.py	/^    def bos_token_id(self):$/;"	m	class:CharTokenizer
+build_tokenizer	MolGen/src/tokenizers/CharTokenizer.py	/^    def build_tokenizer(self, tokenizer_path: str, data_path:str) -> Dict[int, str]:$/;"	m	class:CharTokenizer
+calc_diversity	MolGen/src/utils/metrics.py	/^def calc_diversity(gen_molecules: List[str]) -> float:$/;"	f
+calc_logp	MolGen/src/utils/metrics.py	/^def calc_logp(mol: Chem.rdchem.Mol) -> float:$/;"	f
+calc_novelty	MolGen/src/utils/metrics.py	/^def calc_novelty(train_set_molecules: List[str], gen_molecules: List[str]) -> float:$/;"	f
+calc_qed	MolGen/src/utils/metrics.py	/^def calc_qed(mol: Chem.rdchem.Mol) -> float:$/;"	f
+calc_sas	MolGen/src/utils/metrics.py	/^def calc_sas(mol: Chem.rdchem.Mol) -> float:$/;"	f
+calc_set_stat	MolGen/src/train/evaluate.py	/^def calc_set_stat(mol_set: List[Chem.rdchem.Mol],$/;"	f
+calc_valid_molecules	MolGen/src/utils/metrics.py	/^def calc_valid_molecules(molecules: List[Chem.rdchem.Mol]) -> int:$/;"	f
+convert_ids_to_tokens	MolGen/src/tokenizers/CharTokenizer.py	/^    def convert_ids_to_tokens(self, encodings: List[int]) -> List[str]:$/;"	m	class:CharTokenizer
+convert_to_molecules	MolGen/src/utils/utils.py	/^def convert_to_molecules(smiles_list: List[str]) -> List[Chem.rdchem.Mol]:$/;"	f
+convert_to_scaffolds	MolGen/src/utils/utils.py	/^def convert_to_scaffolds(mols: List[Chem.rdchem.Mol]) -> Set[str]:$/;"	f
+convert_tokens_to_ids	MolGen/src/tokenizers/CharTokenizer.py	/^    def convert_tokens_to_ids(self, tokens: List[str]) -> List[int]:$/;"	m	class:CharTokenizer
+convert_tokens_to_string	MolGen/src/tokenizers/CharTokenizer.py	/^    def convert_tokens_to_string(self, tokens: List[str]) -> str:$/;"	m	class:CharTokenizer
+decode	MolGen/src/tokenizers/CharTokenizer.py	/^    def decode(self, tokens: List[int]) -> str:$/;"	m	class:CharTokenizer
+eos_token	MolGen/src/tokenizers/CharTokenizer.py	/^    def eos_token(self):$/;"	m	class:CharTokenizer
+eos_token_id	MolGen/src/tokenizers/CharTokenizer.py	/^    def eos_token_id(self):$/;"	m	class:CharTokenizer
+filter_invalid_molecules	MolGen/src/utils/utils.py	/^def filter_invalid_molecules(mols: List[Chem.rdchem.Mol]) -> List[Chem.rdchem.Mol]:$/;"	f
+forward	MolGen/src/models/recurrent.py	/^    def forward(self, inputs, attention_mask=None, state=None, labels=None):$/;"	m	class:RecurrentModel
+gen_till_train	MolGen/src/train/evaluate.py	/^def gen_till_train(model, dataset):$/;"	f
+generate_and_save_plot	MolGen/src/utils/utils.py	/^def generate_and_save_plot(values,$/;"	f
+generate_smiles	MolGen/src/train/evaluate.py	/^def generate_smiles(model, tokenizer, temprature=1, size=1000) -> List[Chem.rdchem.Mol]:$/;"	f
+get_max_smiles_len	MolGen/src/datasets/dataset.py	/^    def get_max_smiles_len(self, ) -> int:$/;"	m	class:SmilesDataset
+get_molecule_scaffold	MolGen/src/utils/utils.py	/^def get_molecule_scaffold(mol: Chem.rdchem.Mol) -> str:$/;"	f
+get_stats	MolGen/src/train/evaluate.py	/^def get_stats(train_set, generated_smiles, save_path=None):$/;"	f
+init_state	MolGen/src/models/recurrent.py	/^    def init_state(self, sequence_length):$/;"	m	class:RecurrentModel
+load_tokenizer	MolGen/src/tokenizers/BPETokenizer.py	/^def load_tokenizer(tokenizer_path: str) -> PreTrainedTokenizer:$/;"	f
+main	MolGen/main.py	/^def main():$/;"	f
+main	MolGen/src/datasets/dataset.py	/^def main():$/;"	f
+main	MolGen/src/models/recurrent.py	/^def main():$/;"	f
+main	MolGen/src/tokenizers/BPETokenizer.py	/^def main():$/;"	f
+main	MolGen/src/tokenizers/CharTokenizer.py	/^def main():$/;"	f
+main	MolGen/src/train/evaluate.py	/^def main():$/;"	f
+numBridgeheadsAndSpiro	MolGen/src/utils/metrics.py	/^def numBridgeheadsAndSpiro(mol, ri=None):$/;"	f
+pad_token	MolGen/src/tokenizers/CharTokenizer.py	/^    def pad_token(self):$/;"	m	class:CharTokenizer
+pad_token_id	MolGen/src/tokenizers/CharTokenizer.py	/^    def pad_token_id(self):$/;"	m	class:CharTokenizer
+policy_gradients	MolGen/src/train/reinforcement.py	/^def policy_gradients(model, tokenizer, reward_fn, batch_size=16, epochs=100, discount_factor=0.99):$/;"	f
+tokenize	MolGen/src/tokenizers/CharTokenizer.py	/^    def tokenize(self, smiles, padding=None, max_length=None):$/;"	m	class:CharTokenizer
+train	MolGen/src/train/train.py	/^    def train(self, epochs, batch_size, device):$/;"	m	class:Trainer
+train_tokenizer	MolGen/src/tokenizers/BPETokenizer.py	/^def train_tokenizer(data_path: str, save_path: str) -> None:$/;"	f
+vocab_size	MolGen/src/tokenizers/CharTokenizer.py	/^    def vocab_size(self):$/;"	m	class:CharTokenizer

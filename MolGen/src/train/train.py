@@ -1,5 +1,5 @@
 import torch
-
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 class Trainer():
     
@@ -14,7 +14,8 @@ class Trainer():
         dataloader = torch.utils.data.DataLoader(self.dataset,
                                                  shuffle=True,
                                                  batch_size=batch_size,
-                                                 num_workers=8)
+                                                 num_workers=8,
+                                                 pin_memory=True)
 
         for epoch in range(epochs):
 
@@ -25,7 +26,7 @@ class Trainer():
                 attention_mask = encodings['attention_mask'].to(device)
                 labels = encodings['labels'].to(device)
                 
-                loss, logits = self.model(input_ids, attention_mask=attention_mask, labels=labels)
+                loss, logits, *args = self.model(input_ids, attention_mask=attention_mask, labels=labels)
                 #logits = logits[..., :-1, :]
                 #loss = self.criterion(logits.transpose(1, 2), labels)
 

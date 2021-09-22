@@ -18,7 +18,7 @@ from tqdm import trange, tqdm
 from src.utils.metrics import *
 from src.utils.utils import convert_to_molecules, filter_invalid_molecules, generate_and_save_plot, convert_to_scaffolds, get_molecule_scaffold
 
-def generate_smiles(model, tokenizer, temprature=1, size=1000) -> List[Chem.rdchem.Mol]:
+def generate_smiles(model, tokenizer, temprature=1, size=1000, max_len=100) -> List[Chem.rdchem.Mol]:
     
     model.to('cpu')
     model.eval()
@@ -26,9 +26,12 @@ def generate_smiles(model, tokenizer, temprature=1, size=1000) -> List[Chem.rdch
     for i in trange(size):
         tokens = [tokenizer.bos_token_id]
         next_token = ''
-        while next_token != tokenizer.eos_token_id  and len(tokens) < 36:
+        while next_token != tokenizer.eos_token_id  and len(tokens) < max_len:
             x = torch.tensor([tokens])
             y_pred = model(x)
+
+            if isinstance(y_pred, tuple):
+                y_pred = y_pred[0]
 
             last_word_logits = y_pred[0][-1]
             p = torch.nn.functional.softmax(last_word_logits / temprature, dim=0).detach().numpy()
@@ -70,25 +73,25 @@ def get_stats(train_set, generated_smiles, save_path=None):
 
     cur_date = str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
     # Calculating statics on the train-set.
-    print('Calculating Train set stats')
-    train_path = f'{save_path}/{cur_date}/train'
+    # print('Calculating Train set stats')
+    # train_path = f'{save_path}/{cur_date}/train'
 
-    print('Calculating diversity')
-    train_diversity_score = calc_diversity(train_set)
-    print(f'Train-set diversity score: {train_diversity_score * 100}')
+    # print('Calculating diversity')
+    # train_diversity_score = calc_diversity(train_set)
+    # print(f'Train-set diversity score: {train_diversity_score * 100}')
 
-    print('Calculating QED')
-    train_qed_values, train_qed_stats = calc_set_stat(train_mol_set, calc_qed, value_range=(0, 1), desc='QED')
-    
-    generate_and_save_plot(train_qed_values,
-                           sns.kdeplot,
-                           xlabel='QED',
-                           ylabel='Density',
-                           title='Train set QED density',
-                           save_path=train_path,
-                           name="train_qed_distribution",
-                           color='green',
-                           shade=True)
+    # print('Calculating QED')
+    # train_qed_values, train_qed_stats = calc_set_stat(train_mol_set, calc_qed, value_range=(0, 1), desc='QED')
+    # 
+    # generate_and_save_plot(train_qed_values,
+    #                        sns.kdeplot,
+    #                        xlabel='QED',
+    #                        ylabel='Density',
+    #                        title='Train set QED density',
+    #                        save_path=train_path,
+    #                        name="train_qed_distribution",
+    #                        color='green',
+    #                        shade=True)
 
 
     # Calculating statistics on the generated-set.
@@ -139,28 +142,18 @@ def get_stats(train_set, generated_smiles, save_path=None):
     with open(f'{generated_path}/stats.json', 'w') as f:
         json.dump(stats, f)
 
-def gen_till_train(model, dataset, compare_type='mol'):
+def gen_till_train(model, dataset):
     count = 0
-    if compare_type == 'mol':
-        train_set = dataset.molecules
-    else:
-        print('Generating scaffolds')
-        molecules = convert_to_molecules(dataset.molecules)
-        train_set = convert_to_scaffolds(molecules)
-    not_train = True
-    while not_train:
+    test_set = dataset.test_molecules
+    not_in_test = True
+    while not_in_test:
         smiles_set = generate_smiles(model, dataset.tokenizer)
         for smiles in smiles_set:
-            if compare_type == 'mol':
-                smiles = smiles
-            else:
-                smiles = Chem.MolFromSmiles(smiles)
-                if smiles:
-                    smiles = get_molecule_scaffold(smiles)
-            if not smiles or smiles not in train_set:
+            smiles = smiles
+            if not smiles or smiles not in test_set:
                 count += 1
             else:
-                not_train = False
+                not_in_test = False
                 break
         print(count)
     return count

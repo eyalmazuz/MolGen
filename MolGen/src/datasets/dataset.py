@@ -20,6 +20,8 @@ class SmilesDataset(Dataset):
             self.molecules = f.readlines()
             self.molecules = [smiles.strip() for smiles in self.molecules]
         
+        self.test_molecules = self.molecules[int(len(self.molecules) * 0.8):]
+        self.molecuels = self.molecules[:int(len(self.molecules) * 0.8)]
         self.tokenizer = tokenizer
         
         self.max_len = self.get_max_smiles_len()
