@@ -1,20 +1,40 @@
 import json
 import os
-from typing import Dict, List
+from typing import Dict, List, Union
 
 from tqdm import tqdm
 
 
 class CharTokenizer():
     
-    def __init__(self, tokenizer_path: str=None, data_path=None):
+    def __init__(self, tokenizer_path: str=None, data_path: str=None) -> None:
 
         if tokenizer_path and os.path.exists(tokenizer_path):
             with open(tokenizer_path, 'r') as f:
                 self.id2token = json.load(f)
                 self.id2token = {int(k): v for k, v in self.id2token.items()}
         else:
-            self.id2token = self.build_tokenizer(data_path, tokenizer_path)
+            self.id2token = {}
+            if os.path.isdir(data_path):
+                for path in os.listdir(data_path):
+                    full_path = os.path.join(data_path, path)
+                    tokenized_file = self.build_tokenizer(full_path)
+                    self.id2token = {**self.id2token, **tokenized_file}
+                    print(self.id2token)
+                len_tokens = len(self.id2token)
+
+                self.id2token[len_tokens + 0] = '[PAD]'
+                self.id2token[len_tokens + 1] = '[BOS]'
+                self.id2token[len_tokens + 2] = '[EOS]'
+                print(self.id2token)
+            else:
+                self.id2token = self.build_tokenizer(data_path)
+                
+            
+            print('Saving tokenizer')
+            if tokenizer_path:
+                with open(tokenizer_path, 'w') as f:
+                    json.dump(self.id2token, f)
 
         self.token2id = {v: k for k, v in self.id2token.items()}
        
@@ -48,7 +68,7 @@ class CharTokenizer():
         return self.token2id['[PAD]']
 
 
-    def build_tokenizer(self, tokenizer_path: str, data_path:str) -> Dict[int, str]:
+    def build_tokenizer(self, data_path:str) -> Dict[int, str]:
 
         with open(data_path, 'r') as f:
             self.molecules = f.readlines()
@@ -60,23 +80,11 @@ class CharTokenizer():
         for smiles in tqdm(self.molecules):
             if smiles:
                 tokens |= set(smiles)
-        print(tokens)
 
         id2token = {}
         for i, token in enumerate(tokens):
             id2token[i] = token
-
-        len_tokens = len(id2token)
-
-        id2token[len_tokens + 0] = '[PAD]'
-        id2token[len_tokens + 1] = '[BOS]'
-        id2token[len_tokens + 2] = '[EOS]'
         
-        print('Saving tokenizer')
-        if tokenizer_path:
-            with open(tokenizer_path, 'w') as f:
-                json.dump(id2token, f)
-
         return id2token
 
 
@@ -136,10 +144,10 @@ class CharTokenizer():
         return self.convert_tokens_to_string(self.convert_ids_to_tokens(tokens))
 
 def main():
-    tokenizer = CharTokenizer('../../../data/tokenizers/gdb13CharTokenizer.json')
+    tokenizer = CharTokenizer('./data/tokenizers/gdb13FullCharTokenizer.json', './data/gdb/gdb13/full')
     
     print(tokenizer.vocab_size)
-    smiles = '(CC1C(C)C(C(CC#N)C=C)C1)C'
+    smiles = '(CCO)'
     encodings = tokenizer(smiles, max_length=40)
     print(encodings)
     decoded = tokenizer.decode(encodings['input_ids'])

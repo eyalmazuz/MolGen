@@ -1,12 +1,13 @@
 import json
+import linecache
 import os
 from typing import List, Dict
 
 from rdkit import Chem
-from rdkit.Chem.rdmolfiles import SmilesMolSupplier#, MultithreadedSmilesMolSupplier 
 from rdkit import RDLogger
 
 import torch
+from torch.utils import data
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
@@ -14,48 +15,46 @@ RDLogger.DisableLog('rdApp.*')
 
 class SmilesDataset(Dataset):
 
-    def __init__(self, data_path: str, tokenizer) -> None:
+    def __init__(self, data_path: str, tokenizer, max_len: int=0) -> None:
 
+        self.max_len = max_len
+        self.len = 0
         with open(data_path, 'r') as f:
-            self.molecules = f.readlines()
-            self.molecules = [smiles.strip() for smiles in self.molecules]
+            for line in f:
+                self.len += 1
+
+        self.data_path = data_path        
+        # with open(data_path, 'r') as f:
+        #     self.molecules = f.readlines()
+        #     self.molecules = [smiles.strip() for smiles in self.molecules]
         
-        self.test_molecules = self.molecules[int(len(self.molecules) * 0.8):]
-        self.molecuels = self.molecules[:int(len(self.molecules) * 0.8)]
+        # self.test_molecules = self.molecules[int(len(self.molecules) * 0.8):]
+        # self.molecuels = self.molecules[:int(len(self.molecules) * 0.8)]
         self.tokenizer = tokenizer
         
-        self.max_len = self.get_max_smiles_len()
 
     def __len__(self) -> int:
-        return len(self.molecules)
+        return self.len
 
     def __getitem__(self, idx):
-
-        smiles = self.molecules[idx]
+        smiles = linecache.getline(self.data_path, idx + 1).strip()
         smiles = '[BOS]' + smiles + '[EOS]'
         encodings = self.tokenizer(smiles, padding=True, max_length=self.max_len)
         encodings['labels'] = encodings['input_ids']
         #encodings['input_ids'] = encodings['input_ids']
         encodings = {k: torch.tensor(v) for k, v in encodings.items()}
         return encodings
-    
-    def get_max_smiles_len(self, ) -> int:
-        max_len = 0
-        for smiles in tqdm(self.molecules):
-            if len(smiles) > max_len:
-                max_len = len(smiles)
-        return max_len + 2
 
 def main():
 
-    dataset = CharSmilesDataset('../../../data/gdb/gdb13/gdb13.rand1M.smi',
-                                 '../../../data/tokenizers/gdb13CharTokenizer.json')
+    dataset = SmilesDataset('./data/gdb/gdb13/full/1.smi',
+                                 './data/tokenizers/gdb13FullCharTokenizer.json')
 
-    smiles = 'Cc1ncc(C[n+]2csc(CCO)c2C)c(N)n1'
+    smiles = 'CCO'
     
-    encoding = dataset.encode(smiles)
+    encoding = dataset.tokenizer.encode(smiles)
     print(encoding)
-    rec_smiles = dataset.decode(encoding)
+    rec_smiles = dataset.tokenizer.decode(encoding)
     print(rec_smiles)
     print(rec_smiles == smiles)
 

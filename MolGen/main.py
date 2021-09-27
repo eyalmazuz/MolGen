@@ -11,16 +11,25 @@ from src.tokenizers.CharTokenizer import CharTokenizer
 from src.train.train import Trainer
 from src.train.evaluate import generate_smiles, get_stats, gen_till_train
 from src.train.reinforcement import policy_gradients
-from src.utils.metrics import calc_qed, calc_sas
+from src.utils.metrics import calc_qed
+from src.utils.utils import get_max_smiles_len
 
 RDLogger.DisableLog('rdApp.*')
 torch.autograd.set_detect_anomaly(True)
 def main():
 
+    data_path = './data/gdb/gdb13/gdb13.rand1M.smi'
+    tokenizer_path = './data/tokenizers/gdb13CharTokenizer.json'
+
+    max_len = get_max_smiles_len(data_path)
+    print(max_len)
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    tokenizer = CharTokenizer('./data/tokenizers/gdb13CharTokenizer.json')
-    dataset = SmilesDataset('./data/gdb/gdb13/gdb13.rand1M.smi',
-                            tokenizer)
+    tokenizer = CharTokenizer(tokenizer_path)
+
+    dataset = SmilesDataset(data_path,
+                            tokenizer,
+                            max_len=max_len)
 
     config = {
         'n_emb': 256,
@@ -37,13 +46,13 @@ def main():
 
     }
 
-    model = get_model(ModelOpt.GPT, **config).to(device)
+    model = get_model(ModelOpt.RECURRENT, **config).to(device)
 
     optim = torch.optim.Adam(model.parameters())
     criterion = torch.nn.CrossEntropyLoss()
 
     trainer = Trainer(dataset, model, optim, criterion)
-    trainer.train(3, 1024, device)
+    trainer.train(5, 1024, device)
 
     # generated_molecules = generate_smiles(model, tokenizer, temprature=1)
     # get_stats(dataset.molecules, generated_molecules, save_path='../data/results')

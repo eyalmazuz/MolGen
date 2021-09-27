@@ -1,24 +1,9 @@
 import os
-from typing import List, Set
 
 import matplotlib.pyplot as plt
-import pandas as pd
-from rdkit import Chem
-from rdkit.Chem.Scaffolds import MurckoScaffold
+
 import seaborn as sns
 from tqdm import tqdm
-
-def convert_to_molecules(smiles_list: List[str]) -> List[Chem.rdchem.Mol]:
-    mols = [Chem.MolFromSmiles(smiles) for smiles in tqdm(smiles_list)]
-
-    return mols
-
-
-def filter_invalid_molecules(mols: List[Chem.rdchem.Mol]) -> List[Chem.rdchem.Mol]:
-    mols = list(filter(lambda x: x != None, mols))
-
-    return mols
-
 
 def generate_and_save_plot(values,
                            plot_func,
@@ -37,15 +22,14 @@ def generate_and_save_plot(values,
     plt.clf()
 
 
-def get_molecule_scaffold(mol: Chem.rdchem.Mol) -> str:
-    scaffold = MurckoScaffold.MurckoScaffoldSmiles(mol=mol)
-
-    return scaffold
-
-def convert_to_scaffolds(mols: List[Chem.rdchem.Mol]) -> Set[str]:
-    scaffolds = set()
-    for mol in tqdm(mols):
-        scaffold = get_molecule_scaffold(mol)
-        scaffolds.add(scaffold)
-
-    return scaffolds
+def get_max_smiles_len(data_path: str) -> int:
+    if os.path.isdir(data_path):
+        max_len = 0
+        for path in os.listdir(data_path):
+            full_path = os.path.join(data_path, path)
+            file_max_len = len(max(open(full_path, 'r'), key=len))
+            max_len = file_max_len if file_max_len > max_len else max_len
+    else:
+        max_len = len(max(open(data_path, 'r'), key=len))
+    
+    return max_len + 2

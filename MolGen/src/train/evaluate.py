@@ -16,7 +16,8 @@ import torch
 from tqdm import trange, tqdm
 
 from src.utils.metrics import *
-from src.utils.utils import convert_to_molecules, filter_invalid_molecules, generate_and_save_plot, convert_to_scaffolds, get_molecule_scaffold
+from src.utils.utils import generate_and_save_plot
+from src.utils.mol_utils import convert_to_molecules, filter_invalid_molecules
 
 def generate_smiles(model, tokenizer, temprature=1, size=1000, max_len=100) -> List[Chem.rdchem.Mol]:
     
