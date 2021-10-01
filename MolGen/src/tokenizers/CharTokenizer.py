@@ -14,7 +14,7 @@ class CharTokenizer():
                 self.id2token = json.load(f)
                 self.id2token = {int(k): v for k, v in self.id2token.items()}
         else:
-            self.id2token = {}
+            self.id2token: Dict[int, str] = {}
             if os.path.isdir(data_path):
                 for path in os.listdir(data_path):
                     full_path = os.path.join(data_path, path)
@@ -36,7 +36,7 @@ class CharTokenizer():
                 with open(tokenizer_path, 'w') as f:
                     json.dump(self.id2token, f)
 
-        self.token2id = {v: k for k, v in self.id2token.items()}
+        self.token2id: Dict[str, int] = {v: k for k, v in self.id2token.items()}
        
     
     @property
@@ -122,7 +122,7 @@ class CharTokenizer():
         return self.tokenize(smiles, padding, max_length)
 
     def convert_tokens_to_ids(self, tokens: List[str]) -> List[int]:
-        encodings = []
+        encodings: List[int] = []
         for char in tokens:
             encodings.append(self.token2id[char])
         

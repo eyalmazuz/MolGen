@@ -63,13 +63,13 @@ def calc_set_stat(mol_set: List[Chem.rdchem.Mol],
 
     return values, stats
 
-def get_stats(train_set, generated_smiles, save_path=None):
+def get_stats(train_set_path, generated_smiles, save_path=None):
     print('Converting smiles to mols')
-    train_mol_set = convert_to_molecules(train_set)
+    # train_mol_set = convert_to_molecules(train_set)
     generated_molecules = convert_to_molecules(generated_smiles)
 
     print('Filtering invlaid mols')
-    train_mol_set = filter_invalid_molecules(train_mol_set)
+    # train_mol_set = filter_invalid_molecules(train_mol_set)
     generated_molecules = filter_invalid_molecules(generated_molecules)
 
     cur_date = str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
@@ -132,12 +132,15 @@ def get_stats(train_set, generated_smiles, save_path=None):
     stats['diversity'] = generated_diversity_score
     
     print('Calculating novelty')
-    generated_novelty_score = calc_novelty(train_set, generated_smiles)
+    generated_novelty_score = calc_novelty(train_set_path, generated_smiles)
     stats['novelty'] = generated_novelty_score
 
     print('Calculating percentage of valid mols')
     generated_set_valid_count = calc_valid_molecules(generated_smiles)
     stats['validity'] = generated_set_valid_count
+
+    print('calculating average SMILES length')
+    stats['average_length'] = sum(map(len, generated_smiles)) / len(generated_smiles)
 
     print(stats)
     with open(f'{generated_path}/stats.json', 'w') as f:

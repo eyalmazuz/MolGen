@@ -1,18 +1,22 @@
 import os
+from typing import List
 
 import matplotlib.pyplot as plt
 
 import seaborn as sns
 from tqdm import tqdm
 
-def generate_and_save_plot(values,
+def generate_and_save_plot(values: List[float],
                            plot_func,
-                           xlabel,
-                           ylabel,
-                           title,
-                           save_path,
-                           name,
-                           **kwargs):
+                           xlabel: str,
+                           ylabel: str,
+                           title: str,
+                           save_path: str,
+                           name: str,
+                           **kwargs) -> None:
+    """
+    Generates a plot and saves it.
+    """
     
     plot = plot_func(values, **kwargs)
     plot.set(xlabel=xlabel, ylabel=ylabel, title=title)
@@ -23,6 +27,10 @@ def generate_and_save_plot(values,
 
 
 def get_max_smiles_len(data_path: str) -> int:
+    """
+    Returns the length of the molecule which has the longest SMILES string.
+    this is used for padding in the tokenizer when traning the model.  
+    """
     if os.path.isdir(data_path):
         max_len = 0
         for path in os.listdir(data_path):

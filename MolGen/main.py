@@ -1,11 +1,13 @@
 import numpy as np
+import os
 
 from rdkit import Chem
 from rdkit import RDLogger
 
 import torch
+from torch.utils.data import ConcatDataset
 
-from src.datasets.dataset import SmilesDataset
+from src.datasets.dataset import get_dataset
 from src.models.model_builder import get_model, ModelOpt
 from src.tokenizers.CharTokenizer import CharTokenizer
 from src.train.train import Trainer
@@ -26,13 +28,13 @@ def main():
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     tokenizer = CharTokenizer(tokenizer_path)
-
-    dataset = SmilesDataset(data_path,
-                            tokenizer,
-                            max_len=max_len)
+    dataset = get_dataset(data_path,
+                          tokenizer=tokenizer,
+                          max_len=max_len,
+                          to_load=True)
 
     config = {
-        'n_emb': 256,
+        'n_emb': 64,
         'd_model': 64,
         'n_layers': 1,
         'num_heads': 8,
@@ -59,7 +61,7 @@ def main():
 
     policy_gradients(model, tokenizer, reward_fn=calc_qed, batch_size=100, epochs=25, discount_factor=0.99)
     generated_molecules = generate_smiles(model, tokenizer, temprature=1, size=1000)
-    get_stats(dataset.molecules, generated_molecules, save_path='./data/results')
+    get_stats(data_path, generated_molecules, save_path='./data/results')
 
     #count = gen_till_train(model, dataset)
     #print(f'Took {count} Generations for generate a mol from the test set.')
