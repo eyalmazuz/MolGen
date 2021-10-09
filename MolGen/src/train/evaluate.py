@@ -63,7 +63,10 @@ def calc_set_stat(mol_set: List[Chem.rdchem.Mol],
 
     return values, stats
 
-def get_stats(train_set_path, generated_smiles, save_path=None):
+def get_stats(train_set_path,
+              generated_smiles,
+              save_path=None,
+              folder_name=None):
     print('Converting smiles to mols')
     # train_mol_set = convert_to_molecules(train_set)
     generated_molecules = convert_to_molecules(generated_smiles)
@@ -98,6 +101,9 @@ def get_stats(train_set_path, generated_smiles, save_path=None):
     # Calculating statistics on the generated-set.
     print('Calculating Generated set stats')
     generated_path = f'{save_path}/{cur_date}/generated'
+    
+    if folder_name:
+        generated_path = os.path.join(generated_path, folder_name)
 
     print('Calculating QED')
     generated_qed_values, generated_qed_stats = calc_set_stat(generated_molecules, calc_qed, value_range=(0, 1), desc='QED')

@@ -31,7 +31,10 @@ class SmilesDataset(Dataset):
         self.data_path = data_path 
         
         if self.to_load:
-            self._molecules = self.load_molecules()       
+            self._molecules = self.load_molecules()
+            self.test_molecules = self._molecules[int(len(self._molecules) * 0.8):]
+            self._molecules = self._molecules[:int(len(self._molecules) * 0.8)]
+            self.len = len(self._molecules)
 
         self.tokenizer = tokenizer
 

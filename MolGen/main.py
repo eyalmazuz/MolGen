@@ -1,6 +1,7 @@
-import numpy as np
+import copy
 import os
 
+import numpy as np
 from rdkit import Chem
 from rdkit import RDLogger
 
@@ -34,12 +35,12 @@ def main():
                           to_load=True)
 
     config = {
-        'n_emb': 64,
-        'd_model': 64,
-        'n_layers': 1,
-        'num_heads': 8,
+        'n_embd': 512,
+        'd_model': 512,
+        'n_layers': 2,
+        'num_heads': 16,
         'vocab_size': tokenizer.vocab_size,
-        'n_positions': 512,
+        'block_size': 512,
         'proj_size': 512,
         'attn_dropout_rate': 0.1,
         'proj_dropout_rate': 0.1,
@@ -54,17 +55,21 @@ def main():
     criterion = torch.nn.CrossEntropyLoss()
 
     trainer = Trainer(dataset, model, optim, criterion)
-    trainer.train(5, 1024, device)
+    trainer.train(3, 1024, device)
 
-    # generated_molecules = generate_smiles(model, tokenizer, temprature=1)
-    # get_stats(dataset.molecules, generated_molecules, save_path='../data/results')
+    old_model = copy.deepcopy(model)
+    generated_molecules = generate_smiles(model, tokenizer, temprature=1, size=10000)
+    get_stats(dataset.molecules, generated_molecules, save_path='../data/results', folder_name='pre_RL')
 
-    policy_gradients(model, tokenizer, reward_fn=calc_qed, batch_size=100, epochs=25, discount_factor=0.99)
-    generated_molecules = generate_smiles(model, tokenizer, temprature=1, size=1000)
-    get_stats(data_path, generated_molecules, save_path='./data/results')
+    policy_gradients(model, tokenizer, reward_fn=calc_qed, batch_size=200, epochs=150, discount_factor=0.97, device=device)
+    generated_molecules = generate_smiles(model, tokenizer, temprature=1, size=10000)
+    get_stats(data_path, generated_molecules, save_path='./data/results', folder_name='post_RL')
 
-    #count = gen_till_train(model, dataset)
-    #print(f'Took {count} Generations for generate a mol from the test set.')
+    count = gen_till_train(old_model, dataset)
+    print(f'Took {count} Generations for generate a mol from the test set before PG.')
+
+    count = gen_till_train(model, dataset)
+    print(f'Took {count} Generations for generate a mol from the test set after PG.')
     
 if __name__ == "__main__":
     main()

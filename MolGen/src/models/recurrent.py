@@ -4,13 +4,13 @@ from torch import nn
 class RecurrentConfig():
     def __init__(self,
                 vocab_size=26,
-                n_emb=512,
+                n_embd=512,
                 d_model=256,
                 n_layers=2,
                 padding_idx=26,
                 **kwargs) -> None:
         self.vocab_size = vocab_size
-        self.n_emb = n_emb
+        self.n_embd = n_embd
         self.d_model = d_model
         self.n_layers = n_layers
         self.padding_idx = padding_idx
@@ -22,10 +22,10 @@ class RecurrentModel(nn.Module):
         super(RecurrentModel, self).__init__()
 
         self.embedding = nn.Embedding(num_embeddings=config.vocab_size,
-                                      embedding_dim=config.n_emb,
+                                      embedding_dim=config.n_embd,
                                       padding_idx=config.padding_idx)
 
-        self.lstm = nn.LSTM(input_size=config.n_emb,
+        self.lstm = nn.LSTM(input_size=config.n_embd,
                             hidden_size=config.d_model,
                             num_layers=config.n_layers,
                             batch_first=True)
