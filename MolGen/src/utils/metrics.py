@@ -50,6 +50,7 @@ def calc_novelty(train_set: Union[str, List[str]], generated_molecules: List[str
     
     else:
         new_molecules = set(generated_molecules) - set(train_set)
+        new_molecules = len(new_molecules)
 
     novelty_score = new_molecules / len(generated_molecules)
     return novelty_score

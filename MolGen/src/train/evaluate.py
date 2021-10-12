@@ -1,4 +1,3 @@
-from datetime import datetime
 import json
 import sys
 import os
@@ -19,24 +18,27 @@ from src.utils.metrics import *
 from src.utils.utils import generate_and_save_plot
 from src.utils.mol_utils import convert_to_molecules, filter_invalid_molecules
 
-def generate_smiles(model, tokenizer, temprature=1, size=1000, max_len=100) -> List[Chem.rdchem.Mol]:
+def generate_smiles(model, tokenizer, temprature=1, size=1000, max_len=100, device='cpu') -> List[Chem.rdchem.Mol]:
     
-    model.to('cpu')
+    model.to(device)
     model.eval()
     gen_smiles = []
     for i in trange(size):
         tokens = [tokenizer.bos_token_id]
         next_token = ''
-        while next_token != tokenizer.eos_token_id  and len(tokens) < max_len:
-            x = torch.tensor([tokens])
+        while next_token != tokenizer.eos_token_id and len(tokens) < max_len:
+            x = torch.tensor([tokens]).to(device)
             y_pred = model(x)
 
             if isinstance(y_pred, tuple):
                 y_pred = y_pred[0]
 
+            # print(y_pred.size())
             last_word_logits = y_pred[0][-1]
-            p = torch.nn.functional.softmax(last_word_logits / temprature, dim=0).detach().numpy()
-            next_token = np.random.choice(len(last_word_logits), p=p)
+            p = torch.nn.functional.softmax(last_word_logits, dim=0)
+            if p.device.type != 'cpu':
+                p = p.cpu()
+            next_token = np.random.choice(len(last_word_logits), p=p.detach().numpy())
             tokens.append(next_token)
 
         smiles = tokenizer.decode(tokens[1:-1])
@@ -63,7 +65,7 @@ def calc_set_stat(mol_set: List[Chem.rdchem.Mol],
 
     return values, stats
 
-def get_stats(train_set_path,
+def get_stats(train_set,
               generated_smiles,
               save_path=None,
               folder_name=None):
@@ -75,7 +77,7 @@ def get_stats(train_set_path,
     # train_mol_set = filter_invalid_molecules(train_mol_set)
     generated_molecules = filter_invalid_molecules(generated_molecules)
 
-    cur_date = str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
+    # cur_date = str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
     # Calculating statics on the train-set.
     # print('Calculating Train set stats')
     # train_path = f'{save_path}/{cur_date}/train'
@@ -100,10 +102,10 @@ def get_stats(train_set_path,
 
     # Calculating statistics on the generated-set.
     print('Calculating Generated set stats')
-    generated_path = f'{save_path}/{cur_date}/generated'
+    # generated_path = f'{save_path}/{cur_date}/generated'
     
     if folder_name:
-        generated_path = os.path.join(generated_path, folder_name)
+        generated_path = os.path.join(save_path, folder_name)
 
     print('Calculating QED')
     generated_qed_values, generated_qed_stats = calc_set_stat(generated_molecules, calc_qed, value_range=(0, 1), desc='QED')
@@ -138,7 +140,7 @@ def get_stats(train_set_path,
     stats['diversity'] = generated_diversity_score
     
     print('Calculating novelty')
-    generated_novelty_score = calc_novelty(train_set_path, generated_smiles)
+    generated_novelty_score = calc_novelty(train_set, generated_smiles)
     stats['novelty'] = generated_novelty_score
 
     print('Calculating percentage of valid mols')
@@ -152,12 +154,12 @@ def get_stats(train_set_path,
     with open(f'{generated_path}/stats.json', 'w') as f:
         json.dump(stats, f)
 
-def gen_till_train(model, dataset):
+def gen_till_train(model, dataset, device='cpu'):
     count = 0
     test_set = dataset.test_molecules
     not_in_test = True
     while not_in_test:
-        smiles_set = generate_smiles(model, dataset.tokenizer)
+        smiles_set = generate_smiles(model, dataset.tokenizer, device=device)
         for smiles in smiles_set:
             smiles = smiles
             if not smiles or smiles not in test_set:
