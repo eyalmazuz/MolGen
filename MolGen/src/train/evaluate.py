@@ -7,9 +7,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from rdkit import Chem
 from rdkit.Chem import Draw
-from rdkit import RDConfig
-sys.path.append(os.path.join(RDConfig.RDContribDir, 'SA_Score'))
-import sascorer
 
 import seaborn as sns
 import torch
@@ -141,7 +138,7 @@ def get_stats(train_set: Union[str, List[str]],
                            shade=True)
 
     print('Calculating SAS')
-    generated_sas_values, generated_sas_stats = calc_set_stat(generated_molecules, sascorer.calculateScore, value_range=(1, 10), desc='SAS')
+    generated_sas_values, generated_sas_stats = calc_set_stat(generated_molecules, calc_sas, value_range=(1, 10), desc='SAS')
     
     generate_and_save_plot(generated_sas_values,
                            sns.kdeplot,
