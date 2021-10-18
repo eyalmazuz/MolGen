@@ -15,7 +15,7 @@ from src.tokenizers.CharTokenizer import CharTokenizer
 from src.train.train import Trainer
 from src.train.evaluate import generate_smiles, get_stats, gen_till_train
 from src.train.reinforcement import policy_gradients
-from src.utils.metrics import calc_qed
+from src.utils.reward_fn import qed_reward
 from src.utils.utils import get_max_smiles_len
 
 RDLogger.DisableLog('rdApp.*')
@@ -66,7 +66,7 @@ def main():
         'batch_size': 500,
         'epochs': 150,
         'discount_factor': 0.97,
-        'reward_fn': calc_qed,
+        'reward_fn': qed_reward,
         'optimizer': torch.optim.Adam,
         'max_len': 100,
     }

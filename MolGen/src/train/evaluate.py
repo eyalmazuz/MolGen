@@ -6,6 +6,7 @@ from typing import List, Dict, Tuple, Callable
 import matplotlib.pyplot as plt
 import numpy as np
 from rdkit import Chem
+from rdkit.Chem import Draw
 from rdkit import RDConfig
 sys.path.append(os.path.join(RDConfig.RDContribDir, 'SA_Score'))
 import sascorer
@@ -65,10 +66,29 @@ def calc_set_stat(mol_set: List[Chem.rdchem.Mol],
 
     return values, stats
 
-def get_stats(train_set,
-              generated_smiles,
-              save_path=None,
-              folder_name=None):
+def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
+                   generated_score: List[float],
+                   top_k: int=5,
+                   save_path: str=None) -> Dict[str, float]:
+    sorted_values, _ = list(zip(*list(sorted(zip(generated_molecules, generated_score), key=lambda x: x[1], reverse=True))))
+    top_k_molecules = sorted_values[:top_k]
+    metrics = {}
+    for i, molecule in enumerate(top_k_molecules):
+        smiles = Chem.MolToSmiles(molecule)
+        Draw.MolToFile(molecule, f'{save_path}/{smiles}.png')
+        metrics[f'top_{i+1}_qed'] = calc_qed(molecule)
+        metrics[f'top_{i+1}_sas'] = calc_sas(molecule)
+        metrics[f'top_{i+1}_len'] = len(smiles)
+
+    return metrics
+    
+
+
+def get_stats(train_set: Union[str, List[str]],
+              generated_smiles: List[str],
+              save_path: str=None,
+              folder_name: str=None,
+              top_k: int=5):
     print('Converting smiles to mols')
     # train_mol_set = convert_to_molecules(train_set)
     generated_molecules = convert_to_molecules(generated_smiles)
@@ -133,7 +153,9 @@ def get_stats(train_set,
                            color='green',
                            shade=True)
 
-    stats = {**generated_qed_stats, **generated_sas_stats}
+    top_k_metrics = get_top_k_mols(generated_molecules, generated_qed_values, top_k=top_k, save_path=generated_path)
+
+    stats = {**generated_qed_stats, **generated_sas_stats, **top_k_metrics}
     
     print('Calculating diversity')
     generated_diversity_score = calc_diversity(generated_smiles)

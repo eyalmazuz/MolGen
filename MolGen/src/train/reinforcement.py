@@ -42,7 +42,7 @@ def policy_gradients(model,
             smiles = tokenizer.decode(tokens[1:-1])
             mol = Chem.MolFromSmiles(smiles)
             if mol:
-                reward = reward_fn(mol) * 10 
+                reward = reward_fn(mol)
             else:
                 reward = 0
 
