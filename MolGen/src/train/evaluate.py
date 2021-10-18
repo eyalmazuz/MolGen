@@ -72,7 +72,7 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
     metrics = {}
     for i, molecule in enumerate(top_k_molecules):
         smiles = Chem.MolToSmiles(molecule)
-        Draw.MolToFile(molecule, f'{save_path}/{smiles}.png')
+        Draw.MolToFile(molecule, f'{save_path}/top_{i+1}_{smiles}.png')
         metrics[f'top_{i+1}_qed'] = calc_qed(molecule)
         metrics[f'top_{i+1}_sas'] = calc_sas(molecule)
         metrics[f'top_{i+1}_len'] = len(smiles)
@@ -173,21 +173,27 @@ def get_stats(train_set: Union[str, List[str]],
     with open(f'{generated_path}/stats.json', 'w') as f:
         json.dump(stats, f)
 
-def gen_till_train(model, dataset, device='cpu'):
-    count = 0
-    test_set = dataset.test_molecules
-    not_in_test = True
-    while not_in_test:
-        smiles_set = generate_smiles(model, dataset.tokenizer, device=device)
-        for smiles in smiles_set:
-            smiles = smiles
-            if not smiles or smiles not in test_set:
-                count += 1
-            else:
-                not_in_test = False
-                break
-        print(count)
-    return count
+def gen_till_train(model, dataset, times: int=10, device: str='cpu'):
+    
+    results = []
+    for i in range(times):
+        count = 0
+        test_set = dataset.test_molecules
+        not_in_test = True
+        while not_in_test:
+            smiles_set = generate_smiles(model, dataset.tokenizer, device=device)
+            for smiles in smiles_set:
+                smiles = smiles
+                if not smiles or smiles not in test_set:
+                    count += 1
+                else:
+                    not_in_test = False
+                    break
+            print(count)
+        results.append(count)
+    
+    results = np.array(results)
+    return results.mean(), results.std()
 
 def main():
     pass

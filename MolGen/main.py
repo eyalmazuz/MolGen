@@ -64,7 +64,7 @@ def main():
 
     rl_config = {
         'batch_size': 500,
-        'epochs': 150,
+        'epochs': 250,
         'discount_factor': 0.97,
         'reward_fn': qed_reward,
         'optimizer': torch.optim.Adam,
@@ -126,15 +126,15 @@ def main():
               save_path=eval_config['save_path'],
               folder_name='post_RL')
 
-    count = gen_till_train(old_model,
+    mean, std = gen_till_train(old_model,
                            dataset,
                            device=config['device'])
-    print(f'Took {count} Generations for generate a mol from the test set before PG.')
+    print(f'Took on average {mean}+- {std} Generations for generate a mol from the test set before PG.')
 
     count = gen_till_train(model,
                            dataset,
                            device=config['device'])
-    print(f'Took {count} Generations for generate a mol from the test set after PG.')
+    print(f'Took on average {mean}+- {std} Generations for generate a mol from the test set after PG.')
     
 if __name__ == "__main__":
     main()
