@@ -15,7 +15,7 @@ class Trainer():
                                                  shuffle=True,
                                                  batch_size=batch_size,
                                                  num_workers=8,
-                                                 pin_memory=True)
+                                                 pin_memory=False)
 
         for epoch in range(epochs):
 

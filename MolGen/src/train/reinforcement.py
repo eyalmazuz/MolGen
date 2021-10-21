@@ -14,7 +14,8 @@ def policy_gradients(model,
                      step_size=3e-5,
                      discount_factor=0.99,
                      max_len=100,
-                     device='cpu'):
+                     device='cpu',
+                     **kwargs):
     model.train()
     model.to(device)
     optimizer = optimizer(model.parameters(), step_size)
@@ -22,29 +23,11 @@ def policy_gradients(model,
         loss = 0
         batch_reward = 0
         for batch in trange(batch_size, leave=False):
-            tokens = [tokenizer.bos_token_id]
-            next_token = ''
-            while next_token != tokenizer.eos_token_id and len(tokens) < max_len:
-                x = torch.tensor([tokens]).to(device)
-                y_pred = model(x)
-
-                if isinstance(y_pred, tuple):
-                    y_pred = y_pred[0]
-
-                # print(y_pred.size())
-                last_word_logits = y_pred[0][-1]
-                p = torch.nn.functional.softmax(last_word_logits, dim=0)
-                if p.device.type != 'cpu':
-                    p = p.cpu()
-                next_token = np.random.choice(len(last_word_logits), p=p.detach().numpy())
-                tokens.append(next_token)
+            tokens = model.generate(tokenizer.bos_token_id, tokenizer.eos_token_id, 1, max_len, device)
 
             smiles = tokenizer.decode(tokens[1:-1])
-            mol = Chem.MolFromSmiles(smiles)
-            if mol:
-                reward = reward_fn(mol)
-            else:
-                reward = 0
+            
+            reward = reward_fn(smiles, kwargs['fn'])
 
             discounted_returns = (torch.pow(discount_factor, torch.arange(len(tokens[:-1]), 0, -1)) * reward).to(device)
             # discounted_returns = (discounted_returns - discounted_returns.mean()) / (discounted_returns.std() + 1e-5)

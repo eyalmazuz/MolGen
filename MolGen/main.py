@@ -1,6 +1,7 @@
 import copy
 from datetime import datetime
 import os
+import random
 
 import numpy as np
 from rdkit import Chem
@@ -20,6 +21,12 @@ from src.utils.utils import get_max_smiles_len
 
 RDLogger.DisableLog('rdApp.*')
 torch.autograd.set_detect_anomaly(True)
+
+# set seeds
+torch.manual_seed(0)
+np.random.seed(0)
+random.seed(0)
+
 def main():
 
     config = {
@@ -41,9 +48,9 @@ def main():
 
     model_config = {
         'n_embd': 512,
-        'd_model': 512,
-        'n_layers': 2,
-        'num_heads': 16,
+        'd_model': 1024,
+        'n_layers': 4,
+        'num_heads': 8,
         'vocab_size': tokenizer.vocab_size,
         'block_size': 512,
         'proj_size': 512,
@@ -64,11 +71,12 @@ def main():
 
     rl_config = {
         'batch_size': 500,
-        'epochs': 250,
-        'discount_factor': 0.97,
+        'epochs': 150,
+        'discount_factor': 0.99,
         'reward_fn': qed_reward,
         'optimizer': torch.optim.Adam,
         'max_len': 100,
+        # 'fn': lambda x: x * 10, 
     }
 
     eval_config = {
@@ -81,8 +89,9 @@ def main():
     }
 
 
-    model = get_model(ModelOpt.RECURRENT, **model_config).to(config['device'])
-
+    model = get_model(ModelOpt.GPT, **model_config).to(config['device'])
+    print(sum(p.numel() for p in model.parameters()))
+   
     optim = train_config['optimizer'](model.parameters())
     criterion = train_config['criterion']()
 
@@ -106,13 +115,7 @@ def main():
 
     policy_gradients(model=model,
                      tokenizer=tokenizer,
-                     reward_fn=rl_config['reward_fn'],
-                     optimizer=rl_config['optimizer'],
-                     batch_size=rl_config['batch_size'],
-                     epochs=rl_config['epochs'],
-                     discount_factor=rl_config['discount_factor'],
-                     max_len=rl_config['max_len'],
-                     device=config['device'])
+                     **rl_config)
     
     generated_molecules = generate_smiles(model=model,
                                           tokenizer=tokenizer,
@@ -131,7 +134,7 @@ def main():
                            device=config['device'])
     print(f'Took on average {mean}+- {std} Generations for generate a mol from the test set before PG.')
 
-    count = gen_till_train(model,
+    mean, std = gen_till_train(model,
                            dataset,
                            device=config['device'])
     print(f'Took on average {mean}+- {std} Generations for generate a mol from the test set after PG.')

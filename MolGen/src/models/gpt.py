@@ -1,9 +1,11 @@
-from torch import nn
 """
 Code based on andrej karpathy minGPT code with a little bit of modifications
 https://github.com/karpathy/minGPT/
 """
+
+import numpy as np
 import torch
+from torch import nn
 from torch.nn import functional as F
 
 class GPTConfig():
@@ -151,6 +153,26 @@ class GPT(nn.Module):
         
         else:
             return logits, attn_weights
+    
+    def generate(self, initial_token, end_token, max_len: int=100, device: str='cpu'):
+        tokens = [initial_token]
+        next_token = ''
+        while next_token != end_token and len(tokens) < max_len:
+            x = torch.tensor([tokens]).to(device)
+            y_pred = self.forward(x)
+
+            if isinstance(y_pred, tuple):
+                y_pred = y_pred[0]
+
+            # print(y_pred.size())
+            last_word_logits = y_pred[0][-1]
+            p = torch.nn.functional.softmax(last_word_logits, dim=0)
+            if p.device.type != 'cpu':
+                p = p.cpu()
+            next_token = np.random.choice(len(last_word_logits), p=p.detach().numpy())
+            tokens.append(next_token)
+
+        return tokens
 
 def main():
     config = GPTConfig(num_heads=8, block_size=512, proj_dropout_rate=0, attn_dropout_rate=0, n_embd=512, n_layers=2)

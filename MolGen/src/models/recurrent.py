@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch import nn
 
@@ -48,6 +49,26 @@ class RecurrentModel(nn.Module):
 
         else:
             return logits
+
+    def generate(self, initial_token, end_token, temprature: int=1, max_len: int=100, device: str='cpu'):
+        tokens = [initial_token]
+        next_token = ''
+        while next_token != end_token and len(tokens) < max_len:
+            x = torch.tensor([tokens]).to(device)
+            y_pred = self.forward(x)
+
+            if isinstance(y_pred, tuple):
+                y_pred = y_pred[0]
+
+            # print(y_pred.size())
+            last_word_logits = y_pred[0][-1]
+            p = torch.nn.functional.softmax(last_word_logits, dim=0)
+            if p.device.type != 'cpu':
+                p = p.cpu()
+            next_token = np.random.choice(len(last_word_logits), p=p.detach().numpy())
+            tokens.append(next_token)
+
+        return tokens
 
 def main():
     config = RecurrentConfig(padding_idx=4)
