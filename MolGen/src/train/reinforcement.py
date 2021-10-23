@@ -9,12 +9,14 @@ def policy_gradients(model,
                      tokenizer,
                      reward_fn,
                      optimizer=torch.optim.Adam,
-                     batch_size=16,
-                     epochs=100,
-                     step_size=3e-5,
-                     discount_factor=0.99,
-                     max_len=100,
-                     device='cpu',
+                     batch_size: int=16,
+                     epochs: int=100,
+                     step_size: float=3e-5,
+                     discount_factor: float=0.99,
+                     max_len: int=100,
+                     eval_steps: int=50,
+                     do_eval: bool=False,
+                     device='cuda',
                      **kwargs):
     model.train()
     model.to(device)
@@ -27,7 +29,10 @@ def policy_gradients(model,
 
             smiles = tokenizer.decode(tokens[1:-1])
             
-            reward = reward_fn(smiles, kwargs['fn'])
+            if 'fn' in kwargs:
+                reward = reward_fn(smiles, kwargs['fn'])
+            else:
+                reward = reward_fn(smiles)
 
             discounted_returns = (torch.pow(discount_factor, torch.arange(len(tokens[:-1]), 0, -1)) * reward).to(device)
             # discounted_returns = (discounted_returns - discounted_returns.mean()) / (discounted_returns.std() + 1e-5)
@@ -50,3 +55,7 @@ def policy_gradients(model,
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+
+        if do_eval and (epoch + 1) % eval_steps == 0:
+            # TODO find a way to implement this
+            pass

@@ -17,7 +17,7 @@ from src.utils.metrics import *
 from src.utils.utils import generate_and_save_plot
 from src.utils.mol_utils import convert_to_molecules, filter_invalid_molecules
 
-def generate_smiles(model, tokenizer, temprature=1, size=1000, max_len=100, device='cpu', disable=False) -> List[Chem.rdchem.Mol]:
+def generate_smiles(model, tokenizer, temprature=1, size=1000, max_len=100, device='cuda', disable=False) -> List[Chem.rdchem.Mol]:
     
     model.to(device)
     model.eval()
@@ -171,7 +171,7 @@ def get_stats(train_set: Union[str, List[str]],
     with open(f'{generated_path}/stats.json', 'w') as f:
         json.dump(stats, f)
 
-def gen_till_train(model, dataset, times: int=10, device: str='cpu'):
+def gen_till_train(model, dataset, times: int=10, device: str='cuda'):
     
     results = []
     for i in trange(times):

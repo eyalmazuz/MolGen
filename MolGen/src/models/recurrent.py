@@ -18,7 +18,7 @@ class RecurrentConfig():
 
 class RecurrentModel(nn.Module):
 
-    def __init__(self, config):
+    def __init__(self, config: RecurrentConfig):
 
         super(RecurrentModel, self).__init__()
 
@@ -32,6 +32,8 @@ class RecurrentModel(nn.Module):
                             batch_first=True)
 
         self.fc = nn.Linear(config.d_model, config.vocab_size)
+
+        self.config = config
 
 
     def forward(self, inputs, attention_mask=None, state=None, labels=None):
@@ -50,7 +52,7 @@ class RecurrentModel(nn.Module):
         else:
             return logits
 
-    def generate(self, initial_token, end_token, temprature: int=1, max_len: int=100, device: str='cpu'):
+    def generate(self, initial_token, end_token, temprature: int=1, max_len: int=100, device: str='cuda'):
         tokens = [initial_token]
         next_token = ''
         while next_token != end_token and len(tokens) < max_len:
@@ -69,6 +71,9 @@ class RecurrentModel(nn.Module):
             tokens.append(next_token)
 
         return tokens
+    
+    def __str__(self):
+        return f"LSTM_Layers_{self.config.n_layers}_Emb_{self.config.n_embd}"
 
 def main():
     config = RecurrentConfig(padding_idx=4)

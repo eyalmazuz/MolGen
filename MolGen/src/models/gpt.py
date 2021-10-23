@@ -6,7 +6,8 @@ https://github.com/karpathy/minGPT/
 import numpy as np
 import torch
 from torch import nn
-from torch.nn import functional as F
+
+from src.models.layers import MultiheadAttention, DecoderBlock
 
 class GPTConfig():
     def __init__(self,
@@ -35,86 +36,8 @@ class GPTConfig():
         self.resid_dropout_rate = resid_dropout_rate
         self.embd_dropout_rate = embd_dropout_rate
 
-class MultiheadAttention(nn.Module):
-    def __init__(self, config):
-        super(MultiheadAttention, self).__init__()
-
-        self.query = nn.Linear(config.n_embd, config.proj_size)
-        self.key = nn.Linear(config.n_embd, config.proj_size)
-        self.value = nn.Linear(config.n_embd, config.proj_size)
-        self.proj = nn.Linear(config.proj_size, config.n_embd)
-
-        self.attn_drop = nn.Dropout(config.attn_dropout_rate)
-        self.proj_drop = nn.Dropout(config.proj_dropout_rate)
-
-        self.num_heads = config.num_heads
-
-        self.register_buffer('mask', torch.tril(torch.ones(config.block_size, config.block_size))
-                                        .view(1, 1, config.block_size, config.block_size))
-
-    def forward(self, q, k, v, attn_mask=None):
-       
-        q = self.query(q)
-        k = self.key(k)
-        v = self.value(v)
-        
-
-        B, T, C = q.size()
-        q = q.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
-        k = k.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
-        v = v.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
-
-        look_ahead_mask = self.mask[:, :, :T, :T]
-        if attn_mask is not None:
-            attention_mask = attn_mask.view(B, 1, 1, T)
-            mask = torch.minimum(look_ahead_mask, attention_mask)
-        else:
-            mask = look_ahead_mask
-
-        y, att_weights = self.attention(q, k ,v, attn_mask=mask)
-        y = y.transpose(1, 2).contiguous().view(B, T, C)
-        y = self.proj_drop(self.proj(y))
-
-        return y, att_weights
-
-    def attention(self, q, k, v, attn_mask=None):
-        att = (q @ k.transpose(-2, -1))
-        att = att  * (1.0 / k.size()[-1] ** 0.5)
-
-        if attn_mask is not None:
-            att = att.masked_fill(attn_mask == 0, float('-inf'))
-
-        att_weights = F.softmax(att, dim=-1)
-        att = self.attn_drop(att_weights)
-
-        y = att @ v
-        return y, att_weights
-
-class DecoderBlock(nn.Module):
-    def __init__(self, config) -> None:
-        super(DecoderBlock, self).__init__()
-
-        self.attn = MultiheadAttention(config)
-        self.ln1 = nn.LayerNorm(config.n_embd)
-        self.ln2 = nn.LayerNorm(config.n_embd)
-        self.mlp = nn.Sequential(
-            nn.Linear(config.n_embd, 4 * config.d_model),
-            nn.GELU(),
-            nn.Linear(4 * config.d_model, config.n_embd),
-            nn.Dropout(config.resid_dropout_rate),
-        )
-
-    def forward(self, x, attention_mask=None):
-        x_norm = self.ln1(x)
-        attn_logits, attn_weights = self.attn(x_norm, x_norm, x_norm, attn_mask=attention_mask)
-        x = x + attn_logits
-        x = x + self.mlp(self.ln2(x))
-
-        return x, attn_weights
-
-
 class GPT(nn.Module):
-    def __init__(self, config) -> None:
+    def __init__(self, config: GPTConfig) -> None:
         super(GPT, self).__init__()
 
         self.token_embds = nn.Embedding(config.vocab_size, config.n_embd)
@@ -126,6 +49,9 @@ class GPT(nn.Module):
         self.ln = nn.LayerNorm(config.n_embd)
         self.logits = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
+        self.register_buffer('mask', torch.tril(torch.ones(config.block_size, config.block_size))
+                                        .view(1, 1, config.block_size, config.block_size))
+
         self.config = config
 
     def forward(self, idx, attention_mask=None, labels=None):
@@ -135,10 +61,17 @@ class GPT(nn.Module):
         pos_embs = self.pos_emb[:, :T, :] # each position maps to a (learnable) vector
         x = self.drop(token_embds + pos_embs)
 
+        look_ahead_mask = self.mask[:, :, :T, :T]
+        if attention_mask is not None:
+            attention_mask = attention_mask.view(B, 1, 1, T)
+            mask = torch.minimum(look_ahead_mask, attention_mask)
+        else:
+            mask = look_ahead_mask
+
         attn_weights = {}
         
         for i, block in enumerate(self.blocks):
-            x, weights = block(x, attention_mask=attention_mask)
+            x, weights = block(x, attention_mask=mask)
             attn_weights[f'block_{i}'] = weights
 
         x = self.ln(x)
@@ -154,7 +87,7 @@ class GPT(nn.Module):
         else:
             return logits, attn_weights
     
-    def generate(self, initial_token, end_token, max_len: int=100, device: str='cpu'):
+    def generate(self, initial_token, end_token, temprature: int=1, max_len: int=100, device: str='cuda'):
         tokens = [initial_token]
         next_token = ''
         while next_token != end_token and len(tokens) < max_len:
@@ -173,6 +106,9 @@ class GPT(nn.Module):
             tokens.append(next_token)
 
         return tokens
+
+    def __str__(self):
+        return f"GPT_Layers_{self.config.n_layers}_Heads_{self.config.num_heads}_Emb_{self.config.n_embd}"
 
 def main():
     config = GPTConfig(num_heads=8, block_size=512, proj_dropout_rate=0, attn_dropout_rate=0, n_embd=512, n_layers=2)

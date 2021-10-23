@@ -48,7 +48,7 @@ def main():
 
     model_config = {
         'n_embd': 512,
-        'd_model': 1024,
+        'd_model': 512,
         'n_layers': 4,
         'num_heads': 8,
         'vocab_size': tokenizer.vocab_size,
@@ -110,12 +110,13 @@ def main():
     
     get_stats(train_set=train_set,
               generated_smiles=generated_molecules,
-              save_path=eval_config['save_path'],
+              save_path=f"{eval_config['save_path']}_{str(model)}",
               folder_name='pre_RL')
 
     policy_gradients(model=model,
                      tokenizer=tokenizer,
-                     **rl_config)
+                     **rl_config,
+                     device=config['device'])
     
     generated_molecules = generate_smiles(model=model,
                                           tokenizer=tokenizer,
@@ -126,7 +127,7 @@ def main():
 
     get_stats(train_set=train_set,
               generated_smiles=generated_molecules,
-              save_path=eval_config['save_path'],
+              save_path=f"{eval_config['save_path']}_{str(model)}",
               folder_name='post_RL')
 
     mean, std = gen_till_train(old_model,
