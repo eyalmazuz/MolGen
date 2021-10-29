@@ -3,14 +3,15 @@ import sys
 import os
 from typing import List, Dict, Tuple, Callable
 
-import matplotlib.pyplot as plt
+import moses
 import numpy as np
 from rdkit import Chem
 import rdkit
 from rdkit.Chem import Draw
+from rdkit import RDLogger
+RDLogger.DisableLog('rdApp.*')
 
 import seaborn as sns
-import torch
 from tqdm import trange, tqdm
 
 from src.utils.metrics import *
@@ -34,8 +35,9 @@ def generate_smiles(model, tokenizer, temprature=1, size=1000, max_len=100, devi
 def fail_safe(func: Callable[[Chem.rdchem.Mol], float], mol: Chem.rdchem.Mol) -> float:
     try:
         res = func(mol)
-    except ValueError as e:
+    except Exception as e:
         res = None
+        print(mol)
     return res
 
 def calc_set_stat(mol_set: List[Chem.rdchem.Mol],
@@ -57,7 +59,7 @@ def calc_set_stat(mol_set: List[Chem.rdchem.Mol],
     start, stop = value_range
     ranges = np.linspace(start, stop, 6)
     for start, stop in [ranges[i:i+2] for i in range(0, len(ranges)-1)]:
-        stats[f'{desc} {start} < x <= {stop}'] = np.count_nonzero((start < values) & (values <= stop))
+        stats[f'{start} < {desc} <= {stop}'] = np.count_nonzero((start < values) & (values <= stop))
 
     return values, stats
 
@@ -83,41 +85,17 @@ def get_stats(train_set: Union[str, List[str]],
               generated_smiles: List[str],
               save_path: str=None,
               folder_name: str=None,
-              top_k: int=5):
+              top_k: int=5,
+              run_moses: bool=False):
+
     print('Converting smiles to mols')
-    # train_mol_set = convert_to_molecules(train_set)
     generated_molecules = convert_to_molecules(generated_smiles)
 
     print('Filtering invlaid mols')
-    # train_mol_set = filter_invalid_molecules(train_mol_set)
     generated_molecules = filter_invalid_molecules(generated_molecules)
-
-    # cur_date = str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
-    # Calculating statics on the train-set.
-    # print('Calculating Train set stats')
-    # train_path = f'{save_path}/{cur_date}/train'
-
-    # print('Calculating diversity')
-    # train_diversity_score = calc_diversity(train_set)
-    # print(f'Train-set diversity score: {train_diversity_score * 100}')
-
-    # print('Calculating QED')
-    # train_qed_values, train_qed_stats = calc_set_stat(train_mol_set, calc_qed, value_range=(0, 1), desc='QED')
-    # 
-    # generate_and_save_plot(train_qed_values,
-    #                        sns.kdeplot,
-    #                        xlabel='QED',
-    #                        ylabel='Density',
-    #                        title='Train set QED density',
-    #                        save_path=train_path,
-    #                        name="train_qed_distribution",
-    #                        color='green',
-    #                        shade=True)
-
 
     # Calculating statistics on the generated-set.
     print('Calculating Generated set stats')
-    # generated_path = f'{save_path}/{cur_date}/generated'
     
     if folder_name:
         generated_path = os.path.join(save_path, folder_name)
@@ -156,9 +134,10 @@ def get_stats(train_set: Union[str, List[str]],
     generated_diversity_score = calc_diversity(generated_smiles)
     stats['diversity'] = generated_diversity_score
     
-    print('Calculating novelty')
-    generated_novelty_score = calc_novelty(train_set, generated_smiles)
-    stats['novelty'] = generated_novelty_score
+    if train_set is not None:
+        print('Calculating novelty')
+        generated_novelty_score = calc_novelty(train_set, generated_smiles)
+        stats['novelty'] = generated_novelty_score
 
     print('Calculating percentage of valid mols')
     generated_set_valid_count = calc_valid_molecules(generated_smiles)
@@ -170,6 +149,16 @@ def get_stats(train_set: Union[str, List[str]],
     print(stats)
     with open(f'{generated_path}/stats.json', 'w') as f:
         json.dump(stats, f)
+
+    with open(f'{generated_path}/generated_smiles.txt', 'w') as f:
+        f.write('\n'.join(generated_smiles))
+
+    if run_moses:
+        print('Running Moses')
+        metrics = moses.get_all_metrics(generated_smiles)
+        with open(f'{generated_path}/moses_metrics.json', 'w') as f:
+            json.dump(metrics, f)
+    
 
 def gen_till_train(model, dataset, times: int=10, device: str='cuda'):
     

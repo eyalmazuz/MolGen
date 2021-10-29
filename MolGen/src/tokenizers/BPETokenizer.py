@@ -3,6 +3,7 @@ import os
 from rdkit import Chem
 from rdkit.Chem.rdmolfiles import SmilesMolSupplier, MultithreadedSmilesMolSupplier
 from rdkit import RDLogger
+RDLogger.DisableLog('rdApp.*')
 
 from tokenizers import Tokenizer
 from tokenizers.models import BPE

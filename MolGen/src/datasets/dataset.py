@@ -5,14 +5,14 @@ from typing import List, Dict, Union
 
 from rdkit import Chem
 from rdkit import RDLogger
+RDLogger.DisableLog('rdApp.*')
 
 import torch
-from torch._C import _supported_qengines
 from torch.utils import data
 from torch.utils.data import Dataset, ConcatDataset
 from tqdm import tqdm
 
-RDLogger.DisableLog('rdApp.*')
+
 
 class SmilesDataset(Dataset):
 
@@ -32,8 +32,8 @@ class SmilesDataset(Dataset):
         
         if self.to_load:
             self._molecules = self.load_molecules()
-            self.test_molecules = self._molecules[int(len(self._molecules) * 0.8):]
-            self._molecules = self._molecules[:int(len(self._molecules) * 0.8)]
+            # self.test_molecules = self._molecules[int(len(self._molecules) * 0.8):]
+            # self._molecules = self._molecules[:int(len(self._molecules) * 0.8)]
             self.len = len(self._molecules)
 
         self.tokenizer = tokenizer

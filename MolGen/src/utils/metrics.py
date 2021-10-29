@@ -9,6 +9,8 @@ from rdkit.Chem import QED, rdMolDescriptors, Crippen
 from rdkit import RDConfig
 sys.path.append(os.path.join(RDConfig.RDContribDir, 'SA_Score'))
 import sascorer
+from rdkit import RDLogger
+RDLogger.DisableLog('rdApp.*')
 
 def calc_novelty(train_set: Union[str, List[str]], generated_molecules: List[str]) -> float:
     """

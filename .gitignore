@@ -130,3 +130,5 @@ dmypy.json
 
 /data/
 .vscode/settings.json
+/*.out
+/sbatch_gpu.example

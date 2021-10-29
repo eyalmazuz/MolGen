@@ -2,6 +2,8 @@ from typing import List, Set
 
 from rdkit import Chem
 from rdkit.Chem.Scaffolds import MurckoScaffold
+from rdkit import RDLogger
+RDLogger.DisableLog('rdApp.*')
 from tqdm import tqdm
 
 def get_molecule_scaffold(mol: Chem.rdchem.Mol) -> str:

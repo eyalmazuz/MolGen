@@ -1,9 +1,12 @@
 import numpy as np
 from numpy.lib.arraysetops import isin
 from rdkit import Chem
+from rdkit import RDLogger
+RDLogger.DisableLog('rdApp.*')
 import torch
 from tqdm import trange
 
+from src.train.evaluate import generate_smiles, get_stats
 
 def policy_gradients(model,
                      tokenizer,
@@ -21,6 +24,7 @@ def policy_gradients(model,
     model.train()
     model.to(device)
     optimizer = optimizer(model.parameters(), step_size)
+
     for epoch in trange(epochs):
         loss = 0
         batch_reward = 0
@@ -28,11 +32,8 @@ def policy_gradients(model,
             tokens = model.generate(tokenizer.bos_token_id, tokenizer.eos_token_id, 1, max_len, device)
 
             smiles = tokenizer.decode(tokens[1:-1])
-            
-            if 'fn' in kwargs:
-                reward = reward_fn(smiles, kwargs['fn'])
-            else:
-                reward = reward_fn(smiles)
+
+            reward = reward_fn(smiles)
 
             discounted_returns = (torch.pow(discount_factor, torch.arange(len(tokens[:-1]), 0, -1)) * reward).to(device)
             # discounted_returns = (discounted_returns - discounted_returns.mean()) / (discounted_returns.std() + 1e-5)
@@ -57,5 +58,17 @@ def policy_gradients(model,
         optimizer.step()
 
         if do_eval and (epoch + 1) % eval_steps == 0:
-            # TODO find a way to implement this
-            pass
+            generated_smiles = generate_smiles(model=model,
+                                          tokenizer=tokenizer,
+                                          temprature=kwargs['temprature'],
+                                          size=kwargs['size'],
+                                          max_len=max_len,
+                                          device=device,)
+                                          
+
+            get_stats(train_set=kwargs['train_set'],
+                    generated_smiles=generated_smiles,
+                    save_path=f"{kwargs['save_path']}",
+                    folder_name=f'mid_RL/step_{epoch +1}')
+
+            model.train()

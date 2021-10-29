@@ -21,15 +21,15 @@ class CharTokenizer():
                     tokenized_file = self.build_tokenizer(full_path)
                     self.id2token = {**self.id2token, **tokenized_file}
                     print(self.id2token)
-                len_tokens = len(self.id2token)
-
-                self.id2token[len_tokens + 0] = '[PAD]'
-                self.id2token[len_tokens + 1] = '[BOS]'
-                self.id2token[len_tokens + 2] = '[EOS]'
-                print(self.id2token)
             else:
                 self.id2token = self.build_tokenizer(data_path)
                 
+            len_tokens = len(self.id2token)
+
+            self.id2token[len_tokens + 0] = '[PAD]'
+            self.id2token[len_tokens + 1] = '[BOS]'
+            self.id2token[len_tokens + 2] = '[EOS]'
+            print(self.id2token)
             
             print('Saving tokenizer')
             if tokenizer_path:

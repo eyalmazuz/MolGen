@@ -63,7 +63,7 @@ class DecoderBlock(nn.Module):
 
     def forward(self, x, attention_mask=None):
         x_norm = self.ln1(x)
-        attn_logits, attn_weights = self.attn(x_norm, x_norm, x_norm, attn_mask=attention_mask)
+        attn_logits, attn_weights = self.attn(x_norm, x_norm, x_norm, attention_mask=attention_mask)
         x = x + attn_logits
         x = x + self.mlp(self.ln2(x))
 
