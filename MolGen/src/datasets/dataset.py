@@ -4,6 +4,7 @@ import os
 from typing import List, Dict, Union
 
 from rdkit import Chem
+from rdkit.Chem.Scaffolds.MurckoScaffold import MurckoScaffoldSmiles
 from rdkit import RDLogger
 RDLogger.DisableLog('rdApp.*')
 
@@ -20,6 +21,7 @@ class SmilesDataset(Dataset):
                  data_path: str,
                  tokenizer,
                  max_len: int=0,
+                 return_scaffold=False,
                  to_load: bool=False) -> None:
 
         self.max_len = max_len
@@ -29,6 +31,7 @@ class SmilesDataset(Dataset):
                 self.len += 1
         self.to_load = to_load
         self.data_path = data_path 
+        self.return_scaffold = return_scaffold
         
         if self.to_load:
             self._molecules = self.load_molecules()
@@ -62,9 +65,16 @@ class SmilesDataset(Dataset):
             smiles = self._molecules[idx]
         else:
             smiles = linecache.getline(self.data_path, idx + 1).strip()
+        
+        
         smiles = '[BOS]' + smiles + '[EOS]'
         encodings = self.tokenizer(smiles, padding=True, max_length=self.max_len)
         encodings['labels'] = encodings['input_ids']
+
+        if self.return_scaffold:
+            scaffold = MurckoScaffoldSmiles(smiles)
+            encodings['scafofld'] = '[BOS]' + scaffold + '[EOS]'
+
         #encodings['input_ids'] = encodings['input_ids']
         encodings = {k: torch.tensor(v) for k, v in encodings.items()}
         return encodings
