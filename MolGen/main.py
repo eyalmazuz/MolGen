@@ -50,7 +50,7 @@ def main():
 
     print(config['device'])
     
-    config['max_len'] = get_max_smiles_len(config['data_path'])
+    config['max_len'] = get_max_smiles_len(config['data_path']) + 2
     print(config['max_len'])
     
     tokenizer = CharTokenizer(config['tokenizer_path'], config['data_path'])

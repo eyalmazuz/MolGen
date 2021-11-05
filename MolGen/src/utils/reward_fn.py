@@ -7,7 +7,7 @@ from rdkit import Chem
 from rdkit import RDLogger
 RDLogger.DisableLog('rdApp.*')
 
-from src.utils.metrics import calc_qed, calc_sas
+from .metrics import calc_qed, calc_sas
 
 
 class Reward(ABC):
@@ -17,10 +17,6 @@ class Reward(ABC):
         
     @abstractmethod
     def __call__(self, smiles: str):
-        raise NotImplementedError
-
-    @abstractmethod
-    def __call__(self):
         raise NotImplementedError
 
 class QEDReward(Reward):

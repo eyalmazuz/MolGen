@@ -1,7 +1,7 @@
 import os
 from typing import List, Dict
 
-from rdkit.Chem.Scaffolds.MurckoScaffold import MurckoScaffoldSmiles
+from src.utils.mol_utils import get_molecule_scaffold
 import torch
 from torch.utils.data import Dataset
 
@@ -51,7 +51,7 @@ class ScaffoldDataset(Dataset):
         
 
         if self.return_scaffold:
-            scaffold = MurckoScaffoldSmiles(smiles)
+            scaffold = get_molecule_scaffold(smiles)
             scaffold = '[BOS]' + scaffold + '[EOS]'
             scaffold_encodings = self.tokenizer(scaffold, padding=True, max_length=self.max_len)
             

@@ -38,6 +38,6 @@ def get_max_smiles_len(data_path: str) -> int:
             file_max_len = len(max(open(full_path, 'r'), key=len))
             max_len = file_max_len if file_max_len > max_len else max_len
     else:
-        max_len = len(max(open(data_path, 'r'), key=len))
+        max_len = len(max(open(data_path, 'r'), key=len).strip())
     
-    return max_len + 2
+    return max_len

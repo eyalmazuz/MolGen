@@ -6,15 +6,15 @@ from rdkit import RDLogger
 RDLogger.DisableLog('rdApp.*')
 from tqdm import tqdm
 
-def get_molecule_scaffold(mol: Chem.rdchem.Mol) -> str:
+def get_molecule_scaffold(smiles: str) -> str:
     """
     Returns the scaffold of a given molecule.
     """
-    scaffold = MurckoScaffold.MurckoScaffoldSmiles(mol=mol)
+    scaffold = MurckoScaffold.MurckoScaffoldSmiles(smiles)
 
     return scaffold
 
-def convert_to_scaffolds(mols: List[Chem.rdchem.Mol]) -> Set[str]:
+def convert_to_scaffolds(mols: List[str]) -> Set[str]:
     """
     Returns all the scaffolds that are present in the list of molecules.
     """
