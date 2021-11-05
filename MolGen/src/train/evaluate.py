@@ -12,17 +12,21 @@ from rdkit import RDLogger
 RDLogger.DisableLog('rdApp.*')
 
 import seaborn as sns
+import torch
 from tqdm import trange, tqdm
 
 from src.utils.metrics import *
 from src.utils.utils import generate_and_save_plot
 from src.utils.mol_utils import convert_to_molecules, filter_invalid_molecules
 
-def generate_smiles(model, tokenizer, temprature=1, size=1000, max_len=100, device='cuda', disable=False) -> List[Chem.rdchem.Mol]:
-    
+def generate_smiles(model, tokenizer, temprature=1, size=1000, max_len=100, device=torch.device('cuda'), disable=False) -> List[Chem.rdchem.Mol]:
+    print(f'Evaluate {device}')
+    if torch.cuda.device_count() > 1:
+        model = model.module
     model.to(device)
     model.eval()
     gen_smiles = []
+    
     for i in trange(size, disable=disable):
         
         tokens = model.generate(tokenizer.bos_token_id, tokenizer.eos_token_id, temprature, max_len, device)
@@ -160,7 +164,7 @@ def get_stats(train_set: Union[str, List[str]],
             json.dump(metrics, f)
     
 
-def gen_till_train(model, dataset, times: int=10, device: str='cuda'):
+def gen_till_train(model, dataset, times: int=10, device=torch.device('cuda')):
     
     results = []
     for i in trange(times):

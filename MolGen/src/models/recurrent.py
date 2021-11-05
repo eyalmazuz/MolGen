@@ -36,7 +36,7 @@ class RecurrentModel(nn.Module):
         self.config = config
 
 
-    def forward(self, inputs, attention_mask=None, state=None, labels=None):
+    def forward(self, inputs, padding_mask=None, state=None, labels=None):
         
         embeddings = self.embedding(inputs)
         output, _ = self.lstm(embeddings)
@@ -52,7 +52,7 @@ class RecurrentModel(nn.Module):
         else:
             return logits
 
-    def generate(self, initial_token, end_token, temprature: int=1, max_len: int=100, device: str='cuda'):
+    def generate(self, initial_token, end_token, temprature: int=1, max_len: int=100, device=torch.device('cuda')):
         tokens = [initial_token]
         next_token = ''
         while next_token != end_token and len(tokens) < max_len:

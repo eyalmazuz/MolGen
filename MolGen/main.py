@@ -12,6 +12,8 @@ RDLogger.DisableLog('rdApp.*')
 
 
 import torch
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.nn import DataParallel as DP
 
 from src.datasets.dataset import get_dataset
 from src.models.model_builder import get_model, ModelOpt
@@ -45,6 +47,8 @@ def main():
         'to_load': True,
         'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
     }
+
+    print(config['device'])
     
     config['max_len'] = get_max_smiles_len(config['data_path'])
     print(config['max_len'])
@@ -58,8 +62,8 @@ def main():
 
     model_config = {
         'n_embd': 512,
-        'd_model': 512,
-        'n_layers': 2,
+        'd_model': 1024,
+        'n_layers': 4,
         'num_heads': 8,
         'vocab_size': tokenizer.vocab_size,
         'block_size': 512,
@@ -72,7 +76,7 @@ def main():
     }
 
     train_config = {
-        'batch_size': 1024,
+        'batch_size': 512,
         'epochs': 3,
         'optimizer': torch.optim.Adam,
         'criterion': torch.nn.CrossEntropyLoss,
@@ -81,8 +85,8 @@ def main():
 
     rl_config = {
         'batch_size': 500,
-        'epochs': 150,
-        'discount_factor': 0.97,
+        'epochs': 100,
+        'discount_factor': 0.99,
         'reward_fn': QEDReward(),
         'optimizer': torch.optim.Adam,
         'max_len': 150,
@@ -96,15 +100,24 @@ def main():
         'max_len': 150,        
     }
 
-    model = get_model(ModelOpt.RECURRENT, **model_config).to(config['device'])
+    model = get_model(ModelOpt.GPT, **model_config).to(config['device'])
     print(str(model))
     print(sum(p.numel() for p in model.parameters()))
 
     dataset_name = config['data_path'][config['data_path'].rfind('/')+1:config['data_path'].rfind('.')]
 
-    eval_config['save_path'] = eval_config['save_path'] + f'_{str(model)}' + f'_{dataset_name}' + f'_{str(rl_config["reward_fn"])}'
+    eval_config['save_path'] = eval_config['save_path'] + \
+                                f'_{str(model)}' + \
+                                f'_{dataset_name}' + \
+                                f'_{str(rl_config["reward_fn"])}' + \
+                                f'_discount_{str(rl_config["discount_factor"])}'
+
     print(eval_config['save_path'])
     
+    if torch.cuda.device_count() > 1:
+        print("Using data parallal")
+        model = DP(model)
+
     optim = train_config['optimizer'](model.parameters())
     criterion = train_config['criterion']()
 

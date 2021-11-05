@@ -1,7 +1,6 @@
 import os
 
 import torch
-from torch.nn.parallel import DistributedDataParallel as DDP
 
 class Trainer():
     
@@ -13,6 +12,7 @@ class Trainer():
 
 
     def train(self, epochs, batch_size, device):
+        print(f'Train {device}')
         dataloader = torch.utils.data.DataLoader(self.dataset,
                                                  shuffle=True,
                                                  batch_size=batch_size,
@@ -25,18 +25,18 @@ class Trainer():
                 self.optim.zero_grad()
             
                 input_ids = encodings['input_ids'].to(device)
-                attention_mask = encodings['attention_mask'].to(device)
+                padding_mask = encodings['padding_mask'].to(device)
                 labels = encodings['labels'].to(device)
                 
-                loss, logits, *args = self.model(input_ids, attention_mask=attention_mask, labels=labels)
+                loss, logits, *args = self.model(input_ids, padding_mask=padding_mask, labels=labels)
                 #logits = logits[..., :-1, :]
                 #loss = self.criterion(logits.transpose(1, 2), labels)
 
-
+                
+                if torch.cuda.device_count() > 1:
+                    loss = loss.mean()
                 loss.backward()
                 self.optim.step()
 
                 if batch % 200 == 0:
-                    #print(self.dataset.decode(x[0].cpu().numpy()), self.dataset.decode(y[0].cpu().numpy()))
-                    #print(y.size(), y_pred.size(), y_pred.transpose(1, 2).size())
                     print(f'epoch: {epoch + 1}, batch: {batch + 1}, loss: {loss.item()}')

@@ -107,15 +107,15 @@ class CharTokenizer():
 
         if eos:
             encodings = encodings + [eos]
-        attention_mask = [1] * len(encodings)
+        padding_mask = [1] * len(encodings)
         
         if padding and max_length and len(encodings) < max_length:
             pad_len = (max_length - len(encodings))
             encodings += [self.token2id['[PAD]']] * pad_len
-            attention_mask += [0] * pad_len 
+            padding_mask += [0] * pad_len 
 
         return {"input_ids": encodings,
-                "attention_mask": attention_mask}
+                "padding_mask": padding_mask}
 
  
     def __call__(self, smiles, padding=False, max_length=None):

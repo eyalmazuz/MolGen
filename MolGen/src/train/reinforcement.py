@@ -19,8 +19,9 @@ def policy_gradients(model,
                      max_len: int=100,
                      eval_steps: int=50,
                      do_eval: bool=False,
-                     device='cuda',
+                     device=torch.device('cuda'),
                      **kwargs):
+    print(f'Reinfocement {device}')
     model.train()
     model.to(device)
     optimizer = optimizer(model.parameters(), step_size)
@@ -63,7 +64,7 @@ def policy_gradients(model,
                                           temprature=kwargs['temprature'],
                                           size=kwargs['size'],
                                           max_len=max_len,
-                                          device=device,)
+                                          device=device)
                                           
 
             get_stats(train_set=kwargs['train_set'],

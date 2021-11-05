@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 from .recurrent import RecurrentConfig, RecurrentModel
 from .gpt import GPTConfig, GPT
 

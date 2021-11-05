@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from src.models.layers import MultiheadAttention, DecoderBlock
+from src.models.layers import MultiheadAttention, DecoderOnlyBlock
 
 class GPTConfig():
     def __init__(self,
@@ -45,7 +45,7 @@ class GPT(nn.Module):
 
         self.drop = nn.Dropout(config.embd_dropout_rate)
 
-        self.blocks = nn.ModuleList([DecoderBlock(config) for _ in range(config.n_layers)])
+        self.blocks = nn.ModuleList([DecoderOnlyBlock(config) for _ in range(config.n_layers)])
         self.ln = nn.LayerNorm(config.n_embd)
         self.logits = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
@@ -54,7 +54,7 @@ class GPT(nn.Module):
 
         self.config = config
 
-    def forward(self, idx, attention_mask=None, labels=None):
+    def forward(self, idx, padding_mask=None, labels=None):
         B, T = idx.size()
        
         token_embds = self.token_embds(idx)
@@ -62,8 +62,8 @@ class GPT(nn.Module):
         x = self.drop(token_embds + pos_embs)
 
         look_ahead_mask = self.mask[:, :, :T, :T]
-        if attention_mask is not None:
-            attention_mask = attention_mask.view(B, 1, 1, T)
+        if padding_mask is not None:
+            attention_mask = padding_mask.view(B, 1, 1, T)
             mask = torch.minimum(look_ahead_mask, attention_mask)
         else:
             mask = look_ahead_mask
@@ -71,7 +71,7 @@ class GPT(nn.Module):
         attn_weights = {}
         
         for i, block in enumerate(self.blocks):
-            x, weights = block(x, attention_mask=mask)
+            x, weights = block(x, mask=mask)
             attn_weights[f'block_{i}'] = weights
 
         x = self.ln(x)
@@ -87,7 +87,7 @@ class GPT(nn.Module):
         else:
             return logits, attn_weights
     
-    def generate(self, initial_token, end_token, temprature: int=1, max_len: int=100, device: str='cuda'):
+    def generate(self, initial_token, end_token, temprature: int=1, max_len: int=100, device=torch.device('cuda')):
         tokens = [initial_token]
         next_token = ''
         while next_token != end_token and len(tokens) < max_len:
@@ -142,7 +142,7 @@ def main():
 
 
     torch.autograd.set_detect_anomaly(True)
-    block = DecoderBlock(config)
+    block = DecoderOnlyBlock(config)
     # optimizer = torch.optim.SGD(block.parameters(), 3e-5)
     y, w = block(x)
     print(y.size(), w.size())
