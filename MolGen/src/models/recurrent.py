@@ -36,9 +36,9 @@ class RecurrentModel(nn.Module):
         self.config = config
 
 
-    def forward(self, inputs, padding_mask=None, state=None, labels=None):
+    def forward(self, input_ids, padding_mask=None, labels=None):
         
-        embeddings = self.embedding(inputs)
+        embeddings = self.embedding(input_ids)
         output, _ = self.lstm(embeddings)
         logits = self.fc(output)
 

@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from src.models.layers import MultiheadAttention, DecoderOnlyBlock
+from .layers import MultiheadAttention, DecoderOnlyBlock
 
 class GPTConfig():
     def __init__(self,
@@ -54,10 +54,10 @@ class GPT(nn.Module):
 
         self.config = config
 
-    def forward(self, idx, padding_mask=None, labels=None):
-        B, T = idx.size()
+    def forward(self, input_ids, padding_mask=None, labels=None):
+        B, T = input_ids.size()
        
-        token_embds = self.token_embds(idx)
+        token_embds = self.token_embds(input_ids)
         pos_embs = self.pos_emb[:, :T, :] # each position maps to a (learnable) vector
         x = self.drop(token_embds + pos_embs)
 

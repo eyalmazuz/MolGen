@@ -6,7 +6,7 @@ RDLogger.DisableLog('rdApp.*')
 import torch
 from tqdm import trange
 
-from src.train.evaluate import generate_smiles, get_stats
+from .evaluate import generate_smiles, get_stats
 
 def policy_gradients(model,
                      tokenizer,

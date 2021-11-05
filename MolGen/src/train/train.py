@@ -23,12 +23,11 @@ class Trainer():
 
             for batch, encodings in enumerate(dataloader):
                 self.optim.zero_grad()
-            
-                input_ids = encodings['input_ids'].to(device)
-                padding_mask = encodings['padding_mask'].to(device)
-                labels = encodings['labels'].to(device)
+
+                for k, v in encodings.items():
+                    encodings[k] = v.to(device)
                 
-                loss, logits, *args = self.model(input_ids, padding_mask=padding_mask, labels=labels)
+                loss, logits, *args = self.model(**encodings)
                 #logits = logits[..., :-1, :]
                 #loss = self.criterion(logits.transpose(1, 2), labels)
 

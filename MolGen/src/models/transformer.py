@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch import nn
 
-from src.models.layers import Encoder, Decoder
+from .layers import Encoder, Decoder
 
 class TransformerConfig():
     def __init__(self,
@@ -69,3 +69,9 @@ class Transoformer(nn.Module):
         
         else:
             return logits, {**enc_attnetions, **dec_attentions}
+
+def main():
+    print(5)
+
+if __name__ == "__main__":
+    main()
