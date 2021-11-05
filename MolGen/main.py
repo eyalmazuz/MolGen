@@ -15,7 +15,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.nn import DataParallel as DP
 
-from src.datasets.dataset import get_dataset
+from src.datasets.get_dataset import get_dataset
 from src.models.model_builder import get_model, ModelOpt
 from src.tokenizers.CharTokenizer import CharTokenizer
 from src.train.train import Trainer
