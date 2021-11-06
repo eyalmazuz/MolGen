@@ -88,25 +88,19 @@ class CharTokenizer():
         return id2token
 
 
-    def tokenize(self, smiles, padding=None, max_length=None):
+    def tokenize(self, smiles, padding: bool=False, max_length: int=-1):
         encodings = []
-        bos, eos = None, None
+        bos, eos = [], []
         if smiles.startswith('[BOS]'):
-            bos = self.bos_token_id
             smiles = smiles[5:]
-        
+            bos.append('[BOS]')   
+                 
         if smiles.endswith('[EOS]'):
-            eos = self.eos_token_id
+            eos.append('[EOS]') 
             smiles = smiles[:-5]
 
-        for char in smiles:
-            encodings.append(self.token2id[char])
+        encodings = self.convert_tokens_to_ids(bos + list(smiles) + eos)
         
-        if bos:
-            encodings = [bos] + encodings
-
-        if eos:
-            encodings = encodings + [eos]
         padding_mask = [1] * len(encodings)
         
         if padding and max_length and len(encodings) < max_length:
