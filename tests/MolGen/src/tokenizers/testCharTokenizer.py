@@ -4,7 +4,7 @@ from unittest import TestCase
 
 from MolGen.src.tokenizers.CharTokenizer import CharTokenizer
 
-class TestCharTokenizer(TestCase):
+class CharTokenizerTestCase(TestCase):
 
     def setUp(self) -> None:
         with open('./tests/MolGen/src/tokenizers/data.txt', 'w') as f:

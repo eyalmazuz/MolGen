@@ -5,7 +5,7 @@ import torch
 from MolGen.src.models.layers import Decoder, DecoderBlock, Encoder, MultiheadAttention, EncoderBlock
 from MolGen.src.models.transformer import TransformerConfig
 
-class TestMultiHeadAttention(TestCase):
+class MultiHeadAttentionTestCase(TestCase):
     
     
     def setUp(self) -> None:
@@ -46,7 +46,7 @@ class TestMultiHeadAttention(TestCase):
         self.assertTrue(temp.shape == w.shape)
         self.assertTrue(x.shape == y.shape)
 
-class TestEncoderBlock(TestCase):
+class EncoderBlockTestCase(TestCase):
     
     def setUp(self) -> None:
         config = TransformerConfig(num_heads=8, block_size=512, proj_dropout_rate=0,
@@ -63,7 +63,7 @@ class TestEncoderBlock(TestCase):
         self.assertTrue(temp.shape == w.shape)
         self.assertTrue(x.shape == y.shape)
 
-class TestEncoder(TestCase):
+class EncoderTestCase(TestCase):
     
     def setUp(self) -> None:
         config = TransformerConfig(num_heads=8, block_size=512, proj_dropout_rate=0,
@@ -78,7 +78,7 @@ class TestEncoder(TestCase):
         y, _ = self.enc(x)
         self.assertTrue(torch.rand((64, 62 ,512)).shape == y.shape)
 
-class TestDecoderBlock(TestCase):
+class DecoderBlockTestCase(TestCase):
     
     def setUp(self) -> None:
         config = TransformerConfig(num_heads=8, block_size=512, proj_dropout_rate=0,
@@ -96,7 +96,7 @@ class TestDecoderBlock(TestCase):
         y, _, _ = self.dec(x, enc_out)
         self.assertTrue(x.shape == y.shape)
 
-class TestDecoder(TestCase):
+class DecoderTestCase(TestCase):
     
     def setUp(self) -> None:
         config = TransformerConfig(num_heads=8, block_size=512, proj_dropout_rate=0,

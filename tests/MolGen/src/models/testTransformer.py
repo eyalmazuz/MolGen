@@ -4,7 +4,7 @@ import torch
 
 from MolGen.src.models.transformer import Transoformer, TransformerConfig
 
-class TestTransformer(TestCase):
+class TransformerTestCase(TestCase):
     
     def setUp(self) -> None:
         config = TransformerConfig(num_heads=8, block_size=512, proj_dropout_rate=0,
