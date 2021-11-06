@@ -2,7 +2,7 @@ from unittest import TestCase
 
 import torch
 
-from MolGen.src.models.layers import MultiheadAttention
+from MolGen.src.models.layers import Decoder, DecoderBlock, Encoder, MultiheadAttention, EncoderBlock
 from MolGen.src.models.transformer import TransformerConfig
 
 class TestMultiHeadAttention(TestCase):
@@ -45,3 +45,71 @@ class TestMultiHeadAttention(TestCase):
         y, w = self.attn(x, x, x)
         self.assertTrue(temp.shape == w.shape)
         self.assertTrue(x.shape == y.shape)
+
+class TestEncoderBlock(TestCase):
+    
+    def setUp(self) -> None:
+        config = TransformerConfig(num_heads=8, block_size=512, proj_dropout_rate=0,
+                                    attn_dropout_rate=0, n_embd=512, n_layers=2)
+        self.enc = EncoderBlock(config)
+
+        return super().setUp()
+
+    def test_encoder_shape(self):
+        x = torch.rand((64, 43, 512))
+
+        temp = torch.rand((64, 8, 43 ,43))
+        y, w = self.enc(x)
+        self.assertTrue(temp.shape == w.shape)
+        self.assertTrue(x.shape == y.shape)
+
+class TestEncoder(TestCase):
+    
+    def setUp(self) -> None:
+        config = TransformerConfig(num_heads=8, block_size=512, proj_dropout_rate=0,
+                                    attn_dropout_rate=0, n_embd=512, n_layers=2)
+        self.enc = Encoder(config)
+
+        return super().setUp()
+
+    def test_encoder_shape(self):
+        x = torch.randint(0, 512, (64, 62)).long()
+
+        y, _ = self.enc(x)
+        self.assertTrue(torch.rand((64, 62 ,512)).shape == y.shape)
+
+class TestDecoderBlock(TestCase):
+    
+    def setUp(self) -> None:
+        config = TransformerConfig(num_heads=8, block_size=512, proj_dropout_rate=0,
+                                    attn_dropout_rate=0, n_embd=512, n_layers=2)
+        self.dec = DecoderBlock(config)
+        self.enc = EncoderBlock(config)
+
+        return super().setUp()
+
+    def test_decoder_shape(self):
+        enc_inp = torch.rand((64, 43, 512))
+        x = torch.rand((64, 50, 512))
+
+        enc_out, _ = self.enc(enc_inp)
+        y, _, _ = self.dec(x, enc_out)
+        self.assertTrue(x.shape == y.shape)
+
+class TestDecoder(TestCase):
+    
+    def setUp(self) -> None:
+        config = TransformerConfig(num_heads=8, block_size=512, proj_dropout_rate=0,
+                                    attn_dropout_rate=0, n_embd=512, n_layers=2)
+        self.dec = Decoder(config)
+        self.enc = Encoder(config)
+
+        return super().setUp()
+
+    def test_decoder_shape(self):
+        x = torch.randint(0, 512, (64, 26)).long()
+        enc_inp = torch.randint(0, 512, (64, 62)).long()
+
+        enc_out, _ = self.enc(enc_inp)
+        y, _ = self.dec(x, enc_out)
+        self.assertTrue(torch.rand((64, 26 ,512)).shape == y.shape)

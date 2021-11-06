@@ -1,11 +1,21 @@
 from unittest import TestCase
 
-from MolGen.src.models.transformer import Transoformer
+import torch
 
-class LogPTestCase(TestCase):
+from MolGen.src.models.transformer import Transoformer, TransformerConfig
 
-    def setUp(self):
-        self.x = 5
+class TestTransformer(TestCase):
+    
+    def setUp(self) -> None:
+        config = TransformerConfig(num_heads=8, block_size=512, proj_dropout_rate=0,
+                                    attn_dropout_rate=0, n_embd=512, n_layers=2)
+        self.transformer = Transoformer(config)
 
-    def testBuild(self):
-        self.assertEqual(self.x, 5)
+        return super().setUp()
+
+    def test_transformer_shape(self):
+        enc_inp = torch.randint(0, 512, (64, 38)).long()
+        dec_inp = torch.randint(0, 512, (64, 36)).long()
+
+        y, _ = self.transformer(enc_inp, dec_inp)
+        self.assertTrue(torch.rand((64, 36 ,512)).shape == y.shape)

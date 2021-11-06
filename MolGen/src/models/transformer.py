@@ -47,7 +47,7 @@ class Transoformer(nn.Module):
         self.logits = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
 
-    def forward(self , enc_inp, dec_inp, enc_padding_mask, dec_padding_mask, labels):
+    def forward(self , enc_inp, dec_inp, enc_padding_mask=None, dec_padding_mask=None, labels=None):
         B, T = dec_inp.size()
         look_ahead_mask = self.mask[:, :, :T, :T]
         if dec_padding_mask is not None:

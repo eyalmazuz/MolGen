@@ -24,9 +24,9 @@ class MultiheadAttention(nn.Module):
         
 
         B, T, C = q.size()
-        q = q.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
-        k = k.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
-        v = v.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)
+        q = q.view(B, -1, self.num_heads, C // self.num_heads).transpose(1, 2)
+        k = k.view(B, -1, self.num_heads, C // self.num_heads).transpose(1, 2)
+        v = v.view(B, -1, self.num_heads, C // self.num_heads).transpose(1, 2)
 
 
         y, att_weights = self.attention(q, k ,v, mask=mask)
@@ -87,7 +87,7 @@ class EncoderBlock(nn.Module):
         )
 
     def forward(self, x, padding_mask=None):
-        attn_logits, attn_weights = self.attn(x, x, x, mask=padding_mask)
+        attn_logits, attn_weights = self.mha(x, x, x, mask=padding_mask)
         attn_logits = self.dropout(attn_logits)
         x = self.ln1(x + attn_logits)
         x = x + self.ln2(x + self.mlp(x))
@@ -103,9 +103,9 @@ class Encoder(nn.Module):
         self.pos_emb = nn.Parameter(torch.zeros(1, config.block_size, config.n_embd))
 
         self.drop = nn.Dropout(config.embd_dropout_rate)
-        self.blocks = nn.ModuleList([EncoderBlock(config) for _ in range(config.enc_layers)])
+        self.blocks = nn.ModuleList([EncoderBlock(config) for _ in range(config.n_layers)])
 
-    def forward(self, idx, padding_mask):
+    def forward(self, idx, padding_mask=None):
         B, T = idx.size()
        
         token_embds = self.token_embds(idx)
@@ -142,13 +142,13 @@ class DecoderBlock(nn.Module):
         )
 
     def forward(self, x, enc_out, look_ahead_mask=None, padding_mask=None):
-        dec_attn_logits, dec_attn_weights = self.attn(x, x, x, mask=look_ahead_mask)
-        dec_attn_logits = self.dropout(dec_attn_logits)
+        dec_attn_logits, dec_attn_weights = self.mha1(x, x, x, mask=look_ahead_mask)
+        dec_attn_logits = self.dropout1(dec_attn_logits)
         
         x = self.ln1(x + dec_attn_logits)
         
         enc_dec_attn_logits, enc_dec_attn_weights = self.mha2(x, enc_out, enc_out, mask=padding_mask)
-        enc_dec_attn_logits = self.dropout(enc_dec_attn_logits)
+        enc_dec_attn_logits = self.dropout2(enc_dec_attn_logits)
         
         x = self.ln2(x + enc_dec_attn_logits)
         
@@ -165,9 +165,9 @@ class Decoder(nn.Module):
         self.pos_emb = nn.Parameter(torch.zeros(1, config.block_size, config.n_embd))
 
         self.drop = nn.Dropout(config.embd_dropout_rate)
-        self.blocks = nn.ModuleList([EncoderBlock(config) for _ in range(config.n_layers)])
+        self.blocks = nn.ModuleList([DecoderBlock(config) for _ in range(config.n_layers)])
 
-    def forward(self, idx, enc_out, look_ahead_mask, dec_padding_mask):
+    def forward(self, idx, enc_out, look_ahead_mask=None, dec_padding_mask=None):
         B, T = idx.size()
        
         token_embds = self.token_embds(idx)
