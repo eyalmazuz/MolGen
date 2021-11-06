@@ -1,19 +1,17 @@
 from enum import Enum
 
 
+from src.models.model_builder import ModelOpt
 from .smiles_dataset import SmilesDataset
 from .scaffold_dataset import ScaffoldDataset
 
-class DatasetOpt(Enum):
-	SMILES = 1
-	SCAFFOLD = 2
 
-def get_dataset(type=DatasetOpt.SMILES, **kwargs):
+def get_dataset(type=ModelOpt.GPT, **kwargs):
 
-	if type == DatasetOpt.SMILES:
+	if type == ModelOpt.GPT or type == ModelOpt.RECURRENT:
 		dataset = SmilesDataset(**kwargs)
 	
-	elif type == DatasetOpt.SCAFFOLD:
+	elif type == ModelOpt.TRANSFORMER:
 		dataset = ScaffoldDataset(**kwargs)
 
 	else:

@@ -15,7 +15,7 @@ import seaborn as sns
 import torch
 from tqdm import trange, tqdm
 
-from src.utils.metrics import *
+from src.utils.metrics import calc_qed, calc_sas, calc_diversity, calc_novelty, calc_valid_molecules
 from src.utils.utils import generate_and_save_plot
 from src.utils.mol_utils import convert_to_molecules, filter_invalid_molecules
 
@@ -85,10 +85,10 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
     
 
 
-def get_stats(train_set: Union[str, List[str]],
+def get_stats(train_set: List[str],
               generated_smiles: List[str],
-              save_path: str=None,
-              folder_name: str=None,
+              save_path: str='./data',
+              folder_name: str='results',
               top_k: int=5,
               run_moses: bool=False):
 

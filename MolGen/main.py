@@ -16,7 +16,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.nn import DataParallel as DP
 
 from src.datasets.get_dataset import get_dataset
-from src.models.model_builder import get_model, ModelOpt
+from src.models.model_builder import get_model, ModelOpt, MyDataParallel
 from src.tokenizers.CharTokenizer import CharTokenizer
 from src.train.train import Trainer
 from src.train.evaluate import generate_smiles, get_stats, gen_till_train
@@ -44,8 +44,8 @@ def main():
     config = {
         'data_path': f'./data/{dataset}.smi',
         'tokenizer_path': f'./data/tokenizers/{tokenizer}CharTokenizer.json',
-        'to_load': True,
         'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+        'model': ModelOpt.GPT
     }
 
     print(config['device'])
@@ -55,10 +55,10 @@ def main():
     
     tokenizer = CharTokenizer(config['tokenizer_path'], config['data_path'])
 
-    dataset = get_dataset(config['data_path'],
+    dataset = get_dataset(config['model'],
+                          data_path=config['data_path'],
                           tokenizer=tokenizer,
-                          max_len=config['max_len'],
-                          to_load=config['to_load'])
+                          max_len=config['max_len'])
 
     model_config = {
         'n_embd': 512,
@@ -100,7 +100,7 @@ def main():
         'max_len': 150,        
     }
 
-    model = get_model(ModelOpt.GPT, **model_config).to(config['device'])
+    model = get_model(config['model'], **model_config).to(config['device'])
     print(str(model))
     print(sum(p.numel() for p in model.parameters()))
 
@@ -116,20 +116,20 @@ def main():
     
     if torch.cuda.device_count() > 1:
         print("Using data parallal")
-        model = DP(model)
+        model = MyDataParallel(model)
 
     optim = train_config['optimizer'](model.parameters())
     criterion = train_config['criterion']()
 
     trainer = Trainer(dataset, model, optim, criterion)
-    trainer.train(train_config['epochs'], train_config['batch_size'], config['device'])
+    # trainer.train(train_config['epochs'], train_config['batch_size'], config['device'])
 
     if not os.path.exists(f"{eval_config['save_path']}"):
         os.makedirs(f"{eval_config['save_path']}", exist_ok=True)
 
     torch.save(model.state_dict(), f"{eval_config['save_path']}/pre_rl.pt")
-    train_set = dataset.molecules if config['to_load'] else config['data_path']
-
+    train_set = dataset.molecules
+    
     old_model = copy.deepcopy(model)
     generated_smiles = generate_smiles(model=model,
                                           tokenizer=tokenizer,

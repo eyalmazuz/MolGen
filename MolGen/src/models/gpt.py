@@ -89,7 +89,7 @@ class GPT(nn.Module):
     
     def generate(self, initial_token, end_token, temprature: int=1, max_len: int=100, device=torch.device('cuda')):
         tokens = [initial_token]
-        next_token = ''
+        next_token = -1
         while next_token != end_token and len(tokens) < max_len:
             x = torch.tensor([tokens]).to(device)
             y_pred = self.forward(x)

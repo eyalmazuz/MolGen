@@ -7,14 +7,14 @@ from tqdm import tqdm
 
 class CharTokenizer():
     
-    def __init__(self, tokenizer_path: str=None, data_path: str=None) -> None:
+    def __init__(self, tokenizer_path: str='./toeknizers/', data_path: str='./data/') -> None:
 
         if tokenizer_path and os.path.exists(tokenizer_path):
             with open(tokenizer_path, 'r') as f:
                 self.id2token = json.load(f)
                 self.id2token = {int(k): v for k, v in self.id2token.items()}
         else:
-            self.id2token: Dict[int, str] = {}
+            self.id2token = {}
             if os.path.isdir(data_path):
                 for path in os.listdir(data_path):
                     full_path = os.path.join(data_path, path)
@@ -126,7 +126,7 @@ class CharTokenizer():
         for char in tokens:
             encodings.append(self.token2id[char])
         
-        return [encodings]
+        return encodings
 
     def convert_ids_to_tokens(self, encodings: List[int]) -> List[str]:
         tokens = []
