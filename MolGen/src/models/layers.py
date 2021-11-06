@@ -37,7 +37,7 @@ class MultiheadAttention(nn.Module):
 
     def attention(self, q, k, v, mask=None):
         att = (q @ k.transpose(-2, -1))
-        att = att  * (1.0 / k.size()[-1] ** 0.5)
+        att = att  * (1.0 / k.size(-1) ** 0.5)
 
         if mask is not None:
             att = att.masked_fill(mask == 0, float('-inf'))
