@@ -15,9 +15,9 @@ import seaborn as sns
 import torch
 from tqdm import trange, tqdm
 
-from src.utils.metrics import calc_qed, calc_sas, calc_diversity, calc_novelty, calc_valid_molecules
-from src.utils.utils import generate_and_save_plot
-from src.utils.mol_utils import convert_to_molecules, filter_invalid_molecules
+from ..utils.metrics import calc_qed, calc_sas, calc_diversity, calc_novelty, calc_valid_molecules
+from ..utils.utils import generate_and_save_plot
+from ..utils.mol_utils import convert_to_molecules, filter_invalid_molecules
 
 def generate_smiles(model, tokenizer, temprature=1, size=1000, max_len=100, device=torch.device('cuda'), disable=False) -> List[Chem.rdchem.Mol]:
     print(f'Evaluate {device}')

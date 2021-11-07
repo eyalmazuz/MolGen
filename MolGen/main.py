@@ -122,7 +122,7 @@ def main():
     criterion = train_config['criterion']()
 
     trainer = Trainer(dataset, model, optim, criterion)
-    # trainer.train(train_config['epochs'], train_config['batch_size'], config['device'])
+    trainer.train(train_config['epochs'], train_config['batch_size'], config['device'])
 
     if not os.path.exists(f"{eval_config['save_path']}"):
         os.makedirs(f"{eval_config['save_path']}", exist_ok=True)

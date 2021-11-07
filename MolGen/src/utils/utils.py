@@ -1,10 +1,14 @@
+from enum import Enum
 import os
 from typing import List
 
 import matplotlib.pyplot as plt
 
-import seaborn as sns
-from tqdm import tqdm
+
+class ModelOpt(Enum):
+	RECURRENT = 1
+	GPT = 2
+	TRANSFORMER = 3
 
 def generate_and_save_plot(values: List[float],
                            plot_func,

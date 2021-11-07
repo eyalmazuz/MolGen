@@ -1,10 +1,6 @@
-from enum import Enum
-
-
-from src.models.model_builder import ModelOpt
 from .smiles_dataset import SmilesDataset
 from .scaffold_dataset import ScaffoldDataset
-
+from ..utils.utils import ModelOpt
 
 def get_dataset(type=ModelOpt.GPT, **kwargs):
 
