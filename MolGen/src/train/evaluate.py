@@ -1,12 +1,11 @@
 import json
-import sys
 import os
+import random
 from typing import List, Dict, Tuple, Callable
 
 import moses
 import numpy as np
 from rdkit import Chem
-import rdkit
 from rdkit.Chem import Draw
 from rdkit import RDLogger
 RDLogger.DisableLog('rdApp.*')
@@ -19,7 +18,36 @@ from ..utils.metrics import calc_qed, calc_sas, calc_diversity, calc_novelty, ca
 from ..utils.utils import generate_and_save_plot
 from ..utils.mol_utils import convert_to_molecules, filter_invalid_molecules
 
-def generate_smiles(model, tokenizer, temprature=1, size=1000, max_len=100, device=torch.device('cuda'), disable=False) -> List[Chem.rdchem.Mol]:
+def generate_smiles_scaffolds(model, tokenizer, scaffolds, temprature=1, num_samples=10, size=1000,
+                                max_len=100, device=torch.device('cuda'), 
+                                disable=False) -> List[str]:
+    print(f'Evaluate {device}')
+    if torch.cuda.device_count() > 1:
+        model = model.module
+    model.to(device)
+    model.eval()
+    gen_smiles = []
+    
+    if num_samples < len(scaffolds):
+        scaffolds_sample = random.sample(scaffolds, num_samples)
+    else:
+        scaffolds_sample = scaffolds
+
+    for scaffold in scaffolds_sample:
+        encoding = tokenizer('[BOS]' + scaffold + '[EOS]')
+
+        for i in trange(size // num_samples, disable=disable):
+            
+            tokens = model.generate(tokenizer.bos_token_id, tokenizer.eos_token_id, encoding['input_ids'], 
+                                    encoding['padding_mask'], temprature, max_len, device)
+
+            smiles = tokenizer.decode(tokens[1:-1])
+            gen_smiles.append(smiles)
+
+    return gen_smiles
+
+def generate_smiles(model, tokenizer, temprature=1, size=1000, max_len=100,
+                    device=torch.device('cuda'), disable=False) -> List[str]:
     print(f'Evaluate {device}')
     if torch.cuda.device_count() > 1:
         model = model.module

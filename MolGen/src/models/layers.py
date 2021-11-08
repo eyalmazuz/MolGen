@@ -40,7 +40,8 @@ class MultiheadAttention(nn.Module):
         att = att  * (1.0 / k.size(-1) ** 0.5)
 
         if mask is not None:
-            att = att.masked_fill(mask == 0, float('-inf'))
+            # att = att + (mask * -1e9)
+            att = att.masked_fill(mask == 1, float('-inf'))
 
         att_weights = F.softmax(att, dim=-1)
         att = self.attn_drop(att_weights)
@@ -107,7 +108,7 @@ class Encoder(nn.Module):
 
     def forward(self, idx, padding_mask=None):
         B, T = idx.size()
-       
+
         token_embds = self.token_embds(idx)
         pos_embs = self.pos_emb[:, :T, :] # each position maps to a (learnable) vector
         x = self.drop(token_embds + pos_embs)
@@ -159,7 +160,6 @@ class DecoderBlock(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, config) -> None:
         super(Decoder, self).__init__()
-
 
         self.token_embds = nn.Embedding(config.vocab_size, config.n_embd)
         self.pos_emb = nn.Parameter(torch.zeros(1, config.block_size, config.n_embd))

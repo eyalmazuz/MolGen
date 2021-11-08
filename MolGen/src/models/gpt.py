@@ -49,7 +49,7 @@ class GPT(nn.Module):
         self.ln = nn.LayerNorm(config.n_embd)
         self.logits = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
-        self.register_buffer('mask', torch.tril(torch.ones(config.block_size, config.block_size))
+        self.register_buffer('mask', 1 - torch.tril(torch.ones(config.block_size, config.block_size))
                                         .view(1, 1, config.block_size, config.block_size))
 
         self.config = config
@@ -64,7 +64,7 @@ class GPT(nn.Module):
         look_ahead_mask = self.mask[:, :, :T, :T]
         if padding_mask is not None:
             attention_mask = padding_mask.view(B, 1, 1, T)
-            mask = torch.minimum(look_ahead_mask, attention_mask)
+            mask = torch.maximum(look_ahead_mask, attention_mask)
         else:
             mask = look_ahead_mask
 

@@ -2,12 +2,13 @@ import json
 import os
 from typing import Dict, List, Union
 
+from rdkit.Chem.Scaffolds.MurckoScaffold import MurckoScaffoldSmiles
 from tqdm import tqdm
 
 
 class CharTokenizer():
     
-    def __init__(self, tokenizer_path: str='./toeknizers/', data_path: str='./data/') -> None:
+    def __init__(self, tokenizer_path: str='./toeknizers/', data_path: str='./data/', build_scaffolds: bool=False) -> None:
 
         if tokenizer_path and os.path.exists(tokenizer_path):
             with open(tokenizer_path, 'r') as f:
@@ -80,6 +81,7 @@ class CharTokenizer():
         for smiles in tqdm(self.molecules):
             if smiles:
                 tokens |= set(smiles)
+                tokens |= set(MurckoScaffoldSmiles(smiles))
 
         id2token = {}
         for i, token in enumerate(tokens):
@@ -101,12 +103,12 @@ class CharTokenizer():
 
         encodings = self.convert_tokens_to_ids(bos + list(smiles) + eos)
         
-        padding_mask = [1] * len(encodings)
+        padding_mask = [0] * len(encodings)
         
         if padding and max_length and len(encodings) < max_length:
             pad_len = (max_length - len(encodings))
             encodings += [self.token2id['[PAD]']] * pad_len
-            padding_mask += [0] * pad_len 
+            padding_mask += [1] * pad_len 
 
         return {"input_ids": encodings,
                 "padding_mask": padding_mask}

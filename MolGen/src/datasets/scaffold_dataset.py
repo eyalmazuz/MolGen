@@ -4,6 +4,7 @@ from typing import List, Dict
 from ..utils.mol_utils import get_molecule_scaffold
 import torch
 from torch.utils.data import Dataset
+from tqdm import tqdm
 
 
 
@@ -19,7 +20,9 @@ class ScaffoldDataset(Dataset):
         self.data_path = data_path 
 
         self._molecules = self.load_molecules()
-
+        
+        self.scaffolds = list(set([get_molecule_scaffold(mol) for mol in tqdm(self._molecules, desc='generating scaffolds')])) 
+        
         self.tokenizer = tokenizer
 
         self.return_scaffold = return_scaffold
@@ -42,12 +45,12 @@ class ScaffoldDataset(Dataset):
         encodings = {}
         
         smiles = self._molecules[idx]
-        smiles = '[BOS]' + smiles + '[EOS]'
-        smiles_encodings = self.tokenizer(smiles, padding=True, max_length=self.max_len)
+        encoded_smiles = '[BOS]' + smiles + '[EOS]'
+        smiles_encodings = self.tokenizer(encoded_smiles, padding=True, max_length=self.max_len)
         
         encodings['dec_inp'] = smiles_encodings['input_ids']
         encodings['labels'] = smiles_encodings['input_ids']
-        encodings['dec_padding_mask'] = smiles_encodings['attention_mask']
+        encodings['dec_padding_mask'] = smiles_encodings['padding_mask']
         
 
         if self.return_scaffold:
@@ -56,13 +59,13 @@ class ScaffoldDataset(Dataset):
             scaffold_encodings = self.tokenizer(scaffold, padding=True, max_length=self.max_len)
             
             encodings['enc_inp'] = scaffold_encodings['input_ids']
-            encodings['enc_padding_mask'] = scaffold_encodings['attention_mask']
+            encodings['enc_padding_mask'] = scaffold_encodings['padding_mask']
 
         else:
             scaffold_encodings = self.tokenizer('', padding=True, max_length=self.max_len)
             
             encodings['enc_inp'] = scaffold_encodings['input_ids']
-            encodings['enc_padding_mask'] = scaffold_encodings['attention_mask']
+            encodings['enc_padding_mask'] = scaffold_encodings['padding_mask']
         
         encodings = {k: torch.tensor(v) for k, v in encodings.items()}
         return encodings

@@ -19,7 +19,7 @@ from src.datasets.get_dataset import get_dataset
 from src.models.model_builder import get_model, ModelOpt, MyDataParallel
 from src.tokenizers.CharTokenizer import CharTokenizer
 from src.train.train import Trainer
-from src.train.evaluate import generate_smiles, get_stats, gen_till_train
+from src.train.evaluate import generate_smiles, generate_smiles_scaffolds, get_stats, gen_till_train
 from src.train.reinforcement import policy_gradients
 from src.utils.reward_fn import QEDReward
 from src.utils.utils import get_max_smiles_len
@@ -43,9 +43,9 @@ def main():
 
     config = {
         'data_path': f'./data/{dataset}.smi',
-        'tokenizer_path': f'./data/tokenizers/{tokenizer}CharTokenizer.json',
+        'tokenizer_path': f'./data/tokenizers/{tokenizer}ScaffoldCharTokenizer.json',
         'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-        'model': ModelOpt.GPT
+        'model': ModelOpt.TRANSFORMER
     }
 
     print(config['device'])
@@ -53,7 +53,7 @@ def main():
     config['max_len'] = get_max_smiles_len(config['data_path']) + 2
     print(config['max_len'])
     
-    tokenizer = CharTokenizer(config['tokenizer_path'], config['data_path'])
+    tokenizer = CharTokenizer(config['tokenizer_path'], config['data_path'], build_scaffolds=config['model'] == ModelOpt.TRANSFORMER)
 
     dataset = get_dataset(config['model'],
                           data_path=config['data_path'],
@@ -76,7 +76,7 @@ def main():
     }
 
     train_config = {
-        'batch_size': 512,
+        'batch_size': 256,
         'epochs': 3,
         'optimizer': torch.optim.Adam,
         'criterion': torch.nn.CrossEntropyLoss,
@@ -122,21 +122,30 @@ def main():
     criterion = train_config['criterion']()
 
     trainer = Trainer(dataset, model, optim, criterion)
-    trainer.train(train_config['epochs'], train_config['batch_size'], config['device'])
+    # trainer.train(train_config['epochs'], train_config['batch_size'], config['device'])
 
-    if not os.path.exists(f"{eval_config['save_path']}"):
-        os.makedirs(f"{eval_config['save_path']}", exist_ok=True)
+    # if not os.path.exists(f"{eval_config['save_path']}"):
+    #     os.makedirs(f"{eval_config['save_path']}", exist_ok=True)
 
-    torch.save(model.state_dict(), f"{eval_config['save_path']}/pre_rl.pt")
+    # torch.save(model.state_dict(), f"{eval_config['save_path']}/pre_rl.pt")
     train_set = dataset.molecules
     
     old_model = copy.deepcopy(model)
-    generated_smiles = generate_smiles(model=model,
-                                          tokenizer=tokenizer,
-                                          temprature=eval_config['temprature'],
-                                          size=eval_config['size'],
-                                          max_len=eval_config['max_len'],
-                                          device=config['device'])
+    if ModelOpt.TRANSFORMER:
+        generated_smiles = generate_smiles_scaffolds(model=model,
+                                            tokenizer=tokenizer,
+                                            scaffolds=dataset.scaffolds,
+                                            temprature=eval_config['temprature'],
+                                            size=eval_config['size'],
+                                            max_len=eval_config['max_len'],
+                                            device=config['device'])
+    else:
+        generated_smiles = generate_smiles(model=model,
+                                            tokenizer=tokenizer,
+                                            temprature=eval_config['temprature'],
+                                            size=eval_config['size'],
+                                            max_len=eval_config['max_len'],
+                                            device=config['device'])
     
     
     get_stats(train_set=train_set,
