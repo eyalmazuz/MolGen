@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 from numpy.lib.arraysetops import isin
 from rdkit import Chem
@@ -6,7 +8,7 @@ RDLogger.DisableLog('rdApp.*')
 import torch
 from tqdm import trange
 
-from .evaluate import generate_smiles, get_stats
+from .evaluate import generate_smiles, generate_smiles_scaffolds, get_stats
 
 def policy_gradients(model,
                      tokenizer,
@@ -30,7 +32,13 @@ def policy_gradients(model,
         loss = 0
         batch_reward = 0
         for batch in trange(batch_size, leave=False):
-            tokens = model.generate(tokenizer.bos_token_id, tokenizer.eos_token_id, 1, max_len, device)
+            if 'Transformer' in str(model):
+                scaffold = random.sample(kwargs['train_set'].scaffolds, 1)
+                encoding = tokenizer('[BOS]' + scaffold + '[EOS]')
+                tokens = model.generate(tokenizer.bos_token_id, tokenizer.eos_token_id, encoding['input_ids'], 
+                                    encoding['padding_mask'], kwargs['temprature'], max_len, device)
+            else:
+                tokens = model.generate(tokenizer.bos_token_id, tokenizer.eos_token_id, kwargs['temprature'], max_len, device)
 
             smiles = tokenizer.decode(tokens[1:-1])
 
@@ -59,7 +67,17 @@ def policy_gradients(model,
         optimizer.step()
 
         if do_eval and (epoch + 1) % eval_steps == 0:
-            generated_smiles = generate_smiles(model=model,
+            if 'Transformer' in str(model):
+                generated_smiles = generate_smiles_scaffolds(model=model,
+                                            tokenizer=tokenizer,
+                                            scaffolds=kwargs['train_set'].scaffolds,
+                                            temprature=kwargs['temprature'],
+                                            size=kwargs['size'],
+                                            max_len=max_len,
+                                            device=device)
+    
+            else:
+                generated_smiles = generate_smiles(model=model,
                                           tokenizer=tokenizer,
                                           temprature=kwargs['temprature'],
                                           size=kwargs['size'],

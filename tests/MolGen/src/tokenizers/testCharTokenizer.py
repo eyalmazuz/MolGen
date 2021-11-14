@@ -56,7 +56,7 @@ class CharTokenizerTestCase(TestCase):
         padding_mask = encoding['padding_mask']
 
         self.assertTrue(all([isinstance(x, int) for x in input_ids]))
-        self.assertListEqual([1] * len(input_ids), padding_mask)
+        self.assertListEqual([0] * len(input_ids), padding_mask)
         
         # self.assertEqual(tokenizer.bos_token_id, input_ids[0])
         # self.assertEqual(tokenizer.eos_token_id,/ input_ids[-1])
@@ -72,7 +72,7 @@ class CharTokenizerTestCase(TestCase):
         padding_mask = encoding['padding_mask']
 
         self.assertTrue(all([isinstance(x, int) for x in input_ids]))
-        self.assertListEqual([1] * len(input_ids), padding_mask)
+        self.assertListEqual([0] * len(input_ids), padding_mask)
         
         self.assertEqual(tokenizer.bos_token_id, input_ids[0])
         self.assertEqual(tokenizer.eos_token_id, input_ids[-1])
@@ -91,12 +91,12 @@ class CharTokenizerTestCase(TestCase):
         padding_mask = encoding['padding_mask']
 
         self.assertTrue(all([isinstance(x, int) for x in input_ids]))
-        self.assertListEqual([1] * 5, padding_mask[:5])
+        self.assertListEqual([0] * 5, padding_mask[:5])
         
         self.assertEqual(tokenizer.bos_token_id, input_ids[0])
         self.assertEqual(tokenizer.eos_token_id, input_ids[4])
         self.assertListEqual([tokenizer.pad_token_id] * (max_len - 5), input_ids[5:])
-        self.assertListEqual([0] * (max_len - 5), padding_mask[5:])
+        self.assertListEqual([1] * (max_len - 5), padding_mask[5:])
 
         
     def test_convert_tokens_to_ids(self):

@@ -90,12 +90,12 @@ def main():
         'reward_fn': QEDReward(),
         'optimizer': torch.optim.Adam,
         'max_len': 150,
-        'size': 25000,
+        'size': 2500,
     }
 
     eval_config = {
         'save_path': './data/results/' + str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S")),
-        'size': 100000,
+        'size': 10000,
         'temprature': 1,
         'max_len': 150,        
     }
@@ -122,13 +122,12 @@ def main():
     criterion = train_config['criterion']()
 
     trainer = Trainer(dataset, model, optim, criterion)
-    # trainer.train(train_config['epochs'], train_config['batch_size'], config['device'])
+    trainer.train(train_config['epochs'], train_config['batch_size'], config['device'])
 
-    # if not os.path.exists(f"{eval_config['save_path']}"):
-    #     os.makedirs(f"{eval_config['save_path']}", exist_ok=True)
+    if not os.path.exists(f"{eval_config['save_path']}"):
+        os.makedirs(f"{eval_config['save_path']}", exist_ok=True)
 
-    # torch.save(model.state_dict(), f"{eval_config['save_path']}/pre_rl.pt")
-    train_set = dataset.molecules
+    torch.save(model.state_dict(), f"{eval_config['save_path']}/pre_rl.pt")
     
     old_model = copy.deepcopy(model)
     if ModelOpt.TRANSFORMER:
@@ -148,7 +147,7 @@ def main():
                                             device=config['device'])
     
     
-    get_stats(train_set=train_set,
+    get_stats(train_set=dataset,
               generated_smiles=generated_smiles,
               save_path=f"{eval_config['save_path']}",
               folder_name='pre_RL')
@@ -162,7 +161,7 @@ def main():
                      eval_steps=10,
                      save_path=eval_config['save_path'],
                      temprature=eval_config['temprature'],
-                     train_set=train_set)
+                     train_set=dataset)
 
     torch.save(model.state_dict(), f"{eval_config['save_path']}/rl.pt")
     
@@ -174,7 +173,7 @@ def main():
                                           device=config['device'])
                                           
 
-    get_stats(train_set=train_set,
+    get_stats(train_set=dataset,
               generated_smiles=generated_smiles,
               save_path=f"{eval_config['save_path']}",
               folder_name='post_RL',

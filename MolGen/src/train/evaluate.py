@@ -4,6 +4,7 @@ import random
 from typing import List, Dict, Tuple, Callable
 
 import moses
+from torch.utils.data import Dataset
 import numpy as np
 from rdkit import Chem
 from rdkit.Chem import Draw
@@ -113,7 +114,7 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
     
 
 
-def get_stats(train_set: List[str],
+def get_stats(train_set: Dataset,
               generated_smiles: List[str],
               save_path: str='./data',
               folder_name: str='results',
@@ -168,7 +169,7 @@ def get_stats(train_set: List[str],
     
     if train_set is not None:
         print('Calculating novelty')
-        generated_novelty_score = calc_novelty(train_set, generated_smiles)
+        generated_novelty_score = calc_novelty(train_set.molecules, generated_smiles)
         stats['novelty'] = generated_novelty_score
 
     print('Calculating percentage of valid mols')
