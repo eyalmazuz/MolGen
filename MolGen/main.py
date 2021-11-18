@@ -45,7 +45,7 @@ def main():
         'data_path': f'./data/{dataset}.smi',
         'tokenizer_path': f'./data/tokenizers/{tokenizer}ScaffoldCharTokenizer.json',
         'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-        'model': ModelOpt.TRANSFORMER
+        'model': ModelOpt.GPT
     }
 
     print(config['device'])
@@ -61,13 +61,13 @@ def main():
                           max_len=config['max_len'])
 
     model_config = {
-        'n_embd': 512,
-        'd_model': 1024,
+        'n_embd': 128,
+        'd_model': 128,
         'n_layers': 4,
         'num_heads': 8,
         'vocab_size': tokenizer.vocab_size,
-        'block_size': 512,
-        'proj_size': 512,
+        'block_size': 256,
+        'proj_size': 256,
         'attn_dropout_rate': 0.1,
         'proj_dropout_rate': 0.1,
         'resid_dropout_rate': 0.1,

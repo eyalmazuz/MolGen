@@ -16,7 +16,7 @@ import torch
 from tqdm import trange, tqdm
 
 from ..utils.metrics import calc_qed, calc_sas, calc_diversity, calc_novelty, calc_valid_molecules
-from ..utils.utils import generate_and_save_plot
+from ..utils.utils import generate_and_save_plot, sample
 from ..utils.mol_utils import convert_to_molecules, filter_invalid_molecules
 
 def generate_smiles_scaffolds(model, tokenizer, scaffolds, temprature=1, num_samples=10, size=1000,
@@ -47,8 +47,15 @@ def generate_smiles_scaffolds(model, tokenizer, scaffolds, temprature=1, num_sam
 
     return gen_smiles
 
-def generate_smiles(model, tokenizer, temprature=1, size=1000, max_len=100,
-                    device=torch.device('cuda'), disable=False) -> List[str]:
+def generate_smiles(model,
+                    tokenizer,
+                    temprature: int=1,
+                    size:int =1000,
+                    batch_size: int=100,
+                    max_len:int=100,
+                    device=torch.device('cuda'),
+                    disable=False) -> List[str]:
+
     print(f'Evaluate {device}')
     if torch.cuda.device_count() > 1:
         model = model.module
@@ -56,12 +63,11 @@ def generate_smiles(model, tokenizer, temprature=1, size=1000, max_len=100,
     model.eval()
     gen_smiles = []
     
-    for i in trange(size, disable=disable):
-        
-        tokens = model.generate(tokenizer.bos_token_id, tokenizer.eos_token_id, temprature, max_len, device)
-
-        smiles = tokenizer.decode(tokens[1:-1])
-        gen_smiles.append(smiles)
+    for batch in trange(size // batch_size, disable=disable):
+            tokens = sample(model, tokenizer.bos_token_id, tokenizer.eos_token_id, batch, max_len, temprature, device)
+            for token in tokens:
+                smiles = tokenizer.decode(token)
+                gen_smiles.append(smiles)
 
     return gen_smiles
 
