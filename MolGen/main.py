@@ -45,7 +45,7 @@ def main():
         'data_path': f'./data/{dataset}.smi',
         'tokenizer_path': f'./data/tokenizers/{tokenizer}ScaffoldCharTokenizer.json',
         'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-        'model': ModelOpt.TRANSFORMER
+        'model': ModelOpt.GPT
     }
 
     print(config['device'])
@@ -132,7 +132,7 @@ def main():
     torch.save(model.state_dict(), f"{eval_config['save_path']}/pre_rl.pt")
     
     old_model = copy.deepcopy(model)
-    if ModelOpt.TRANSFORMER:
+    if config['model'] == ModelOpt.TRANSFORMER:
         generated_smiles = generate_smiles_scaffolds(model=model,
                                             tokenizer=tokenizer,
                                             scaffolds=dataset.scaffolds,
