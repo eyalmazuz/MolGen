@@ -5,6 +5,7 @@ from typing import List
 import matplotlib.pyplot as plt
 import torch
 from torch.nn import functional as F
+from tqdm import tqdm, trange
 
 class ModelOpt(Enum):
 	RECURRENT = 1
@@ -49,17 +50,16 @@ def get_max_smiles_len(data_path: str) -> int:
 
 def sample(model,
            start_token: int,
-           end_token: int,
            size: int,
            max_len: int,
            temprature: int,
-           device):
+           device,
+           **kwargs):
 
     tokens = []
-    x = torch.tensor([[start_token]] * size).to(device)
-
-    for k in range(max_len):
-        logits = model(x)
+    x = torch.tensor([[start_token]] * size, dtype=torch.long).to(device)
+    for k in trange(max_len, leave=False):
+        logits = model(x, **kwargs)
 
         if isinstance(logits, tuple):
                 logits = logits[0]
@@ -70,12 +70,6 @@ def sample(model,
 
         x = torch.cat((x, idxs), dim=1)
 
-    end_idxs = torch.nonzero(x == end_token, as_tuple=True)[1]
-
-    for mol, end_idx in zip(x, end_idxs):
-        mol = mol[1: end_idx]
-        tokens.append(mol.tolist())
-
-    return tokens
+    return x
 
     

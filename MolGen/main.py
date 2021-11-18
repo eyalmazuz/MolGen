@@ -61,8 +61,8 @@ def main():
                           max_len=config['max_len'])
 
     model_config = {
-        'n_embd': 128,
-        'd_model': 128,
+        'n_embd': 256,
+        'd_model': 256,
         'n_layers': 4,
         'num_heads': 8,
         'vocab_size': tokenizer.vocab_size,
@@ -130,7 +130,7 @@ def main():
     torch.save(model.state_dict(), f"{eval_config['save_path']}/pre_rl.pt")
     
     old_model = copy.deepcopy(model)
-    if ModelOpt.TRANSFORMER:
+    if config['model'] == ModelOpt.TRANSFORMER:
         generated_smiles = generate_smiles_scaffolds(model=model,
                                             tokenizer=tokenizer,
                                             scaffolds=dataset.scaffolds,
