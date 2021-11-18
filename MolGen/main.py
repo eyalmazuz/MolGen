@@ -61,13 +61,13 @@ def main():
                           max_len=config['max_len'])
 
     model_config = {
-        'n_embd': 512,
-        'd_model': 1024,
+        'n_embd': 256,
+        'd_model': 256,
         'n_layers': 4,
         'num_heads': 8,
         'vocab_size': tokenizer.vocab_size,
-        'block_size': 512,
-        'proj_size': 512,
+        'block_size': 256,
+        'proj_size': 256,
         'attn_dropout_rate': 0.1,
         'proj_dropout_rate': 0.1,
         'resid_dropout_rate': 0.1,
@@ -76,8 +76,8 @@ def main():
     }
 
     train_config = {
-        'batch_size': 256,
-        'epochs': 3,
+        'batch_size': 512,
+        'epochs': 5,
         'optimizer': torch.optim.Adam,
         'criterion': torch.nn.CrossEntropyLoss,
     }
@@ -109,7 +109,9 @@ def main():
     eval_config['save_path'] = eval_config['save_path'] + \
                                 f'_{str(model)}' + \
                                 f'_{dataset_name}' + \
-                                f'_{str(rl_config["reward_fn"])}' + \
+                                f'_RlBatch_{str(rl_config["batch_size"])}' + \
+                                f'_RlEpochs_{str(rl_config["epochs"])}' + \
+                                f'_Reward_{str(rl_config["reward_fn"])}' + \
                                 f'_discount_{str(rl_config["discount_factor"])}'
 
     print(eval_config['save_path'])

@@ -108,7 +108,7 @@ class GPT(nn.Module):
         return tokens
 
     def __str__(self):
-        return f"GPT_Layers_{self.config.n_layers}_Heads_{self.config.num_heads}_Emb_{self.config.n_embd}"
+        return f"GPT_Layers_{self.config.n_layers}_Heads_{self.config.num_heads}_Emb_{self.config.n_embd}_Dmodel_{self.config.d_model}"
 
 def main():
     config = GPTConfig(num_heads=8, block_size=512, proj_dropout_rate=0, attn_dropout_rate=0, n_embd=512, n_layers=2)

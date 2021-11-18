@@ -33,7 +33,7 @@ def policy_gradients(model,
         batch_reward = 0
         for batch in trange(batch_size, leave=False):
             if 'Transformer' in str(model):
-                scaffold = random.sample(kwargs['train_set'].scaffolds, 1)
+                scaffold = random.sample(kwargs['train_set'].scaffolds, 1)[0]
                 encoding = tokenizer('[BOS]' + scaffold + '[EOS]')
                 tokens = model.generate(tokenizer.bos_token_id, tokenizer.eos_token_id, encoding['input_ids'], 
                                     encoding['padding_mask'], kwargs['temprature'], max_len, device)
@@ -47,7 +47,7 @@ def policy_gradients(model,
             discounted_returns = (torch.pow(discount_factor, torch.arange(len(tokens[:-1]), 0, -1)) * reward).to(device)
             # discounted_returns = (discounted_returns - discounted_returns.mean()) / (discounted_returns.std() + 1e-5)
             
-            y_hat = model(torch.tensor([tokens[:-1]], dtype=torch.long).to(device))
+            y_hat = model(torch.tensor(encoding['input_ids'], [tokens[:-1]], encoding_padding_mask=encoding['padding_mask'], dtype=torch.long).to(device))
             if isinstance(y_hat, tuple):
                     y_hat = y_hat[0]
             log_preds = torch.nn.functional.log_softmax(y_hat[0], dim=1)

@@ -47,7 +47,7 @@ class Transoformer(nn.Module):
         self.logits = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
 
-    def forward(self , enc_inp, dec_inp, enc_padding_mask=None, dec_padding_mask=None, labels=None):
+    def forward(self, enc_inp, dec_inp, enc_padding_mask=None, dec_padding_mask=None, labels=None):
         B_dec, T_dec = dec_inp.size()
         B_enc, T_enc = enc_inp.size()
 
@@ -104,7 +104,7 @@ class Transoformer(nn.Module):
         return tokens
 
     def __str__(self):
-        return f"Transformer_Layers_{self.config.n_layers}_Heads_{self.config.num_heads}_Emb_{self.config.n_embd}"
+        return f"Transformer_Layers_{self.config.n_layers}_Heads_{self.config.num_heads}_Emb_{self.config.n_embd}_Dmodel_{self.config.d_model}"
 
 
 def main():
