@@ -35,8 +35,8 @@ class CharTokenizerTestCase(TestCase):
 
         self.assertIsNotNone(tokenizer.token2id)
         self.assertIsNotNone(tokenizer.id2token)
-        self.assertEqual(6, len(tokenizer.id2token))
-        self.assertEqual(6, len(tokenizer.token2id))
+        self.assertEqual(7, len(tokenizer.id2token))
+        self.assertEqual(7, len(tokenizer.token2id))
 
     
     def test_create_existing_tokenizer(self):
