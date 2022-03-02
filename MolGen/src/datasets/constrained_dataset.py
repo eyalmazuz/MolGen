@@ -1,12 +1,13 @@
-from random import sample
 from typing import List, Dict
 
+from ..utils.mol_utils import get_molecule_scaffold
 import torch
 from torch.utils.data import Dataset
+from tqdm import tqdm
 
 
 
-class SmilesDataset(Dataset):
+class ConstraiedDataset(Dataset):
 
     def __init__(self,
                  data_path: str,
@@ -17,7 +18,9 @@ class SmilesDataset(Dataset):
         self.data_path = data_path 
 
         self._molecules = self.load_molecules()
-
+        
+        self.scaffolds = list(set([get_molecule_scaffold(mol) for mol in tqdm(self._molecules, desc='generating scaffolds')])) 
+        
         self.tokenizer = tokenizer
 
     @property
@@ -35,9 +38,13 @@ class SmilesDataset(Dataset):
         return len(self._molecules)
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+        encodings = {}
         smiles = self._molecules[idx]
+
+        scaffold = get_molecule_scaffold(smiles)
         
-        smiles = '[BOS]' + smiles + '[EOS]'
+        smiles = '[BOS]' + scaffold + '[SEP]' + smiles + '[EOS]'
+        
         encodings = self.tokenizer(smiles, padding=True, max_length=self.max_len)
         encodings['labels'] = encodings['input_ids']
 
@@ -46,7 +53,7 @@ class SmilesDataset(Dataset):
 
 def main():
 
-    dataset = SmilesDataset('./data/gdb/gdb13/full/1.smi',
+    dataset = ConstraiedDataset('./data/gdb/gdb13/full/1.smi',
                                  './data/tokenizers/gdb13FullCharTokenizer.json')
 
     smiles = 'CCO'

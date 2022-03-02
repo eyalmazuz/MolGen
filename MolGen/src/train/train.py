@@ -28,6 +28,8 @@ class Trainer():
                     encodings[k] = v.to(device)
                 
                 loss, logits, *args = self.model(**encodings)
+                # output = self.model(**encodings)
+                # loss = output['loss']
 
                 if torch.cuda.device_count() > 1:
                     loss = loss.mean()

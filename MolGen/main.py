@@ -17,12 +17,13 @@ from torch.nn import DataParallel as DP
 
 from src.datasets.get_dataset import get_dataset
 from src.models.model_builder import get_model, ModelOpt, MyDataParallel
+from src.models.gpt import GPTValue
 from src.tokenizers.CharTokenizer import CharTokenizer
 from src.train.train import Trainer
 from src.train.evaluate import generate_smiles, generate_smiles_scaffolds, get_stats, gen_till_train
 from src.train.reinforcement import policy_gradients
 from src.utils.reward_fn import QEDReward
-from src.utils.utils import get_max_smiles_len
+from src.utils.utils import TaskOpt, get_max_smiles_len
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -41,6 +42,8 @@ def main():
     
     dataset, tokenizer = datasets[os.environ['SLURM_ARRAY_TASK_ID']]
 
+    task = {'regular': TaskOpt.REGULAR, 'constrained': TaskOpt.CONSTRAINED}[os.environ['TASK']] 
+    print(task)
     config = {
         'data_path': f'./data/{dataset}.smi',
         'tokenizer_path': f'./data/tokenizers/{tokenizer}ScaffoldCharTokenizer.json',
@@ -50,12 +53,13 @@ def main():
 
     print(config['device'])
     
-    config['max_len'] = get_max_smiles_len(config['data_path']) + 2
+    config['max_len'] = get_max_smiles_len(config['data_path']) + 50
     print(config['max_len'])
     
     tokenizer = CharTokenizer(config['tokenizer_path'], config['data_path'], build_scaffolds=config['model'] == ModelOpt.TRANSFORMER)
 
     dataset = get_dataset(config['model'],
+                          task,
                           data_path=config['data_path'],
                           tokenizer=tokenizer,
                           max_len=config['max_len'])
@@ -77,7 +81,7 @@ def main():
 
     train_config = {
         'batch_size': 512,
-        'epochs': 5,
+        'epochs': 3,
         'optimizer': torch.optim.Adam,
         'criterion': torch.nn.CrossEntropyLoss,
     }
@@ -90,12 +94,12 @@ def main():
         'reward_fn': QEDReward(),
         'optimizer': torch.optim.Adam,
         'max_len': 150,
-        'size': 2500,
+        'size': 25000,
     }
 
     eval_config = {
         'save_path': './data/results/' + str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S")),
-        'size': 10000,
+        'size': 25000,
         'temprature': 1,
         'max_len': 150,        
     }
@@ -154,16 +158,18 @@ def main():
               save_path=f"{eval_config['save_path']}",
               folder_name='pre_RL')
 
-    
+    gpt_value = GPTValue(copy.deepcopy(model))
+
     policy_gradients(model=model,
-                     tokenizer=tokenizer,
-                     **rl_config,
-                     device=config['device'],
-                     do_eval=True,
-                     eval_steps=10,
-                     save_path=eval_config['save_path'],
-                     temprature=eval_config['temprature'],
-                     train_set=dataset)
+                    value_net=gpt_value,
+                    tokenizer=tokenizer,
+                    **rl_config,
+                    device=config['device'],
+                    do_eval=True,
+                    eval_steps=10,
+                    save_path=eval_config['save_path'],
+                    temprature=eval_config['temprature'],
+                    train_set=dataset)
 
     torch.save(model.state_dict(), f"{eval_config['save_path']}/rl.pt")
     

@@ -30,6 +30,7 @@ class CharTokenizer():
             self.id2token[len_tokens + 0] = '[PAD]'
             self.id2token[len_tokens + 1] = '[BOS]'
             self.id2token[len_tokens + 2] = '[EOS]'
+            self.id2token[len_tokens + 3] = '[SEP]'
             print(self.id2token)
             
             print('Saving tokenizer')
@@ -39,7 +40,9 @@ class CharTokenizer():
 
         self.token2id: Dict[str, int] = {v: k for k, v in self.id2token.items()}
        
-    
+        print(self.id2token)
+        print(self.token2id)
+        
     @property
     def vocab_size(self):
         return len(self.id2token)
@@ -68,6 +71,14 @@ class CharTokenizer():
     def pad_token_id(self):
         return self.token2id['[PAD]']
 
+    @property
+    def sep_token(self):
+        return '[SEP]'
+
+    @property
+    def sep_token_id(self):
+        return self.token2id['[SEP]']
+
 
     def build_tokenizer(self, data_path:str) -> Dict[int, str]:
 
@@ -92,7 +103,7 @@ class CharTokenizer():
 
     def tokenize(self, smiles, padding: bool=False, max_length: int=-1):
         encodings = []
-        bos, eos = [], []
+        bos, eos, sep, sca = [], [], [], []
         if smiles.startswith('[BOS]'):
             smiles = smiles[5:]
             bos.append('[BOS]')   
@@ -101,7 +112,14 @@ class CharTokenizer():
             eos.append('[EOS]') 
             smiles = smiles[:-5]
 
-        encodings = self.convert_tokens_to_ids(bos + list(smiles) + eos)
+        if '[SEP]' in smiles:
+            idx = smiles.find('[SEP]')
+            sca += smiles[:idx]
+            sep.append(smiles[idx:idx+5])
+            smiles = smiles[idx+5:]
+
+
+        encodings = self.convert_tokens_to_ids(bos + sca + sep + list(smiles) + eos)
         
         padding_mask = [0] * len(encodings)
         

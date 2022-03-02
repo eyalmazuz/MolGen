@@ -12,6 +12,10 @@ class ModelOpt(Enum):
 	GPT = 2
 	TRANSFORMER = 3
 
+class TaskOpt(Enum):
+	REGULAR = 1
+	CONSTRAINED = 2
+	
 def generate_and_save_plot(values: List[float],
                            plot_func,
                            xlabel: str,
@@ -53,13 +57,11 @@ def sample(model,
            size: int,
            max_len: int,
            temprature: int,
-           device,
-           **kwargs):
+           device,):
 
-    tokens = []
-    x = torch.tensor([[start_token]] * size, dtype=torch.long).to(device)
+    x = torch.tensor([start_token] * size, dtype=torch.long).to(device)
     for k in trange(max_len, leave=False):
-        logits = model(x, **kwargs)
+        logits = model(x)
 
         if isinstance(logits, tuple):
                 logits = logits[0]
@@ -72,4 +74,29 @@ def sample(model,
 
     return x
 
+def sample_scaffodls(model,
+           start_token: int,
+           enc_inp,
+           enc_padding_mask,
+           size: int,
+           max_len: int,
+           temprature: int,
+           device,):
+
+    x = torch.tensor([[start_token]] * size, dtype=torch.long).to(device)
+    enc_inp = torch.tensor([enc_inp] * size, dtype=torch.long).to(device)
+    enc_padding_mask = torch.tensor([enc_padding_mask] * size, dtype=torch.long).to(device)
+    for k in trange(max_len, leave=False):
+        logits = model(enc_inp=enc_inp, dec_inp=x, enc_padding_mask=enc_padding_mask)
+
+        if isinstance(logits, tuple):
+                logits = logits[0]
+
+        logits = logits[:, -1, :] / temprature
+        probs = F.softmax(logits, dim=-1)
+        idxs = torch.multinomial(probs, num_samples=1)
+
+        x = torch.cat((x, idxs), dim=1)
+
+    return x
     

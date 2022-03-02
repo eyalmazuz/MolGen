@@ -19,6 +19,17 @@ class Reward(ABC):
     def __call__(self, smiles: str):
         raise NotImplementedError
 
+class IC50Reward(Reward):
+
+    def __init__(self, predictor, multiplier: Optional[Callable[[float], float]] = None) -> None:
+        super().__init__(multiplier)
+        self.predictor = predictor
+
+    def __call__(self, smiles: str):
+        predicted_ic50 = self.predictor(smiles)
+        reward = self.multiplier(predicted_ic50)
+        return reward
+        
 class QEDReward(Reward):
 
     def __init__(self,

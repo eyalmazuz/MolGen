@@ -17,7 +17,7 @@ import torch
 from tqdm import trange, tqdm
 
 from ..utils.metrics import calc_qed, calc_sas, calc_diversity, calc_novelty, calc_valid_molecules
-from ..utils.utils import generate_and_save_plot, sample
+from ..utils.utils import generate_and_save_plot, sample, sample_scaffodls
 from ..utils.mol_utils import convert_to_molecules, filter_invalid_molecules
 
 def generate_smiles_scaffolds(model,
@@ -46,8 +46,8 @@ def generate_smiles_scaffolds(model,
     for scaffold in scaffolds_sample:
         encoding = tokenizer('[BOS]' + scaffold + '[EOS]')
 
-        tokens = sample(model, tokenizer.bos_token_id,  batch_size, max_len, temprature, device,
-                        enc_inp=encoding['input_ids'], enc_padding_mask=encoding['padding_mask'])
+        tokens = sample_scaffodls(model, tokenizer.bos_token_id, encoding['input_ids'], encoding['padding_mask'],
+                                  batch_size, max_len, temprature, device,)
 
         tokens = tokens.tolist()
 
@@ -60,6 +60,48 @@ def generate_smiles_scaffolds(model,
 
             smiles = tokenizer.decode(mol)
             gen_smiles.append(smiles)
+
+    return gen_smiles
+
+def generate_smiles_constrained(model,
+                              tokenizer,
+                              scaffolds,
+                              temprature=1,
+                              num_samples=10,
+                              size: int=1000,
+                              batch_size: int=100,
+                              max_len=100,
+                              device=torch.device('cuda'), 
+                              disable=False) -> List[str]:
+
+    print(f'Evaluate {device}')
+    if torch.cuda.device_count() > 1:
+        model = model.module
+    model.to(device)
+    model.eval()
+    gen_smiles = []
+    
+    if num_samples < len(scaffolds):
+        scaffolds_sample = random.sample(scaffolds, num_samples)
+    else:
+        scaffolds_sample = scaffolds
+
+    for scaffold in scaffolds_sample:
+        encoding = tokenizer('[BOS]' + scaffold + '[SEP]')
+
+        tokens = sample(model, encoding, batch_size, max_len, temprature, device)
+        tokens = tokens.tolist()
+
+        for mol in tokens:
+            try:
+                end_idx = mol.index(tokenizer.eos_token_id)
+            except ValueError:
+                end_idx = len(mol)
+            mol = mol[2 + len(scaffold): end_idx]
+
+            smiles = tokenizer.decode(mol)
+            gen_smiles.append(smiles)
+
 
     return gen_smiles
 
@@ -80,7 +122,7 @@ def generate_smiles(model,
     gen_smiles = []
     
     for batch in trange(size // batch_size, disable=disable):
-        tokens = sample(model, tokenizer.bos_token_id, batch_size, max_len, temprature, device)
+        tokens = sample(model, [tokenizer.bos_token_id], batch_size, max_len, temprature, device)
         tokens = tokens.tolist()
 
         for mol in tokens:

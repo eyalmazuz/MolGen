@@ -6,6 +6,7 @@ https://github.com/karpathy/minGPT/
 import numpy as np
 import torch
 from torch import nn
+from torch.nn.modules import padding
 
 from .layers import MultiheadAttention, DecoderOnlyBlock
 
@@ -55,6 +56,8 @@ class GPT(nn.Module):
         self.config = config
 
     def forward(self, input_ids, padding_mask=None, labels=None):
+        
+        output = {}
         B, T = input_ids.size()
        
         token_embds = self.token_embds(input_ids)
@@ -77,16 +80,21 @@ class GPT(nn.Module):
         x = self.ln(x)
         logits = self.logits(x)
 
+        output['logits'] = logits
+        output['attention weights'] = attn_weights
+
         if labels is not None:
             shift_logits = logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
             loss_fct = nn.CrossEntropyLoss()
             loss = loss_fct(shift_logits.transpose(1, 2), shift_labels)
+            output['loss'] = loss
             return loss, logits, attn_weights
         
         else:
             return logits, attn_weights
-    
+        # return output
+
     def generate(self, initial_token, end_token, temprature: int=1, max_len: int=100, device=torch.device('cuda')):
         tokens = [initial_token]
         next_token = -1
@@ -109,6 +117,19 @@ class GPT(nn.Module):
 
     def __str__(self):
         return f"GPT_Layers_{self.config.n_layers}_Heads_{self.config.num_heads}_Emb_{self.config.n_embd}_Dmodel_{self.config.d_model}"
+
+class GPTValue(nn.Module):
+    def __init__(self, gpt):
+      super(GPTValue, self).__init__()
+
+      self.gpt = gpt
+      self.value = nn.Linear(self.gpt.config.vocab_size, 1)
+
+    def forward(self, input_ids, padding_mask=None, labels=None):
+        logits, _ = self.gpt(input_ids, padding_mask, labels)
+        state_values = self.value(logits)
+
+        return state_values
 
 def main():
     config = GPTConfig(num_heads=8, block_size=512, proj_dropout_rate=0, attn_dropout_rate=0, n_embd=512, n_layers=2)

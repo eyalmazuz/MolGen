@@ -47,7 +47,7 @@ class Transoformer(nn.Module):
         self.logits = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
 
-    def forward(self, enc_inp, dec_inp, enc_padding_mask=None, dec_padding_mask=None, labels=None):
+    def forward(self, enc_inp, dec_inp, enc_padding_mask=None, dec_padding_mask=None, labels=None, **kwargs):
         B_dec, T_dec = dec_inp.size()
         B_enc, T_enc = enc_inp.size()
 
