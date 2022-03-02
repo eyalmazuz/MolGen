@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 class CharTokenizer():
     
-    def __init__(self, tokenizer_path: str='./toeknizers/', data_path: str='./data/', build_scaffolds: bool=False) -> None:
+    def __init__(self, tokenizer_path: str='./tokenizers/', data_path: str='./data/', build_scaffolds: bool=False) -> None:
 
         if tokenizer_path and os.path.exists(tokenizer_path):
             with open(tokenizer_path, 'r') as f:
@@ -127,6 +127,9 @@ class CharTokenizer():
             pad_len = (max_length - len(encodings))
             encodings += [self.token2id['[PAD]']] * pad_len
             padding_mask += [1] * pad_len 
+
+        elif len(encodings) > max_length:
+            encodings = encodings[:max_length]
 
         return {"input_ids": encodings,
                 "padding_mask": padding_mask}

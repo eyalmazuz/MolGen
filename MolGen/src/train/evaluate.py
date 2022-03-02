@@ -32,8 +32,6 @@ def generate_smiles_scaffolds(model,
                               disable=False) -> List[str]:
 
     print(f'Evaluate {device}')
-    if torch.cuda.device_count() > 1:
-        model = model.module
     model.to(device)
     model.eval()
     gen_smiles = []
@@ -75,8 +73,6 @@ def generate_smiles_constrained(model,
                               disable=False) -> List[str]:
 
     print(f'Evaluate {device}')
-    if torch.cuda.device_count() > 1:
-        model = model.module
     model.to(device)
     model.eval()
     gen_smiles = []
@@ -115,8 +111,6 @@ def generate_smiles(model,
                     disable=False) -> List[str]:
 
     print(f'Evaluate {device}')
-    if torch.cuda.device_count() > 1:
-        model = model.module
     model.to(device)
     model.eval()
     gen_smiles = []

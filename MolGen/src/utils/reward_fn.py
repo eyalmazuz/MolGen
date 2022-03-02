@@ -10,9 +10,17 @@ RDLogger.DisableLog('rdApp.*')
 from .metrics import calc_qed, calc_sas
 
 
+def get_reward_fn(reward_name: str='QED', **kwargs):
+
+    if reward_name == 'QED':
+        return QEDReward(**kwargs)
+    
+    elif reward_name == 'IC50':
+        return IC50Reward(**kwargs)
+
 class Reward(ABC):
 
-    def __init__(self, multiplier:  Optional[Callable[[float], float]]=None) -> None:
+    def __init__(self, multiplier:  Optional[Callable[[float], float]]=None, **kwargs) -> None:
         self.multiplier = multiplier
         
     @abstractmethod
@@ -21,7 +29,11 @@ class Reward(ABC):
 
 class IC50Reward(Reward):
 
-    def __init__(self, predictor, multiplier: Optional[Callable[[float], float]] = None) -> None:
+    def __init__(self,
+                predictor,
+                multiplier: Optional[Callable[[float], float]]=None,
+                **kwargs) -> None:
+
         super().__init__(multiplier)
         self.predictor = predictor
 
@@ -30,11 +42,15 @@ class IC50Reward(Reward):
         reward = self.multiplier(predicted_ic50)
         return reward
         
+    def __str__(self,):
+        return "IC50"
+        
 class QEDReward(Reward):
 
     def __init__(self,
                  multiplier: Optional[Callable[[float], float]]=lambda x: x * 10,
-                 negative_reward: float=0):
+                 negative_reward: float=0,
+                 **kwargs):
 
         super(QEDReward, self).__init__(multiplier)
         self.negative_reward = negative_reward
