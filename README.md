@@ -22,4 +22,4 @@ Please follow the prerequisite before running the code:
 
 All the code contains the hyper-parameters used in all of the expremiments
 so to reproduce the results simply run the following command
-```python3 MolGen/main.py``
+```python3 MolGen/main.py```
