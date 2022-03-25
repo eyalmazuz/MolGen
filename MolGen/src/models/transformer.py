@@ -61,7 +61,7 @@ class Transoformer(nn.Module):
             enc_padding_mask = enc_padding_mask.view(B_enc, 1, 1, T_enc)
 
         if dec_padding_mask is not None:
-            dec_padding_mask = enc_padding_mask.view(B_dec, 1, 1, T_dec)
+            dec_padding_mask = dec_padding_mask.view(B_dec, 1, 1, T_dec)
 
         enc_out, enc_attnetions = self.encoder(enc_inp, enc_padding_mask)
         

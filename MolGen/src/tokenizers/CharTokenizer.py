@@ -2,13 +2,12 @@ import json
 import os
 from typing import Dict, List, Union
 
-from rdkit.Chem.Scaffolds.MurckoScaffold import MurckoScaffoldSmiles
 from tqdm import tqdm
 
 
 class CharTokenizer():
     
-    def __init__(self, tokenizer_path: str='./tokenizers/', data_path: str='./data/', build_scaffolds: bool=False) -> None:
+    def __init__(self, tokenizer_path: str='./tokenizers/', data_path: str='./data/') -> None:
 
         if tokenizer_path and os.path.exists(tokenizer_path):
             with open(tokenizer_path, 'r') as f:
@@ -31,6 +30,8 @@ class CharTokenizer():
             self.id2token[len_tokens + 1] = '[BOS]'
             self.id2token[len_tokens + 2] = '[EOS]'
             self.id2token[len_tokens + 3] = '[SEP]'
+            self.id2token[len_tokens + 4] = '[UNK]'
+            self.id2token[len_tokens + 5] = '[CLS]'
             print(self.id2token)
             
             print('Saving tokenizer')
@@ -79,6 +80,22 @@ class CharTokenizer():
     def sep_token_id(self):
         return self.token2id['[SEP]']
 
+    @property
+    def unk_token(self):
+        return '[UNK]'
+
+    @property
+    def unk_token_id(self):
+        return self.token2id['[UNK]']
+
+    @property
+    def cls_token(self):
+        return '[CLS]'
+
+    @property
+    def cls_token_id(self):
+        return self.token2id['[CLS]']
+
 
     def build_tokenizer(self, data_path:str) -> Dict[int, str]:
 
@@ -89,11 +106,6 @@ class CharTokenizer():
         print('Building tokenzier')
 
         tokens = set()
-        for smiles in tqdm(self.molecules):
-            if smiles:
-                tokens |= set(smiles)
-                tokens |= set(MurckoScaffoldSmiles(smiles))
-
         id2token = {}
         for i, token in enumerate(tokens):
             id2token[i] = token
@@ -103,7 +115,12 @@ class CharTokenizer():
 
     def tokenize(self, smiles, padding: bool=False, max_length: int=-1):
         encodings = []
-        bos, eos, sep, sca = [], [], [], []
+        bos, eos, sep, cls, sca = [], [], [], [], []
+         
+        if smiles.startswith('[CLS]'):
+            smiles = smiles[5:]
+            cls.append('[CLS]')   
+        
         if smiles.startswith('[BOS]'):
             smiles = smiles[5:]
             bos.append('[BOS]')   
@@ -112,37 +129,37 @@ class CharTokenizer():
             eos.append('[EOS]') 
             smiles = smiles[:-5]
 
-        if '[SEP]' in smiles:
-            idx = smiles.find('[SEP]')
-            sca += smiles[:idx]
-            sep.append(smiles[idx:idx+5])
-            smiles = smiles[idx+5:]
+        # if '[SEP]' in smiles:
+            # idx = smiles.find('[SEP]')
+            # sca += smiles[:idx]
+            # sep.append(smiles[idx:idx+5])
+            # smiles = smiles[idx+5:]
 
 
-        encodings = self.convert_tokens_to_ids(bos + sca + sep + list(smiles) + eos)
+        # encodings = self.convert_tokens_to_ids(bos + sca + sep + list(smiles) + eos)
+        encodings = self.convert_tokens_to_ids(bos + cls + list(smiles) + eos)
         
         padding_mask = [0] * len(encodings)
         
-        if padding and max_length and len(encodings) < max_length:
+        if padding and max_length != -1 and len(encodings) < max_length:
             pad_len = (max_length - len(encodings))
             encodings += [self.token2id['[PAD]']] * pad_len
             padding_mask += [1] * pad_len 
 
-        elif len(encodings) > max_length:
+        elif max_length != -1 and len(encodings) > max_length:
             encodings = encodings[:max_length]
 
         return {"input_ids": encodings,
                 "padding_mask": padding_mask}
 
  
-    def __call__(self, smiles, padding=False, max_length=None):
+    def __call__(self, smiles, padding=False, max_length=-1):
         return self.tokenize(smiles, padding, max_length)
 
     def convert_tokens_to_ids(self, tokens: List[str]) -> List[int]:
         encodings: List[int] = []
         for char in tokens:
             encodings.append(self.token2id[char])
-        
         return encodings
 
     def convert_ids_to_tokens(self, encodings: List[int]) -> List[str]:

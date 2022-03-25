@@ -1,5 +1,6 @@
 import copy
 from datetime import datetime
+import math
 import os
 import random
 
@@ -16,15 +17,16 @@ import torch
 
 from src.datasets.get_dataset import get_dataset
 from src.datasets.bs1_dataset import BS1Dataset
-from src.models.model_builder import get_model, ModelOpt 
+from src.models.model_builder import get_model 
 from src.models.gpt import GPTValue
-from src.models.property_predictor import Predictor, PredictorConfig
+from src.models.bert import Bert, BertConfig
 from src.tokenizers.CharTokenizer import CharTokenizer
 from src.train.train import Trainer, PredictorTrainer
 from src.train.evaluate import generate_smiles, generate_smiles_scaffolds, get_stats, gen_till_train
 from src.train.reinforcement import policy_gradients
 from src.utils.reward_fn import QEDReward, IC50Reward, get_reward_fn
 from src.utils.utils import TaskOpt, get_max_smiles_len
+from src.utils.utils import eval_arguments, model_arguments, general_arguments, rl_train_arguments, train_arguments, predictor_arguments
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -35,210 +37,166 @@ random.seed(0)
 
 def main():
 
+    general_parser = general_arguments() 
+    train_parser = train_arguments()
+    rl_parser = rl_train_arguments()
+    model_parser = model_arguments()
+    eval_parser = eval_arguments()
+    predictor_parser = predictor_arguments()
     
-    train_predictor = True
+    load_pretrained = True
 
-    if train_predictor:
-        bs1_data = pd.read_csv('./data/csvs/bs1.csv')
+    if predictor_parser.train_predictor:
+        bs1_data = pd.read_csv(predictor_parser.predictor_dataset_path)
         train, test = train_test_split(bs1_data, test_size=0.2, random_state=42, shuffle=True,)
 
+        print(train.shape)
         train.reset_index(inplace=True)
         test.reset_index(inplace=True)
 
-        predictor_tokenizer = CharTokenizer('./data/tokenizers/predictor_tokenizer.json',
-                                            data_path='./data/ic50_smiles.smi', build_scaffolds=False)
-        max_len = max(map(len, train.Smiles)) + 2
+        predictor_tokenizer = CharTokenizer(predictor_parser.predictor_toeknizer_path,
+                                            data_path='./data/ic50_smiles.smi')
 
-        print(max_len)
-        train_dataset = BS1Dataset(train, predictor_tokenizer, max_len=max_len)
-        test_dataset = BS1Dataset(test, predictor_tokenizer, max_len=max_len)
+        train_dataset = BS1Dataset(train, predictor_tokenizer)
+        test_dataset = BS1Dataset(test, predictor_tokenizer)
 
-        model_config = {
-            'n_embd': 256,
-            'd_model': 256,
-            'n_layers': 4,
-            'num_heads': 8,
-            'vocab_size': predictor_tokenizer.vocab_size,
-            'block_size': 256,
-            'proj_size': 256,
-            'attn_dropout_rate': 0.1,
-            'proj_dropout_rate': 0.1,
-            'resid_dropout_rate': 0.1,
-            'padding_idx': predictor_tokenizer.pad_token_id,
-        }
-        predictor_config = PredictorConfig(**model_config)
-        predictor_model = Predictor(predictor_config) 
+        predictor_config = BertConfig(n_embd=predictor_parser.n_embd,
+                                      d_model=predictor_parser.d_model,
+                                      n_layers=predictor_parser.n_layers,
+                                      num_heads=predictor_parser.num_heads,
+                                      vocab_size=tokenizer.vocab_size,
+                                      block_size=predictor_parser.block_size,
+                                      proj_size=predictor_parser.proj_size,
+                                      attn_dropout_rate=predictor_parser.attn_dropout_rate,
+                                      proj_dropout_rate=predictor_parser.proj_dropout_rate,
+                                      resid_dropout_rate=predictor_parser.resid_dropout_rate,
+                                      padding_idx=tokenizer.pad_token_id)
+        predictor_model = Bert(predictor_config) 
         predictor_model = predictor_model.to('cuda')
 
         predictor_trainer = PredictorTrainer(train_dataset,
                                             test_dataset,
                                             predictor_model,
-                                            torch.optim.Adam(predictor_model.parameters()),
+                                            torch.optim.Adam(predictor_model.parameters(), lr=5e-3),
                                             torch.nn.MSELoss(),)
 
-        predictor_trainer.train(3, 512, 'cuda')
+        predictor_trainer.train(predictor_parser.predictor_epochs, predictor_parser.predictor_batch_size, general_parser.device)
 
-        torch.save(predictor_model, './data/models/predictor_model.pt')
+        torch.save(predictor_model, predictor_parser.predictor_save_path)
 
-    datasets = {
-            '1': ['gdb/gdb13/gdb13', 'gdb13'],
-            '2': ['moses', 'moses'],
-            '3': ['zinc/zinc250k', 'zinc']
-    }
+    else:
+        predictor_tokenizer = CharTokenizer('./data/tokenizers/predictor_tokenizer.json',
+                                            data_path='./data/ic50_smiles.smi')
+
+        predictor_model = torch.load('./data/models/predictor_model.pt') 
+ 
+    print(general_parser.device)
     
-    dataset, tokenizer = datasets[os.environ['SLURM_ARRAY_TASK_ID']]
-
-    task = {'regular': TaskOpt.REGULAR, 'constrained': TaskOpt.CONSTRAINED}[os.environ['TASK']] 
-    print(task)
-    config = {
-        'data_path': f'./data/{dataset}.smi',
-        'tokenizer_path': f'./data/tokenizers/{tokenizer}ScaffoldCharTokenizer.json',
-        'device': torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
-        'model': ModelOpt.GPT
-    }
-
-    print(config['device'])
+    max_smiles_len = get_max_smiles_len(general_parser.dataset_path) + 50
     
-    config['max_len'] = get_max_smiles_len(config['data_path']) + 50
-    print(config['max_len'])
-    
-    tokenizer = CharTokenizer(config['tokenizer_path'], config['data_path'], build_scaffolds=config['model'] == ModelOpt.TRANSFORMER)
+    tokenizer = CharTokenizer(general_parser.tokenizer_path, general_parser.dataset_path)
 
-    dataset = get_dataset(config['model'],
-                          task,
-                          data_path=config['data_path'],
+    dataset = get_dataset(data_path=general_parser.dataset_path,
                           tokenizer=tokenizer,
-                          max_len=config['max_len'])
+                          max_len=max_smiles_len)
 
-    model_config = {
-        'n_embd': 256,
-        'd_model': 256,
-        'n_layers': 4,
-        'num_heads': 8,
-        'vocab_size': tokenizer.vocab_size,
-        'block_size': 256,
-        'proj_size': 256,
-        'attn_dropout_rate': 0.1,
-        'proj_dropout_rate': 0.1,
-        'resid_dropout_rate': 0.1,
-        'padding_idx': tokenizer.pad_token_id,
+    model = get_model(general_parser.model,
+                      n_embd=model_parser.n_embd,
+                      d_model=model_parser.d_model,
+                      n_layers=model_parser.n_layers,
+                      num_heads=model_parser.num_heads,
+                      vocab_size=tokenizer.vocab_size,
+                      block_size=model_parser.block_size,
+                      proj_size=model_parser.proj_size,
+                      attn_dropout_rate=model_parser.attn_dropout_rate,
+                      proj_dropout_rate=model_parser.proj_dropout_rate,
+                      resid_dropout_rate=model_parser.resid_dropout_rate,
+                      padding_idx=tokenizer.pad_token_id).to(general_parser.device)
 
-    }
+    # if load_pretrained:
+    #     print(f'./data/models/gpt_pre_rl_{tokenizer_name}.pt')
+    #     model.load_state_dict(torch.load(f'./data/models/gpt_pre_rl_{tokenizer_name}.pt'))
 
-    train_config = {
-        'batch_size': 512,
-        'epochs': 1,
-        'optimizer': torch.optim.Adam,
-        'criterion': torch.nn.CrossEntropyLoss,
-    }
-
-
-    rl_config = {
-        'batch_size': 5,
-        'epochs': 10,
-        'discount_factor': 0.99,
-        # 'reward_fn': QEDReward(),
-        'predictor_path': None,
-        'optimizer': torch.optim.Adam,
-        'max_len': 150,
-        'size': 250,
-    }
-
-    eval_config = {
-        'save_path': './data/results/' + str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S")),
-        'size': 250,
-        'temprature': 1,
-        'max_len': 150,        
-    }
-
-    model = get_model(config['model'], **model_config).to(config['device'])
     print(str(model))
     print(sum(p.numel() for p in model.parameters()))
 
-    dataset_name = config['data_path'][config['data_path'].rfind('/')+1:config['data_path'].rfind('.')]
+    dataset_name = general_parser.dataset_path[general_parser.dataset_path.rfind('/')+1:general_parser.dataset_path.rfind('.')]
 
-    reward_fn = get_reward_fn(reward_name='QED', **rl_config)    
+    reward_fn = get_reward_fn(reward_name=rl_parser.reward_fn,
+                            predictor_path=rl_parser.predictor_path,
+                            predictor=predictor_model,
+                            tokenizer=predictor_tokenizer,)
 
-    eval_config['save_path'] = eval_config['save_path'] + \
+    eval_save_path = eval_parser.save_path + \
                                 f'_{str(model)}' + \
                                 f'_{dataset_name}' + \
-                                f'_RlBatch_{str(rl_config["batch_size"])}' + \
-                                f'_RlEpochs_{str(rl_config["epochs"])}' + \
+                                f'_RlBatch_{str(rl_parser.rl_batch_size)}' + \
+                                f'_RlEpochs_{str(rl_parser.rl_epochs)}' + \
                                 f'_Reward_{str(reward_fn)}' + \
-                                f'_discount_{str(rl_config["discount_factor"])}'
+                                f'_discount_{str(rl_parser.discount_factor)}'
 
-    print(eval_config['save_path'])
+    print(eval_save_path)
     
-    optim = train_config['optimizer'](model.parameters())
-    criterion = train_config['criterion']()
+    if not load_pretrained:
+        optim = torch.optim.Adam(model.parameters())
+        criterion = torch.nn.CrossEntropyLoss()
 
-    trainer = Trainer(dataset, model, optim, criterion)
-    trainer.train(train_config['epochs'], train_config['batch_size'], config['device'])
+        trainer = Trainer(dataset, model, optim, criterion)
+        trainer.train(train_parser.epochs, train_parser.batch_size)
 
-    if not os.path.exists(f"{eval_config['save_path']}"):
-        os.makedirs(f"{eval_config['save_path']}", exist_ok=True)
+    if not os.path.exists(eval_save_path):
+        os.makedirs(eval_save_path, exist_ok=True)
 
-    torch.save(model.state_dict(), f"{eval_config['save_path']}/pre_rl.pt")
+    torch.save(model.state_dict(), f"{eval_save_path}/pre_rl.pt")
     
-    old_model = copy.deepcopy(model)
-    if config['model'] == ModelOpt.TRANSFORMER:
-        generated_smiles = generate_smiles_scaffolds(model=model,
-                                            tokenizer=tokenizer,
-                                            scaffolds=dataset.scaffolds,
-                                            temprature=eval_config['temprature'],
-                                            size=eval_config['size'],
-                                            max_len=eval_config['max_len'],
-                                            device=config['device'])
-    else:
-        generated_smiles = generate_smiles(model=model,
-                                            tokenizer=tokenizer,
-                                            temprature=eval_config['temprature'],
-                                            size=eval_config['size'],
-                                            max_len=eval_config['max_len'],
-                                            device=config['device'])
+    generated_smiles = generate_smiles(model=model,
+                                        tokenizer=tokenizer,
+                                        temprature=eval_parser.temprature,
+                                        size=eval_parser.eval_size,
+                                        max_len=eval_parser.eval_max_len,
+                                        device=general_parser.device)
     
     
+    reward_fn.multiplier = lambda x: x
     get_stats(train_set=dataset,
               generated_smiles=generated_smiles,
-              save_path=f"{eval_config['save_path']}",
-              folder_name='pre_RL')
+              save_path=eval_save_path,
+              folder_name='pre_RL',
+              reward_fn=reward_fn if str(reward_fn) == 'IC50' else None)
 
+    reward_fn.multiplier = lambda x: math.exp(x / 3)
     policy_gradients(model=model,
                     tokenizer=tokenizer,
                     reward_fn=reward_fn,
-                    **rl_config,
-                    device=config['device'],
-                    do_eval=True,
-                    eval_steps=10,
-                    save_path=eval_config['save_path'],
-                    temprature=eval_config['temprature'],
+                    optimizer=torch.optim.Adam(),
+                    batch_size=rl_parser.rl_batch_size,
+                    epochs=rl_parser.rl_epochs,
+                    discount_factor=rl_parser.discount_factor,
+                    max_len=rl_parser.rl_max_len,
+                    device=general_parser.device,
+                    do_eval=rl_parser.do_eval,
+                    eval_steps=rl_parser.eval_steps,
+                    save_path=eval_save_path,
+                    temprature=rl_parser.rl_temprature,
                     train_set=dataset)
 
-    torch.save(model.state_dict(), f"{eval_config['save_path']}/rl.pt")
+    torch.save(model.state_dict(), "{eval_save_path}/rl.pt")
     
     generated_smiles = generate_smiles(model=model,
                                           tokenizer=tokenizer,
-                                          temprature=eval_config['temprature'],
-                                          size=eval_config['size'],
-                                          max_len=eval_config['max_len'],
-                                          device=config['device'])
+                                          temprature=eval_parser.temprature,
+                                          size=eval_parser.eval_size,
+                                          max_len=eval_parser.eval_max_len,
+                                          device=general_parser.device)
                                           
+    reward_fn.multiplier = lambda x: x
 
     get_stats(train_set=dataset,
               generated_smiles=generated_smiles,
-              save_path=f"{eval_config['save_path']}",
+              save_path=eval_save_path,
               folder_name='post_RL',
-              run_moses=True)
+              run_moses=True,
+              reward_fn=reward_fn if str(reward_fn) == 'IC50' else None)
 
-    # mean, std = gen_till_train(old_model,
-    #                        dataset,
-    #                        device=config['device'])
-    # print(f'Took on average {mean}+- {std} Generations for generate a mol from the test set before PG.')
-
-    # mean, std = gen_till_train(model,
-    #                        dataset,
-    #                        device=config['device'])
-    # print(f'Took on average {mean}+- {std} Generations for generate a mol from the test set after PG.')
-    
 if __name__ == "__main__":
     main()

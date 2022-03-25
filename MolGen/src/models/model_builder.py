@@ -8,6 +8,7 @@ from ..utils.utils import ModelOpt
 
 def get_model(type=ModelOpt.RECURRENT, **kwargs):
 
+	print(type)
 	if type == ModelOpt.RECURRENT:
 		config = RecurrentConfig(**kwargs)
 		model = RecurrentModel(config)

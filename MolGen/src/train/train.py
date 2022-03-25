@@ -27,7 +27,7 @@ class Trainer():
                 for k, v in encodings.items():
                     encodings[k] = v.to(device)
                 
-                loss, logits, *args = self.model(**encodings)
+                loss, logits, *_ = self.model(**encodings)
                 # output = self.model(**encodings)
                 # loss = output['loss']
 
@@ -53,16 +53,18 @@ class PredictorTrainer():
                                                        shuffle=True,
                                                        batch_size=batch_size,
                                                        num_workers=8,
+                                                       collate_fn=self.train_dataset.collate_fn,
                                                        pin_memory=False)
 
         test_dataloader = torch.utils.data.DataLoader(self.test_dataset,
                                                        shuffle=True,
                                                        batch_size=batch_size,
                                                        num_workers=8,
+                                                       collate_fn=self.test_dataset.collate_fn,
                                                        pin_memory=False)
 
         for epoch in range(epochs):
-            self.model.train()
+            self.model = self.model.train()
             for batch, (encodings, labels) in enumerate(train_dataloader):
                 self.optim.zero_grad()
 
@@ -70,31 +72,26 @@ class PredictorTrainer():
                     encodings[k] = v.to(device)
                 labels = labels.to(device).float()
 
-                logits = self.model(**encodings)
-
-                loss = self.criterion(logits.squeeze(), labels)
-
+                loss, _ = self.model(**encodings, labels=labels)
                 loss.backward()
                 self.optim.step()
 
-                if batch % 5 == 0:
+                if (batch + 1) % 50 == 0:
                     print(f'epoch: {epoch + 1}, batch: {batch + 1}, loss: {loss.item()}')
             
-            self.model.eval()
+            self.model = self.model.eval()
             
             logits = []
             labels = []
             for batch, (encodings, label) in enumerate(test_dataloader):
-                with torch.no_grad():
-                    for k, v in encodings.items():
+                for k, v in encodings.items():
                         encodings[k] = v.to(device)
 
-                    preds = self.model(**encodings)
+                with torch.no_grad():
+                    preds = self.model(**encodings, test=True)
 
-                logits += preds.squeeze().cpu().numpy().tolist()
+                logits += preds.cpu().numpy().tolist()
                 labels += label.numpy().tolist()
-
             mse = self.criterion(torch.tensor(logits).float(), torch.tensor(labels).float()) 
 
-            print(f'Epoch: {epoch} Test MSE: {mse}')
-            
+            print(f'Epoch: {epoch + 1} Test MSE: {mse}')

@@ -11,10 +11,8 @@ class BS1Dataset(Dataset):
 
     def __init__(self,
                  data: pd.DataFrame,
-                 tokenizer,
-                 max_len: int=0) -> None:
+                 tokenizer,) -> None:
 
-        self.max_len = max_len
 
         self.data = data
 
@@ -27,8 +25,27 @@ class BS1Dataset(Dataset):
         smiles = self.data.loc[idx]['Smiles']
         label = self.data.loc[idx]['pChEMBL Value'] 
 
-        smiles = '[BOS]' + smiles + '[EOS]'
-        encodings = self.tokenizer(smiles, padding=True, max_length=self.max_len)
+        smiles = '[CLS]' + smiles
+        return smiles, label
 
-        encodings = {k: torch.tensor(v) for k, v in encodings.items()}
-        return encodings, label
+    def collate_fn(self, batches):
+        smiles = [b[0] for b in batches]
+        labels = [b[1] for b in batches]
+        labels = torch.tensor(labels, dtype=torch.float32)
+
+        max_len = max(map(len, smiles))
+
+        inputs = []
+        masks = []
+        for s in smiles:
+            encodings = self.tokenizer(s, padding=True, max_length=max_len)
+            inputs.append(encodings['input_ids'])
+            masks.append(encodings['padding_mask'])
+
+        inputs = torch.tensor(inputs, dtype=torch.long)
+        masks = torch.tensor(masks, dtype=torch.long)
+        encodings = {'input_ids': inputs, 'padding_mask': masks}
+
+        return encodings, labels.view(-1, 1)
+
+        

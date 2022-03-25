@@ -1,3 +1,6 @@
+import argparse
+from datetime import datetime
+from email.policy import default
 from enum import Enum
 import os
 from typing import List
@@ -15,7 +18,120 @@ class ModelOpt(Enum):
 class TaskOpt(Enum):
 	REGULAR = 1
 	CONSTRAINED = 2
-	
+ 
+def train_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--batch_size', type=int, default=512,
+                        help='batch size for the language modeling task')
+    parser.add_argument('--epochs', type=int, default=3,
+                        help='number of training epochs for the language modeling task')
+
+    return parser.parse_args()
+
+def rl_train_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--rl_batch_size', type=int, default=500,
+                        help='number of episode to compute batch for the policy gradient')
+    parser.add_argument('--rl_epochs', type=int, default=300,
+                        help='number of epochs to run for the policy graidnet stage')
+    parser.add_argument('--discount_factor', type=float, default=0.99,
+                        help='discount factor to use')
+    parser.add_argument('--max_len', type=int, default=150,
+                        help='the maximum size of molecule the model can generate during the RL stage')
+    parser.add_argument('--rl_size', type=int, default=25000,
+                        help='number of molecules to generate on each eval step during the RL stage')
+    parser.add_argument('--reward_fn', type=str, default='QED', choices=['QED', 'IC50'],
+                        help='reward function to use during the rl stage')
+    parser.add_argument('--do_eval', type=bool, default=True,
+                        help='eval the model during the RL stage')
+    parser.add_argument('--eval_steps', type=int, default=10,
+                        help='every how many steps do eval during the RL stage')
+    parser.add_argument('--rl_temprature', type=float, default=1,
+                        help='temprature during the RL stage')
+    parser.add_argument('--predictor_path', type=str, default=None,
+                        help='predictor path for the IC50 reward function')
+    return parser.parse_args()
+
+
+def eval_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--save_path', type=str, default='./data/results/' + str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S")),
+                        help='path to where to save the results')
+    parser.add_argument('--eval_size', type=int, default=25000,
+                        help='number of molecules to generate during final evaluation')
+    parser.add_argument('--eval_max_len', type=int, default=150,
+                        help='the maximum size of molecule the model can generate during the final evalutation stage')
+    parser.add_argument('--temprature', type=float, default=1,
+                        help='softmax temprature during the final evaluation')
+
+    return parser.parse_args()
+
+
+def model_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--n_embd', type=int, default=512,
+                        help='model embedding size')
+    parser.add_argument('--d_model', type=int, default=1024,
+                        help='model ffn size')
+    parser.add_argument('--n_layers', type=int, default=4,
+                        help='number of ltsm/decoder layers')
+    parser.add_argument('--num_heads', type=int, default=8,
+                        help='number of attention heads') 
+    parser.add_argument('--block_size', type=int, default=512,
+                        help='the maximum length of token for the model')
+    parser.add_argument('--proj_size', type=int, default=256,
+                        help='projection size for the attnetion')
+    parser.add_argument('--attn_dropout_rate', type=float, default=0.1,
+                        help='attention dropout rate')
+    parser.add_argument('--proj_dropout_rate', type=float, default=0.1,
+                        help='projection dropout rate')
+    parser.add_argument('--resid_dropout_rate', type=float, default=0.1,
+                        help='residual layers dropout rate')
+
+    return parser.parse_args()
+
+def predictor_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--predictor_dataset_path', type=str, default='./data/csvs/bs1.csv')
+    parser.add_argument('--predictor_tokenizer_path', type=str, default='./data/tokenizers/predictor_tokenizer.json')
+    parser.add_argument('--predictor_save_path,', type=str, default='./data/models/predictor_model.pt')
+    parser.add_argument('--train_predictor', type=bool, default=False)
+    parser.add_argument('--predictor_batch_size', type=int, default=32)
+    parser.add_argument('--predictor_epochs', type=int, default=10)
+    parser.add_argument('--n_embd', type=int, default=512,
+                        help='model embedding size')
+    parser.add_argument('--d_model', type=int, default=1024,
+                        help='model ffn size')
+    parser.add_argument('--n_layers', type=int, default=4,
+                        help='number of ltsm/decoder layers')
+    parser.add_argument('--num_heads', type=int, default=8,
+                        help='number of attention heads') 
+    parser.add_argument('--block_size', type=int, default=512,
+                        help='the maximum length of token for the model')
+    parser.add_argument('--proj_size', type=int, default=256,
+                        help='projection size for the attnetion')
+    parser.add_argument('--attn_dropout_rate', type=float, default=0.1,
+                        help='attention dropout rate')
+    parser.add_argument('--proj_dropout_rate', type=float, default=0.1,
+                        help='projection dropout rate')
+    parser.add_argument('--resid_dropout_rate', type=float, default=0.1,
+                        help='residual layers dropout rate')
+
+    return parser.parse_args()
+
+
+
+def general_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dataset_path', type=str, default='./data/gdb/gdb13/gdb13.smi',
+                        help='dataset to trian for language modeling')
+    parser.add_argument('--tokenizer_path', type=str, default='./data/tokenizers/gdb13CharTokenizer.json',
+                        help='path to tokenizer')
+    parser.add_argument('--device', type=str, default='cuda')
+    parser.add_argument('--model', default=ModelOpt.GPT, type=lambda opt: ModelOpt[opt], choices=list(ModelOpt))
+    
+    return parser.parse_args()
+
 def generate_and_save_plot(values: List[float],
                            plot_func,
                            xlabel: str,

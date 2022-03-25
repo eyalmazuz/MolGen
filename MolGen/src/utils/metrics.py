@@ -103,10 +103,12 @@ def calc_sas(mol: Chem.rdchem.Mol) -> float:
 
     Raises
 
-    """ 
-    sascore = sascorer.calculateScore(mol)
-
-    return sascore
+    """
+    try:
+        sascore = sascorer.calculateScore(mol)
+        return sascore
+    except Exception:
+        return None
 
 def calc_valid_molecules(molecules: List[str]) -> float:
     valid_molecules = [mol for mol in molecules if Chem.MolFromSmiles(mol) is not None]

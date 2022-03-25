@@ -105,9 +105,8 @@ class GPT(nn.Module):
             if isinstance(y_pred, tuple):
                 y_pred = y_pred[0]
 
-            # print(y_pred.size())
             last_word_logits = y_pred[0][-1]
-            p = torch.nn.functional.softmax(last_word_logits, dim=0)
+            p = torch.nn.functional.softmax(last_word_logits / temprature, dim=0)
             if p.device.type != 'cpu':
                 p = p.cpu()
             next_token = np.random.choice(len(last_word_logits), p=p.detach().numpy())

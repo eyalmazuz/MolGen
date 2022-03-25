@@ -1,3 +1,5 @@
+import copy
+import math
 import random
 
 import numpy as np
@@ -29,6 +31,7 @@ def policy_gradients(model,
     optimizer = optimizer(model.parameters(), step_size)
 
     for epoch in trange(epochs):
+        reward_fn.multiplier = lambda x: math.exp(x / 3)
         loss = 0
         batch_reward = 0
         for batch in trange(batch_size, leave=False):
@@ -41,13 +44,18 @@ def policy_gradients(model,
                 tokens = model.generate(tokenizer.bos_token_id, tokenizer.eos_token_id, kwargs['temprature'], max_len, device)
 
             smiles = tokenizer.decode(tokens[1:-1])
-
+            idx = smiles.find('[PAD]')
+            if idx != -1:
+                smiles = smiles[:idx]
+            
             reward = reward_fn(smiles)
 
             discounted_returns = (torch.pow(discount_factor, torch.arange(len(tokens[:-1]), 0, -1)) * reward).to(device)
-            # discounted_returns = (discounted_returns - discounted_returns.mean()) / (discounted_returns.std() + 1e-5)
             
-            y_hat = model(torch.tensor(encoding['input_ids'], [tokens[:-1]], encoding_padding_mask=encoding['padding_mask'], dtype=torch.long).to(device))
+            if 'Transformer' in str(model):  
+                y_hat = model(torch.tensor(encoding['input_ids'], [tokens[:-1]], encoding_padding_mask=encoding['padding_mask'], dtype=torch.long).to(device))
+            else:
+                y_hat = model(torch.tensor([tokens[:-1]], dtype=torch.long).to(device))
             if isinstance(y_hat, tuple):
                     y_hat = y_hat[0]
             log_preds = torch.nn.functional.log_softmax(y_hat[0], dim=1)
@@ -85,9 +93,12 @@ def policy_gradients(model,
                                           device=device)
                                           
 
+            reward_fn.multiplier = lambda x: x
+
             get_stats(train_set=kwargs['train_set'],
                     generated_smiles=generated_smiles,
                     save_path=f"{kwargs['save_path']}",
-                    folder_name=f'mid_RL/step_{epoch +1}')
+                    folder_name=f'mid_RL/step_{epoch +1}',
+                    reward_fn=reward_fn if str(reward_fn) == 'IC50' else None)
 
             model.train()

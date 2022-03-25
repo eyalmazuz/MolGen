@@ -6,6 +6,7 @@ from typing import Callable, Optional
 from rdkit import Chem
 from rdkit import RDLogger
 RDLogger.DisableLog('rdApp.*')
+import torch
 
 from .metrics import calc_qed, calc_sas
 
@@ -31,17 +32,37 @@ class IC50Reward(Reward):
 
     def __init__(self,
                 predictor,
-                multiplier: Optional[Callable[[float], float]]=None,
+                tokenizer,
+                multiplier: Optional[Callable[[float], float]]=lambda x: math.exp(x / 3),
                 **kwargs) -> None:
 
         super().__init__(multiplier)
         self.predictor = predictor
+        self.predictor = self.predictor.eval()
+
+        self.tokenizer = tokenizer
 
     def __call__(self, smiles: str):
-        predicted_ic50 = self.predictor(smiles)
-        reward = self.multiplier(predicted_ic50)
-        return reward
-        
+        try:
+            mol = Chem.MolFromSmiles(smiles)
+            if mol is None:
+                return 0
+
+            encodings = self.tokenizer('[CLS]' + smiles, padding=False)
+
+            for k, v in encodings.items():
+                encodings[k] = torch.tensor([v]).long().to(self.predictor.device)
+            with torch.no_grad():
+                reward = self.predictor(**encodings)
+            if self.multiplier is not None:
+                reward = self.multiplier(reward)
+            if isinstance(reward, torch.Tensor):
+                reward = reward.cpu().item()
+            return reward
+        except Exception as e:
+            # print(f'Failed at: {smiles}')
+            return 0 
+
     def __str__(self,):
         return "IC50"
         

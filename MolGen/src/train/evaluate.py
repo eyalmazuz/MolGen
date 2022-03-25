@@ -165,13 +165,20 @@ def calc_set_stat(mol_set: List[Chem.rdchem.Mol],
 def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
                    generated_score: List[float],
                    top_k: int=5,
+                   score_name: str='qed',
                    save_path: str=None) -> Dict[str, float]:
-    sorted_values, _ = list(zip(*list(sorted(zip(generated_molecules, generated_score), key=lambda x: x[1], reverse=True))))
-    top_k_molecules = sorted_values[:top_k]
+    sorted_molecules, sorted_scores = list(zip(*list(sorted(zip(generated_molecules, generated_score), key=lambda x: x[1], reverse=True))))
+    top_k_molecules, top_k_scores = sorted_molecules[:top_k], sorted_scores[:top_k]
     metrics = {}
-    for i, molecule in enumerate(top_k_molecules):
+    for i, (molecule, score) in enumerate(zip(top_k_molecules, top_k_scores)):
         smiles = Chem.MolToSmiles(molecule)
-        Draw.MolToFile(molecule, f'{save_path}/top_{i+1}_{smiles}.png')
+        try:
+            Draw.MolToFile(molecule, f'{save_path}/top_{i+1}_{smiles}.png')
+        except Exception:
+            print('failed to save', smiles)
+        metrics[f'top_{i+1}_smiles'] = smiles
+        if score_name != 'qed':
+            metrics[f'top_{i+1}_{score_name}'] = score
         metrics[f'top_{i+1}_qed'] = calc_qed(molecule)
         metrics[f'top_{i+1}_sas'] = calc_sas(molecule)
         metrics[f'top_{i+1}_len'] = len(smiles)
@@ -185,8 +192,10 @@ def get_stats(train_set: Dataset,
               save_path: str='./data',
               folder_name: str='results',
               top_k: int=5,
-              run_moses: bool=False):
+              run_moses: bool=False,
+              reward_fn=None):
 
+    stats = {}
     print('Converting smiles to mols')
     generated_molecules = convert_to_molecules(generated_smiles)
 
@@ -200,8 +209,33 @@ def get_stats(train_set: Dataset,
         generated_path = os.path.join(save_path, folder_name)
 
     print('Calculating QED')
-    generated_qed_values, generated_qed_stats = calc_set_stat(generated_molecules, calc_qed, value_range=(0, 1), desc='QED')
+    generated_qed_values, generated_qed_stats = calc_set_stat(generated_molecules,
+                                                            calc_qed,
+                                                            value_range=(0, 1),
+                                                            desc='QED')
     
+    if reward_fn is not None:
+        print(f'Calculating {reward_fn}')
+        generated_reward_values, generated_reward_stats = calc_set_stat(generated_smiles,
+                                                                        reward_fn,
+                                                                        value_range=(0, 9),
+                                                                        desc=f'{str(reward_fn)}')        
+
+        print(f'{len(generated_reward_values)=}')
+        generated_reward_values_filtered = filter(lambda x : x != 0, generated_reward_values)
+        generated_reward_values_filtered = list(generated_reward_values_filtered)
+
+        generate_and_save_plot(generated_reward_values_filtered,
+                                sns.kdeplot,
+                                xlabel=f'{str(reward_fn)}',
+                                ylabel='Density',
+                                title=f'Generated set {str(reward_fn)} density',
+                                save_path=generated_path,
+                                name=f"generated_{str(reward_fn)}_distribution",
+                                color='green',
+                                shade=True)
+
+
     generate_and_save_plot(generated_qed_values,
                            sns.kdeplot,
                            xlabel='QED',
@@ -225,10 +259,29 @@ def get_stats(train_set: Dataset,
                            color='green',
                            shade=True)
 
-    top_k_metrics = get_top_k_mols(generated_molecules, generated_qed_values, top_k=top_k, save_path=generated_path)
+    if reward_fn is not None:
+        top_k_metrics = get_top_k_mols(generated_molecules,
+                                       generated_reward_values,
+                                       top_k=top_k,
+                                       score_name='ic50',
+                                       save_path=generated_path)
+    else:
+        top_k_metrics = get_top_k_mols(generated_molecules,
+                                       generated_qed_values,
+                                       top_k=top_k,
+                                       score_name='qed',
+                                       save_path=generated_path)
 
-    stats = {**generated_qed_stats, **generated_sas_stats, **top_k_metrics}
-    
+    stats = {
+        **stats,
+        **generated_qed_stats,
+        **generated_sas_stats,
+        **top_k_metrics
+    }
+
+    if reward_fn is not None:
+        stats = {**stats, **generated_reward_stats} 
+
     print('Calculating diversity')
     generated_diversity_score = calc_diversity(generated_smiles)
     stats['diversity'] = generated_diversity_score
