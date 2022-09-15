@@ -117,11 +117,11 @@ def main():
 
     dataset_name = parser.dataset_path[parser.dataset_path.rfind('/')+1:parser.dataset_path.rfind('.')]
 
-    reward_fn = get_reward_fn(reward_name=parser.reward_fn,
-                            predictor_path=parser.predictor_path,
-                            #multiplier=lambda x: 10 * x,
+    reward_fn = get_reward_fn(reward_names=parser.reward_fns,
+                            paths=parser.predictor_paths,)
+                            multiplier=args.multipliers,
                             #predictor=predictor_model,
-                            tokenizer=predictor_tokenizer,)
+                            #tokenizer=predictor_tokenizer,)
 
     eval_save_path = parser.save_path + \
                                 f'_{str(model)}' + \
@@ -163,7 +163,9 @@ def main():
                                            device=device)
     
     
-    #reward_fn.eval = True
+    if hasattr(reward_fn, 'eval'):
+        reward_fn.eval = True
+
     get_stats(train_set=dataset,
               generated_smiles=generated_smiles,
               save_path=eval_save_path,

@@ -33,7 +33,9 @@ def policy_gradients(model,
     optimizer = optimizer(model.parameters(), step_size)
 
     for epoch in trange(epochs):
-        #reward_fn.eval = False
+        if hasattr(reward_fn, 'eval'):
+            reward_fn.eval = False
+
         loss = 0
         batch_reward = 0
         if use_scaffold:
@@ -56,28 +58,15 @@ def policy_gradients(model,
         len_scaffold = len(scaffold_tokens) - 1 if use_scaffold else 0
         batch_smiles = [tokenizer.decode(tokens[len_scaffold+1:-1]) for tokens in batch_tokens]
         batch_rewards = reward_fn(batch_smiles)
+
+        if any(isinstance(tup, tuple) for tup in batch_rewards):
+        # if isinstance(batch_reward, list):
+            batch_rewards = [reward for (name, reward) in batch_rewards]
+            batch_rewards = [sum(rewards) for rewards in zip(batch_rewards)]
+
         for tokens, reward in tqdm(zip(batch_tokens, batch_rewards), leave=False):
-            # if 'Transformer' in str(model):
-            #     scaffold = random.sample(kwargs['train_set'].scaffolds, 1)[0]
-            #     encoding = tokenizer('[BOS]' + scaffold + '[EOS]')
-            #     tokens = model.generate(tokenizer.bos_token_id, tokenizer.eos_token_id, encoding['input_ids'], 
-            #                         encoding['padding_mask'], kwargs['temprature'], max_len, device)
-            # else:
-            #tokens = model.generate(tokenizer.bos_token_id, tokenizer.eos_token_id, kwargs['temprature'], max_len, device)
-
-            # smiles = tokenizer.decode(tokens[1:-1])
-            # idx = smiles.find('[PAD]')
-            # if idx != -1:
-            #     smiles = smiles[:idx]
-            
-            # # print(f'{smiles=}')
-            # reward = reward_fn(smiles)[0]
-
             discounted_returns = (torch.pow(discount_factor, torch.arange(len(tokens[:-1]), 0, -1)) * reward).to(device)
             
-            # if 'Transformer' in str(model):  
-            #     y_hat = model(torch.tensor(encoding['input_ids'], [tokens[:-1]], encoding_padding_mask=encoding['padding_mask'], dtype=torch.long).to(device))
-            # else:
             y_hat = model(torch.tensor([tokens[:-1]], dtype=torch.long).to(device))
             if isinstance(y_hat, tuple):
                     y_hat = y_hat[0]
@@ -118,7 +107,8 @@ def policy_gradients(model,
                                           device=device)
                                           
 
-            #reward_fn.eval = True
+            if hasattr(reward_fn, 'eval'):
+                reward_fn.eval = True
 
             get_stats(train_set=kwargs['train_set'],
                     generated_smiles=generated_smiles,

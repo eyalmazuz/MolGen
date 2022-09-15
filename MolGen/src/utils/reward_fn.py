@@ -12,21 +12,29 @@ from tqdm import tqdm
 
 from .metrics import calc_qed, calc_sas
 
+def get_reward_fn(reward_names: List[str], paths: List[str]=None, multipliers: List[str]=None, **kwargs):
+    reward_fns = []
+    for reward_name, path, mult in zip(reward_names, paths, multipliers):
+        if reward_name == 'QED':
+            reward_fn = QEDReward(**kwargs)
+        
+        elif reward_name == 'IC50':
+            reward_fn = IC50Reward(**kwargs)
 
-def get_reward_fn(reward_name: str='QED', **kwargs):
+        elif reward_name == 'Anti Cancer':
+            reward_fn = ChempropReward(path, reward_name, multiplier=eval(mult))
 
-    if reward_name == 'QED':
-        print('QEDDDDDDD')
-        return QEDReward(**kwargs)
-    
-    elif reward_name == 'IC50':
-        return IC50Reward(**kwargs)
+        elif reward_name == 'LIDI':
+            reward_fn = ChempropReward(path, reward_name, multiplier=eval(mult))
+        
+        rewards.append(reward_fn)
 
-    elif reward_name == 'Anti Cancer':
-        return ChempropReward(**kwargs)
+   if len(rewards) == 1:
+       return reward_fns[0]
+   else:
+       return MultiReward(reward_fn)
 
 class Reward(ABC):
-
     def __init__(self, multiplier:  Optional[Callable[[float], float]]=None, **kwargs) -> None:
         self.multiplier = multiplier
         
@@ -34,11 +42,38 @@ class Reward(ABC):
     def __call__(self, smiles: str):
         raise NotImplementedError
 
+class MutliReward(Reward):
+    def __init__(self, reward_fns, eval_: bool=False) -> None:
+        self.reward_fns = reward_fns
+
+        self._eval = eval_
+
+    def __call__(self, smiles):
+        rewards = []
+        for fn in self.reward_fns:
+            reward = fn(smiles)
+            rewards.append((str(fn), reward))
+
+        return rewards
+
+    @property
+    def eval(self):
+        return self._eval
+
+    @eval.setter
+    def eval(self, val):
+        for fn in self.reward_fns:
+            if hasattr(fn, '_eval'):
+                fn.eval = val
+        self._eval = val
+
+    def __str__(self):
+        return "MultiReward"
 
 class ChempropReward(Reward):
-
     def __init__(self,
                 predictor_path,
+                name: str='Chemprop',
                 multiplier: Optional[Callable[[float], float]]=None,
                 eval_: bool=False,
                 **kwargs) -> None:
@@ -55,7 +90,8 @@ class ChempropReward(Reward):
 
         self.model_objects = chemprop.train.load_model(args=self.args)
 
-        self.eval = eval_
+        self._eval = eval_
+        self.name = name
 
     def __call__(self, smiles: str) -> float:
         if isinstance(smiles, list):
@@ -76,17 +112,23 @@ class ChempropReward(Reward):
                     print(f'Bad SMILES: {s[0]}')
                     preds.append(0)
 
-
         if self.multiplier is not None and not self.eval:
             preds = [self.multiplier(pred) for pred in preds]
 
         return preds
 
+    @property
+    def eval(self):
+        return self._eval
+
+    @eval.setter
+    def eval(self, val):
+        self._eval = val
+
     def __str__(self,):
-        return 'Anti_Cancer'
+        return self.name
 
 class IC50Reward(Reward):
-
     def __init__(self,
                 predictor_path,
                 tokenizer,
@@ -131,7 +173,6 @@ class IC50Reward(Reward):
         return "IC50"
         
 class QEDReward(Reward):
-
     def __init__(self,
                  multiplier: Optional[Callable[[float], float]]=lambda x: x * 10,
                  negative_reward: float=0,
@@ -164,7 +205,6 @@ class QEDReward(Reward):
         return "QED"
 
 def penalized_qed_reward(smiles: Union[List[str], str], fn: Callable[[float], float]=lambda x: x*10) -> float:
-
     mol = Chem.MolFromSmiles(smiles)
     if mol:
         qed = calc_qed(mol)
@@ -179,19 +219,16 @@ def penalized_qed_reward(smiles: Union[List[str], str], fn: Callable[[float], fl
     return reward
 
 def sas_reward(smiles: str, fn: Callable[[float], float]=lambda x: -math.exp(x/3)) -> float:
-
     mol = Chem.MolFromSmiles(smiles)
     if mol:
         sas = calc_sas(mol)
         reward = fn(sas)
     else:
         reward = -1000
-
     
     return reward
 
 def main():
-
     with QEDReward() as rfn:
         print(rfn("CCO"))
 

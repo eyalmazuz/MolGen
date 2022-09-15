@@ -165,20 +165,36 @@ def calc_set_stat(mol_set: List[Chem.rdchem.Mol],
     else:
         values = np.array([fail_safe(func, mol) for mol in tqdm(mol_set, desc=desc)])
     
-    len_values = len(values)
-    values = [mol for mol in values if mol is not None]
-    failed_values = len_values - len(values)
+    if any([isinstance(tup, tuple) for tup in values]):
+        len_values = len(values[0][1])
+        for name, value in values:
+            value = [mol for mol in value if mol is not None]
+            failed_values = len_values - len(values[0][1])
+        
+            value = np.array(value)
+            stats[f'{desc} {name} mean'] = value.mean()
+            stats[f'{desc} {name} std'] = value.std()
+            stats[f'{desc} {name} median'] = np.median(value)
+            stats[f'{desc} {name} failed'] = failed_values
+            start, stop = value_range
+            ranges = np.linspace(start, stop, 6)
+            for start, stop in [ranges[i:i+2] for i in range(0, len(ranges)-1)]:
+                stats[f'{start} < {desc} {name} <= {stop}'] = np.count_nonzero((start < value) & (value <= stop))
 
+    else:
+        len_values = len(values)
+        values = [mol for mol in values if mol is not None]
+        failed_values = len_values - len(values)
 
-    values = np.array(values)
-    stats[f'{desc} mean'] = values.mean()
-    stats[f'{desc} std'] = values.std()
-    stats[f'{desc} median'] = np.median(values)
-    stats[f'{desc} failed'] = failed_values
-    start, stop = value_range
-    ranges = np.linspace(start, stop, 6)
-    for start, stop in [ranges[i:i+2] for i in range(0, len(ranges)-1)]:
-        stats[f'{start} < {desc} <= {stop}'] = np.count_nonzero((start < values) & (values <= stop))
+        values = np.array(values)
+        stats[f'{desc} mean'] = values.mean()
+        stats[f'{desc} std'] = values.std()
+        stats[f'{desc} median'] = np.median(values)
+        stats[f'{desc} failed'] = failed_values
+        start, stop = value_range
+        ranges = np.linspace(start, stop, 6)
+        for start, stop in [ranges[i:i+2] for i in range(0, len(ranges)-1)]:
+            stats[f'{start} < {desc} <= {stop}'] = np.count_nonzero((start < values) & (values <= stop))
 
     return values, stats
 
@@ -187,25 +203,48 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
                    top_k: int=5,
                    score_name: str='qed',
                    save_path: str=None) -> Dict[str, float]:
-    sorted_molecules, sorted_scores = list(zip(*list(sorted(zip(generated_molecules, generated_score), key=lambda x: x[1], reverse=True))))
-    top_k_molecules, top_k_scores = sorted_molecules[:top_k], sorted_scores[:top_k]
     metrics = {}
-    for i, (molecule, score) in enumerate(zip(top_k_molecules, top_k_scores)):
-        smiles = Chem.MolToSmiles(molecule)
-        try:
-            Draw.MolToFile(molecule, f'{save_path}/top_{i+1}_{smiles}.png')
-        except Exception:
-            print('failed to save', smiles)
-        metrics[f'top_{i+1}_smiles'] = smiles
-        if score_name != 'qed':
-            metrics[f'top_{i+1}_{score_name}'] = score
-        metrics[f'top_{i+1}_qed'] = calc_qed(molecule)
-        metrics[f'top_{i+1}_sas'] = calc_sas(molecule)
-        metrics[f'top_{i+1}_len'] = len(smiles)
+
+    if any(isinstance(tup, tuple) for tup in generated_score):
+        sorted_args = np.argsort(generated_score[0][1])[::-1]
+        top_k_molecules = np.array(generated_molecules)[sorted_args][:top_k]
+        
+        top_k_scores = [(name, score[sorted_args][:top_k]) for name, score in generate_score]
+        
+        for i, (molecule, scores) in enumerate(zip(top_k_molecules, top_k_scores))
+           smiles = Chem.MolToSmiles(molecule)
+           try:
+               Draw.MolToFile(molecule, f'{save_path}/top_{i+1}_{smiles}.png')
+            except Exception:
+                print('failed to save ', smiles)
+
+            metrics[f'top_{i+1}_smiles'] = smiles
+
+            for j in range(len(scores):
+                name, score = scores[i][0], scores[i][1][j]
+                if score_name != 'qed':
+                    metrics[f'top {i+1} {name}'] = score
+                metrics[f'top {i+1} qed'] = calc_qed(molecule)
+                metrics[f'top {i+1} sas'] = calc_sas(molecule)
+                metrics[f'top {i+1} len'] = len(smiles)
+
+    else:
+        sorted_molecules, sorted_scores = list(zip(*list(sorted(zip(generated_molecules, generated_score), key=lambda x: x[1], reverse=True))))
+        top_k_molecules, top_k_scores = sorted_molecules[:top_k], sorted_scores[:top_k]
+        for i, (molecule, score) in enumerate(zip(top_k_molecules, top_k_scores)):
+            smiles = Chem.MolToSmiles(molecule)
+            try:
+                Draw.MolToFile(molecule, f'{save_path}/top_{i+1}_{smiles}.png')
+            except Exception:
+                print('failed to save ', smiles)
+            metrics[f'top_{i+1}_smiles'] = smiles
+            if score_name != 'qed':
+                metrics[f'top {i+1} {score_name}'] = score
+            metrics[f'top {i+1} qed'] = calc_qed(molecule)
+            metrics[f'top {i+1} sas'] = calc_sas(molecule)
+            metrics[f'top {i+1} len'] = len(smiles)
 
     return metrics
-    
-
 
 def get_stats(train_set: Dataset,
               generated_smiles: List[str],
@@ -245,19 +284,34 @@ def get_stats(train_set: Dataset,
                                                                         desc=f'{str(reward_fn)}')        
 
         print(f'{len(generated_reward_values)=}')
-        generated_reward_values_filtered = filter(lambda x : x != 0, generated_reward_values)
-        generated_reward_values_filtered = list(generated_reward_values_filtered)
+        if any(isinstance(tup, tuple) for tup in generated_reward_values):
+            for name, values in generated_reward_values:
+                generated_reward_values_filtered = filter(lambda x : x != 0, generated_reward_values)
+                generated_reward_values_filtered = list(generated_reward_values_filtered)
 
-        generate_and_save_plot(generated_reward_values_filtered,
-                                sns.kdeplot,
-                                xlabel=f'{str(reward_fn)}',
-                                ylabel='Density',
-                                title=f'Generated set {str(reward_fn)} density',
-                                save_path=generated_path,
-                                name=f"generated_{str(reward_fn)}_distribution",
-                                color='green',
-                                shade=True)
+                generate_and_save_plot(generated_reward_values_filtered,
+                                        sns.kdeplot,
+                                        xlabel=f'{str(name)}',
+                                        ylabel='Density',
+                                        title=f'Generated set {str(name)} density',
+                                        save_path=generated_path,
+                                        name=f"generated_{str(name)}_distribution",
+                                        color='green',
+                                        shade=True)
 
+        else:
+            generated_reward_values_filtered = filter(lambda x : x != 0, generated_reward_values)
+            generated_reward_values_filtered = list(generated_reward_values_filtered)
+
+            generate_and_save_plot(generated_reward_values_filtered,
+                                    sns.kdeplot,
+                                    xlabel=f'{str(reward_fn)}',
+                                    ylabel='Density',
+                                    title=f'Generated set {str(reward_fn)} density',
+                                    save_path=generated_path,
+                                    name=f"generated_{str(reward_fn)}_distribution",
+                                    color='green',
+                                    shade=True)
 
     generate_and_save_plot(generated_qed_values,
                            sns.kdeplot,

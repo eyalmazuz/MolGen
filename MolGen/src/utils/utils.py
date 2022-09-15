@@ -39,7 +39,7 @@ def parse_arguments():
                         help='the maximum size of molecule the model can generate during the RL stage')
     parser.add_argument('--rl_size', type=int, default=25000,
                         help='number of molecules to generate on each eval step during the RL stage')
-    parser.add_argument('--reward_fn', type=str, default='QED', choices=['QED', 'IC50', 'Anti Cancer'],
+    parser.add_argument('--reward_fns', type=str, default=['QED'], nargs='+', choices=['QED', 'IC50', 'Anti Cancer'],
                         help='reward function to use during the rl stage')
     parser.add_argument('--do_eval', type=bool, default=True,
                         help='eval the model during the RL stage')
@@ -47,7 +47,9 @@ def parse_arguments():
                         help='every how many steps do eval during the RL stage')
     parser.add_argument('--rl_temprature', type=float, default=1,
                         help='temprature during the RL stage')
-    parser.add_argument('--predictor_path', type=str, default=None,
+    parser.add_argument('--multipliers', type=str, default=[None], nargs='+',
+                        help='predictor path for the Property Predictor reward function')
+    parser.add_argument('--predictor_paths', type=str, default=[None], nargs='+',
                         help='predictor path for the Property Predictor reward function')
 
     parser.add_argument('--save_path', type=str, default='./data/results/' + str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S")),
