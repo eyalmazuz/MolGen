@@ -26,6 +26,7 @@ def parse_arguments():
     parser.add_argument('--epochs', type=int, default=3,
                         help='number of training epochs for the language modeling task')
     parser.add_argument('--load_pretrained', type=bool, default=False, help='if to load a pre-trained model instead of training one.')
+    parser.add_argument('--do_train', type=bool, default=False, help='if to train a model with the LM task.')
     parser.add_argument('--pretrained_path', type=str, default='./data/models/gpt_pre_rl_gdb13.pt')
 
     parser.add_argument('--rl_batch_size', type=int, default=500,
@@ -38,7 +39,7 @@ def parse_arguments():
                         help='the maximum size of molecule the model can generate during the RL stage')
     parser.add_argument('--rl_size', type=int, default=25000,
                         help='number of molecules to generate on each eval step during the RL stage')
-    parser.add_argument('--reward_fn', type=str, default='QED', choices=['QED', 'IC50'],
+    parser.add_argument('--reward_fn', type=str, default='QED', choices=['QED', 'IC50', 'Anti Cancer'],
                         help='reward function to use during the rl stage')
     parser.add_argument('--do_eval', type=bool, default=True,
                         help='eval the model during the RL stage')
@@ -47,7 +48,7 @@ def parse_arguments():
     parser.add_argument('--rl_temprature', type=float, default=1,
                         help='temprature during the RL stage')
     parser.add_argument('--predictor_path', type=str, default=None,
-                        help='predictor path for the IC50 reward function')
+                        help='predictor path for the Property Predictor reward function')
 
     parser.add_argument('--save_path', type=str, default='./data/results/' + str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S")),
                         help='path to where to save the results')
@@ -108,6 +109,7 @@ def parse_arguments():
                         help='path to tokenizer')
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--model', default=ModelOpt.GPT, type=lambda opt: ModelOpt[opt], choices=list(ModelOpt))
+    parser.add_argument('--use_scaffold', default=False, type=bool, help='whether to use scaffold')
     
     return parser.parse_args()
 

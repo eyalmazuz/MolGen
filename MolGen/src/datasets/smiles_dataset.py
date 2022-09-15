@@ -1,8 +1,13 @@
 from random import sample
 from typing import List, Dict
 
+from rdkit import Chem
+from rdkit.Chem.Scaffolds import MurckoScaffold
 import torch
 from torch.utils.data import Dataset
+from tqdm import tqdm
+
+from ..utils.mol_utils import get_molecule_scaffold
 
 
 
@@ -11,12 +16,17 @@ class SmilesDataset(Dataset):
     def __init__(self,
                  data_path: str,
                  tokenizer,
+                 use_scaffold=False,
                  max_len: int=0) -> None:
 
         self.max_len = max_len
         self.data_path = data_path 
+        self.use_scaffold = use_scaffold
 
         self._molecules = self.load_molecules()
+
+        if self.use_scaffold:
+            self.scaffolds = list(set([get_molecule_scaffold(mol) for mol in tqdm(self._molecules[:100000], desc='generating scaffolds')]))
 
         self.tokenizer = tokenizer
 
@@ -37,7 +47,11 @@ class SmilesDataset(Dataset):
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         smiles = self._molecules[idx]
         
-        smiles = '[BOS]' + smiles + '[EOS]'
+        if self.use_scaffold:
+            scaffold = MurckoScaffold.MurckoScaffoldSmilesFromSmiles(smiles)
+            smiles = '[BOS]' + scaffold + '[SEP]' + smiles + '[EOS]' 
+        else:
+            smiles = '[BOS]' + smiles + '[EOS]'
         encodings = self.tokenizer(smiles, padding=True, max_length=self.max_len)
         encodings['labels'] = encodings['input_ids']
 

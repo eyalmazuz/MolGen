@@ -129,15 +129,15 @@ class CharTokenizer():
             eos.append('[EOS]') 
             smiles = smiles[:-5]
 
-        # if '[SEP]' in smiles:
-            # idx = smiles.find('[SEP]')
-            # sca += smiles[:idx]
-            # sep.append(smiles[idx:idx+5])
-            # smiles = smiles[idx+5:]
+        if '[SEP]' in smiles:
+            idx = smiles.find('[SEP]')
+            sca += smiles[:idx]
+            sep.append(smiles[idx:idx+5])
+            smiles = smiles[idx+5:]
 
 
-        # encodings = self.convert_tokens_to_ids(bos + sca + sep + list(smiles) + eos)
-        encodings = self.convert_tokens_to_ids(bos + cls + list(smiles) + eos)
+        encodings = self.convert_tokens_to_ids(bos + sca + sep + list(smiles) + eos)
+        # encodings = self.convert_tokens_to_ids(bos + cls + list(smiles) + eos)
         
         padding_mask = [0] * len(encodings)
         

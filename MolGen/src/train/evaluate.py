@@ -29,11 +29,13 @@ def generate_smiles_scaffolds(model,
                               batch_size: int=100,
                               max_len=100,
                               device=torch.device('cuda'), 
+                              return_smiles=True,
                               disable=False) -> List[str]:
 
     print(f'Evaluate {device}')
     model.to(device)
-    model.eval()
+    if return_smiles:
+        model.eval()
     gen_smiles = []
     
     if num_samples < len(scaffolds):
@@ -41,23 +43,32 @@ def generate_smiles_scaffolds(model,
     else:
         scaffolds_sample = scaffolds
 
-    for scaffold in scaffolds_sample:
-        encoding = tokenizer('[BOS]' + scaffold + '[EOS]')
+    print(scaffolds_sample)
+    print(f'{size=}, {batch_size=}, {(size // (batch_size * len(scaffolds_sample)))=}')
+    for scaffold in tqdm(scaffolds_sample, disable=disable):
+        encoding = tokenizer('[BOS]' + scaffold + '[SEP]')
+        for batch in range(size // (batch_size * len(scaffolds_sample))):
 
-        tokens = sample_scaffodls(model, tokenizer.bos_token_id, encoding['input_ids'], encoding['padding_mask'],
-                                  batch_size, max_len, temprature, device,)
+            tokens = sample(model, encoding['input_ids'],
+                        batch_size, max_len, temprature, device,)
 
-        tokens = tokens.tolist()
+            tokens = tokens.tolist()
 
-        for mol in tokens:
-            try:
-                end_idx = mol.index(tokenizer.eos_token_id)
-            except ValueError:
-                end_idx = len(mol)
-            mol = mol[1: end_idx]
+            for mol in tokens:
+                try:
+                    end_idx = mol.index(tokenizer.eos_token_id)
+                except ValueError:
+                    end_idx = len(mol)
 
-            smiles = tokenizer.decode(mol)
-            gen_smiles.append(smiles)
+                mol = mol[:end_idx+1]
+                if return_smiles:
+                    len_scaffold = len(encoding['input_ids'])
+                    mol = mol[len_scaffold-1:]
+                    smiles = tokenizer.decode(mol[1:-1])
+                    gen_smiles.append(smiles)
+
+                else:
+                    gen_smiles.append(mol)
 
     return gen_smiles
 
@@ -108,11 +119,13 @@ def generate_smiles(model,
                     batch_size: int=100,
                     max_len:int=100,
                     device=torch.device('cuda'),
+                    return_smiles=True,
                     disable=False) -> List[str]:
 
     print(f'Evaluate {device}')
     model.to(device)
-    model.eval()
+    if return_smiles:
+        model.eval()
     gen_smiles = []
     
     for batch in trange(size // batch_size, disable=disable):
@@ -124,10 +137,12 @@ def generate_smiles(model,
                 end_idx = mol.index(tokenizer.eos_token_id)
             except ValueError:
                 end_idx = len(mol)
-            mol = mol[1: end_idx]
-
-            smiles = tokenizer.decode(mol)
-            gen_smiles.append(smiles)
+            mol = mol[:end_idx+1]
+            if return_smiles:
+                smiles = tokenizer.decode(mol[1:-1])
+                gen_smiles.append(smiles)
+            else:
+                gen_smiles.append(mol)
 
     return gen_smiles
 
@@ -142,9 +157,14 @@ def fail_safe(func: Callable[[Chem.rdchem.Mol], float], mol: Chem.rdchem.Mol) ->
 def calc_set_stat(mol_set: List[Chem.rdchem.Mol],
                   func: Callable[[Chem.rdchem.Mol], float],
                   value_range=(0,1),
+                  lst: bool=False,
                   desc=None) -> Tuple[List[float], Dict[str, float]]:
     stats = {}
-    values = [fail_safe(func, mol) for mol in tqdm(mol_set, desc=desc)]
+    if lst:
+        values = fail_safe(func, mol_set)
+    else:
+        values = np.array([fail_safe(func, mol) for mol in tqdm(mol_set, desc=desc)])
+    
     len_values = len(values)
     values = [mol for mol in values if mol is not None]
     failed_values = len_values - len(values)
@@ -193,7 +213,8 @@ def get_stats(train_set: Dataset,
               folder_name: str='results',
               top_k: int=5,
               run_moses: bool=False,
-              reward_fn=None):
+              reward_fn=None,
+              scaffold=None):
 
     stats = {}
     print('Converting smiles to mols')
@@ -211,14 +232,16 @@ def get_stats(train_set: Dataset,
     print('Calculating QED')
     generated_qed_values, generated_qed_stats = calc_set_stat(generated_molecules,
                                                             calc_qed,
+                                                            lst=False,
                                                             value_range=(0, 1),
                                                             desc='QED')
     
-    if reward_fn is not None:
+    if str(reward_fn) != 'QED':
         print(f'Calculating {reward_fn}')
         generated_reward_values, generated_reward_stats = calc_set_stat(generated_smiles,
                                                                         reward_fn,
-                                                                        value_range=(0, 9),
+                                                                        lst=True,
+                                                                        value_range=(0, 1),
                                                                         desc=f'{str(reward_fn)}')        
 
         print(f'{len(generated_reward_values)=}')
@@ -247,7 +270,11 @@ def get_stats(train_set: Dataset,
                            shade=True)
 
     print('Calculating SAS')
-    generated_sas_values, generated_sas_stats = calc_set_stat(generated_molecules, calc_sas, value_range=(1, 10), desc='SAS')
+    generated_sas_values, generated_sas_stats = calc_set_stat(generated_molecules,
+                                                              calc_sas,
+                                                              lst=False,
+                                                              value_range=(1, 10), 
+                                                              desc='SAS')
     
     generate_and_save_plot(generated_sas_values,
                            sns.kdeplot,
@@ -259,11 +286,11 @@ def get_stats(train_set: Dataset,
                            color='green',
                            shade=True)
 
-    if reward_fn is not None:
+    if reward_fn is not None and str(reward_fn) != 'QED':
         top_k_metrics = get_top_k_mols(generated_molecules,
                                        generated_reward_values,
                                        top_k=top_k,
-                                       score_name='ic50',
+                                       score_name=str(reward_fn),
                                        save_path=generated_path)
     else:
         top_k_metrics = get_top_k_mols(generated_molecules,
@@ -279,7 +306,7 @@ def get_stats(train_set: Dataset,
         **top_k_metrics
     }
 
-    if reward_fn is not None:
+    if reward_fn is not None and str(reward_fn) != 'QED':
         stats = {**stats, **generated_reward_stats} 
 
     print('Calculating diversity')
@@ -304,6 +331,10 @@ def get_stats(train_set: Dataset,
 
     with open(f'{generated_path}/generated_smiles.txt', 'w') as f:
         f.write('\n'.join(generated_smiles))
+
+    if scaffold is not None:
+        with open(f'{generated_path}/scaffold.txt', 'w') as f:
+            f.write(scaffold)
 
     if run_moses:
         print('Running Moses')

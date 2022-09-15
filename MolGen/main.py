@@ -84,16 +84,15 @@ def main():
         predictor_tokenizer = CharTokenizer('./data/tokenizers/predictor_tokenizer.json',
                                             data_path='./data/ic50_smiles.smi')
 
-        predictor_model = torch.load('./data/models/predictor_model.pt') 
- 
     print(parser.device)
     
     max_smiles_len = get_max_smiles_len(parser.dataset_path) + 50
-    
+    #max_smiles_len = 256
     tokenizer = CharTokenizer(parser.tokenizer_path, parser.dataset_path)
 
     dataset = get_dataset(data_path=parser.dataset_path,
                           tokenizer=tokenizer,
+                          use_scaffold=parser.use_scaffold,
                           max_len=max_smiles_len)
 
     model = get_model(parser.model,
@@ -120,7 +119,8 @@ def main():
 
     reward_fn = get_reward_fn(reward_name=parser.reward_fn,
                             predictor_path=parser.predictor_path,
-                            predictor=predictor_model,
+                            #multiplier=lambda x: 10 * x,
+                            #predictor=predictor_model,
                             tokenizer=predictor_tokenizer,)
 
     eval_save_path = parser.save_path + \
@@ -129,11 +129,12 @@ def main():
                                 f'_RlBatch_{str(parser.rl_batch_size)}' + \
                                 f'_RlEpochs_{str(parser.rl_epochs)}' + \
                                 f'_Reward_{str(reward_fn)}' + \
+                                f'_Scaffold_{str(parser.use_scaffold)}' + \
                                 f'_discount_{str(parser.discount_factor)}'
 
     print(eval_save_path)
     
-    if not parser.load_pretrained:
+    if not parser.load_pretrained and parser.do_train:
         optim = torch.optim.Adam(model.parameters())
         criterion = torch.nn.CrossEntropyLoss()
 
@@ -145,22 +146,30 @@ def main():
 
     torch.save(model.state_dict(), f"{eval_save_path}/pre_rl.pt")
     
-    generated_smiles = generate_smiles(model=model,
-                                        tokenizer=tokenizer,
-                                        temprature=parser.temprature,
-                                        size=parser.eval_size,
-                                        max_len=parser.eval_max_len,
-                                        device=device)
+    if parser.use_scaffold:
+        generated_smiles = generate_smiles_scaffolds(model=model,
+                                                    tokenizer=tokenizer,
+                                                    scaffolds=dataset.scaffolds,
+                                                    temprature=parser.temprature,
+                                                    size=parser.eval_size,
+                                                    max_len=parser.eval_max_len,
+                                                    device=device)
+    else:
+        generated_smiles = generate_smiles(model=model,
+                                           tokenizer=tokenizer,
+                                           temprature=parser.temprature,
+                                           size=parser.eval_size,
+                                           max_len=parser.eval_max_len,
+                                           device=device)
     
     
-    reward_fn.multiplier = lambda x: x
+    #reward_fn.eval = True
     get_stats(train_set=dataset,
               generated_smiles=generated_smiles,
               save_path=eval_save_path,
               folder_name='pre_RL',
-              reward_fn=reward_fn if str(reward_fn) == 'IC50' else None)
+              reward_fn=reward_fn)
 
-    reward_fn.multiplier = lambda x: math.exp(x / 3)
     policy_gradients(model=model,
                     tokenizer=tokenizer,
                     reward_fn=reward_fn,
@@ -170,11 +179,14 @@ def main():
                     discount_factor=parser.discount_factor,
                     max_len=parser.rl_max_len,
                     do_eval=parser.do_eval,
+                    use_scaffold=parser.use_scaffold,
+                    train_set=dataset,
+                    scaffolds=dataset.scaffolds if parser.use_scaffold else [],
                     eval_steps=parser.eval_steps,
                     save_path=eval_save_path,
                     temprature=parser.rl_temprature,
-                    device=device,
-                    train_set=dataset)
+                    size=parser.rl_size,
+                    device=device,)
 
     torch.save(model.state_dict(), f"{eval_save_path}/rl.pt")
     
@@ -192,7 +204,7 @@ def main():
               save_path=eval_save_path,
               folder_name='post_RL',
               run_moses=True,
-              reward_fn=reward_fn if str(reward_fn) == 'IC50' else None)
+              reward_fn=reward_fn)
 
 if __name__ == "__main__":
     main()
