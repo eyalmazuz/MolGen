@@ -1,7 +1,7 @@
 import json
 import os
 import random
-from typing import List, Dict, Tuple, Callable
+from typing import List, Dict, Tuple, Callable, Union
 
 import moses
 from torch._C import Value
@@ -151,7 +151,7 @@ def fail_safe(func: Callable[[Chem.rdchem.Mol], float], mol: Chem.rdchem.Mol) ->
         res = func(mol)
     except Exception as e:
         res = None
-        print(mol)
+        print(f'{mol=}')
     return res
 
 def calc_set_stat(mol_set: List[Chem.rdchem.Mol],
@@ -161,75 +161,93 @@ def calc_set_stat(mol_set: List[Chem.rdchem.Mol],
                   desc=None) -> Tuple[List[float], Dict[str, float]]:
     stats = {}
     if lst:
-        values = fail_safe(func, mol_set)
+        batch_rewards = fail_safe(func, mol_set)
     else:
-        values = np.array([fail_safe(func, mol) for mol in tqdm(mol_set, desc=desc)])
+        batch_rewards = np.array([fail_safe(func, mol) for mol in tqdm(mol_set, desc=desc)])
     
-    if any([isinstance(tup, tuple) for tup in values]):
-        len_values = len(values[0][1])
-        for name, value in values:
+    if isinstance(batch_rewards, dict):
+        transformed_batch_rewards = []
+        for fn, values in zip(func.reward_fns, batch_rewards.values()):
+            transformed_batch_rewards.append(list(map(fn.multiplier, values)))
+
+        transformed_batch_rewards = list(zip(*transformed_batch_rewards))
+        transformed_batch_rewards = [sum(rewards) for rewards in transformed_batch_rewards]
+
+        batch_rewards['Total Reward'] = transformed_batch_rewards
+
+        for name, value in batch_rewards.items():
+            len_batch_rewards = len(value)
             value = [mol for mol in value if mol is not None]
-            failed_values = len_values - len(values[0][1])
+            failed_batch_rewards = len_batch_rewards - len(value)
         
             value = np.array(value)
             stats[f'{desc} {name} mean'] = value.mean()
             stats[f'{desc} {name} std'] = value.std()
             stats[f'{desc} {name} median'] = np.median(value)
-            stats[f'{desc} {name} failed'] = failed_values
+            stats[f'{desc} {name} failed'] = failed_batch_rewards
             start, stop = value_range
             ranges = np.linspace(start, stop, 6)
             for start, stop in [ranges[i:i+2] for i in range(0, len(ranges)-1)]:
                 stats[f'{start} < {desc} {name} <= {stop}'] = np.count_nonzero((start < value) & (value <= stop))
 
     else:
-        len_values = len(values)
-        values = [mol for mol in values if mol is not None]
-        failed_values = len_values - len(values)
+        len_batch_rewards = len(batch_rewards)
+        batch_rewards = [mol for mol in batch_rewards if mol is not None]
+        failed_batch_rewards = len_batch_rewards - len(batch_rewards)
 
-        values = np.array(values)
-        stats[f'{desc} mean'] = values.mean()
-        stats[f'{desc} std'] = values.std()
-        stats[f'{desc} median'] = np.median(values)
-        stats[f'{desc} failed'] = failed_values
+        batch_rewards = np.array(batch_rewards)
+        stats[f'{desc} mean'] = batch_rewards.mean()
+        stats[f'{desc} std'] = batch_rewards.std()
+        stats[f'{desc} median'] = np.median(batch_rewards)
+        stats[f'{desc} failed'] = failed_batch_rewards
         start, stop = value_range
         ranges = np.linspace(start, stop, 6)
         for start, stop in [ranges[i:i+2] for i in range(0, len(ranges)-1)]:
-            stats[f'{start} < {desc} <= {stop}'] = np.count_nonzero((start < values) & (values <= stop))
+            stats[f'{start} < {desc} <= {stop}'] = np.count_nonzero((start < batch_rewards) & (batch_rewards <= stop))
 
-    return values, stats
+    return batch_rewards, stats
 
 def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
-                   generated_score: List[float],
+                   generated_scores: Union[List[float], Dict[str, List[float]]],
                    top_k: int=5,
                    score_name: str='qed',
                    save_path: str=None) -> Dict[str, float]:
     metrics = {}
 
-    if any(isinstance(tup, tuple) for tup in generated_score):
-        sorted_args = np.argsort(generated_score[0][1])[::-1]
+    if isinstance(generated_scores, dict):
+        sorted_args = np.argsort(generated_scores['Total Reward'])[::-1]
+
+        print(len(sorted_args), len(generated_molecules))
         top_k_molecules = np.array(generated_molecules)[sorted_args][:top_k]
         
-        top_k_scores = [(name, score[sorted_args][:top_k]) for name, score in generate_score]
+        for (name, score) in generated_scores.items():
+            #print(name, score[:top_k], sorted_args[:top_k])
+            generated_scores[name] = np.array(score)[sorted_args][:top_k]
+            # top_k_scores.append((name, np.array(score)[sorted_args][:top_k]))
         
-        for i, (molecule, scores) in enumerate(zip(top_k_molecules, top_k_scores))
-           smiles = Chem.MolToSmiles(molecule)
-           try:
-               Draw.MolToFile(molecule, f'{save_path}/top_{i+1}_{smiles}.png')
+        for i in range(top_k):
+            molecule = top_k_molecules[i]
+        #for i, (molecule, (name, scores)) in enumerate(zip(top_k_molecules, top_k_scores)):
+            smiles = Chem.MolToSmiles(molecule)
+            try:
+                Draw.MolToFile(molecule, f'{save_path}/top_{i+1}_{smiles}.png')
             except Exception:
                 print('failed to save ', smiles)
 
             metrics[f'top_{i+1}_smiles'] = smiles
 
-            for j in range(len(scores):
-                name, score = scores[i][0], scores[i][1][j]
+            #for j in range(len(top_k_scores)):
+            for name, score in generated_scores.items():
+                #name, score = top_k_scores[j][0], top_k_scores[j][1][i]
                 if score_name != 'qed':
-                    metrics[f'top {i+1} {name}'] = score
-                metrics[f'top {i+1} qed'] = calc_qed(molecule)
-                metrics[f'top {i+1} sas'] = calc_sas(molecule)
-                metrics[f'top {i+1} len'] = len(smiles)
+                    metrics[f'top {i+1} {name}'] = score[i]
+
+            metrics[f'top {i+1} qed'] = calc_qed(molecule)
+            metrics[f'top {i+1} sas'] = calc_sas(molecule)
+            metrics[f'top {i+1} len'] = len(smiles)
 
     else:
-        sorted_molecules, sorted_scores = list(zip(*list(sorted(zip(generated_molecules, generated_score), key=lambda x: x[1], reverse=True))))
+        sorted_molecules, sorted_scores = list(zip(*list(sorted(zip(generated_molecules, generated_scores), key=lambda x: x[1], reverse=True))))
         top_k_molecules, top_k_scores = sorted_molecules[:top_k], sorted_scores[:top_k]
         for i, (molecule, score) in enumerate(zip(top_k_molecules, top_k_scores)):
             smiles = Chem.MolToSmiles(molecule)
@@ -262,6 +280,8 @@ def get_stats(train_set: Dataset,
     print('Filtering invlaid mols')
     generated_molecules = filter_invalid_molecules(generated_molecules)
 
+    generated_smiles = [Chem.MolToSmiles(mol) for mol in generated_molecules]
+
     # Calculating statistics on the generated-set.
     print('Calculating Generated set stats')
     
@@ -284,9 +304,9 @@ def get_stats(train_set: Dataset,
                                                                         desc=f'{str(reward_fn)}')        
 
         print(f'{len(generated_reward_values)=}')
-        if any(isinstance(tup, tuple) for tup in generated_reward_values):
-            for name, values in generated_reward_values:
-                generated_reward_values_filtered = filter(lambda x : x != 0, generated_reward_values)
+        if isinstance(generated_reward_values, dict):
+            for name, values in generated_reward_values.items():
+                generated_reward_values_filtered = filter(lambda x : x != 0, values)
                 generated_reward_values_filtered = list(generated_reward_values_filtered)
 
                 generate_and_save_plot(generated_reward_values_filtered,

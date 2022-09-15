@@ -118,10 +118,14 @@ def main():
     dataset_name = parser.dataset_path[parser.dataset_path.rfind('/')+1:parser.dataset_path.rfind('.')]
 
     reward_fn = get_reward_fn(reward_names=parser.reward_fns,
-                            paths=parser.predictor_paths,)
-                            multiplier=args.multipliers,
+                            paths=parser.predictor_paths,
+                            multipliers=parser.multipliers,)
                             #predictor=predictor_model,
                             #tokenizer=predictor_tokenizer,)
+
+    print(str(reward_fn))
+    if hasattr(reward_fn, 'reward_fns'):
+        print([str(fn) for fn in reward_fn.reward_fns])
 
     eval_save_path = parser.save_path + \
                                 f'_{str(model)}' + \

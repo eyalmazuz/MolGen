@@ -59,10 +59,10 @@ def policy_gradients(model,
         batch_smiles = [tokenizer.decode(tokens[len_scaffold+1:-1]) for tokens in batch_tokens]
         batch_rewards = reward_fn(batch_smiles)
 
-        if any(isinstance(tup, tuple) for tup in batch_rewards):
-        # if isinstance(batch_reward, list):
-            batch_rewards = [reward for (name, reward) in batch_rewards]
-            batch_rewards = [sum(rewards) for rewards in zip(batch_rewards)]
+        # if isinstance(batch_rewards, dict):
+        #     batch_rewards = list(zip(*list(batch_rewards.values())))
+        #     batch_rewards = [sum(rewards) for rewards in batch_rewards]
+            #print(batch_rewards[:5])
 
         for tokens, reward in tqdm(zip(batch_tokens, batch_rewards), leave=False):
             discounted_returns = (torch.pow(discount_factor, torch.arange(len(tokens[:-1]), 0, -1)) * reward).to(device)

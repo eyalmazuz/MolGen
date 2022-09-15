@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 
 import math
 from typing import Callable, Optional, Union, List
@@ -27,12 +28,12 @@ def get_reward_fn(reward_names: List[str], paths: List[str]=None, multipliers: L
         elif reward_name == 'LIDI':
             reward_fn = ChempropReward(path, reward_name, multiplier=eval(mult))
         
-        rewards.append(reward_fn)
+        reward_fns.append(reward_fn)
 
-   if len(rewards) == 1:
-       return reward_fns[0]
-   else:
-       return MultiReward(reward_fn)
+    if len(reward_fns) == 1:
+        return reward_fns[0]
+    else:
+        return MultiReward(reward_fns)
 
 class Reward(ABC):
     def __init__(self, multiplier:  Optional[Callable[[float], float]]=None, **kwargs) -> None:
@@ -42,17 +43,21 @@ class Reward(ABC):
     def __call__(self, smiles: str):
         raise NotImplementedError
 
-class MutliReward(Reward):
+class MultiReward(Reward):
     def __init__(self, reward_fns, eval_: bool=False) -> None:
         self.reward_fns = reward_fns
 
         self._eval = eval_
 
     def __call__(self, smiles):
-        rewards = []
+        rewards = OrderedDict()
         for fn in self.reward_fns:
             reward = fn(smiles)
-            rewards.append((str(fn), reward))
+            rewards[str(fn)] =  reward
+
+        if not self._eval:
+            rewards = list(zip(*list(rewards.values())))
+            rewards = [sum(rewards) for rewards in rewards]
 
         return rewards
 
@@ -113,7 +118,9 @@ class ChempropReward(Reward):
                     preds.append(0)
 
         if self.multiplier is not None and not self.eval:
+            #print(preds[:5])
             preds = [self.multiplier(pred) for pred in preds]
+            #print(preds[:5])
 
         return preds
 

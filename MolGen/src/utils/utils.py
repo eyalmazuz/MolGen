@@ -39,7 +39,7 @@ def parse_arguments():
                         help='the maximum size of molecule the model can generate during the RL stage')
     parser.add_argument('--rl_size', type=int, default=25000,
                         help='number of molecules to generate on each eval step during the RL stage')
-    parser.add_argument('--reward_fns', type=str, default=['QED'], nargs='+', choices=['QED', 'IC50', 'Anti Cancer'],
+    parser.add_argument('--reward_fns', type=str, default=['QED'], nargs='+', choices=['QED', 'IC50', 'Anti Cancer', 'LIDI'],
                         help='reward function to use during the rl stage')
     parser.add_argument('--do_eval', type=bool, default=True,
                         help='eval the model during the RL stage')
