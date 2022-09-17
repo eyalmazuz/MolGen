@@ -80,10 +80,6 @@ def main():
 
         torch.save(predictor_model, parser.predictor_save_path)
 
-    else:
-        predictor_tokenizer = CharTokenizer('./data/tokenizers/predictor_tokenizer.json',
-                                            data_path='./data/ic50_smiles.smi')
-
     print(parser.device)
     
     max_smiles_len = get_max_smiles_len(parser.dataset_path) + 50
@@ -120,8 +116,6 @@ def main():
     reward_fn = get_reward_fn(reward_names=parser.reward_fns,
                             paths=parser.predictor_paths,
                             multipliers=parser.multipliers,)
-                            #predictor=predictor_model,
-                            #tokenizer=predictor_tokenizer,)
 
     print(str(reward_fn))
     if hasattr(reward_fn, 'reward_fns'):
