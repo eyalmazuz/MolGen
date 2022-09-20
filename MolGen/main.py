@@ -3,6 +3,7 @@ from datetime import datetime
 import math
 import os
 import random
+import sys
 
 import numpy as np
 import pandas as pd
@@ -25,7 +26,7 @@ from src.tokenizers.CharTokenizer import CharTokenizer
 from src.train.train import Trainer, PredictorTrainer
 from src.train.evaluate import generate_smiles, generate_smiles_scaffolds, get_stats, gen_till_train
 from src.train.reinforcement import policy_gradients
-from src.utils.reward_fn import QEDReward, IC50Reward, get_reward_fn
+from src.utils.reward_fn import QEDReward, get_reward_fn
 from src.utils.utils import TaskOpt, get_max_smiles_len
 from src.utils.utils import parse_arguments
 
@@ -141,6 +142,9 @@ def main():
 
     if not os.path.exists(eval_save_path):
         os.makedirs(eval_save_path, exist_ok=True)
+
+    with open(f'{eval_save_path}/command.txt', 'w') as f:
+        f.write(' '.join(sys.argv))
 
     torch.save(model.state_dict(), f"{eval_save_path}/pre_rl.pt")
     

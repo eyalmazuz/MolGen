@@ -306,6 +306,7 @@ def get_stats(train_set: Dataset,
         print(f'{len(generated_reward_values)=}')
         if isinstance(generated_reward_values, dict):
             for name, values in generated_reward_values.items():
+                print(f'Calculating Sub Reward {name}')
                 generated_reward_values_filtered = filter(lambda x : x != 0, values)
                 generated_reward_values_filtered = list(generated_reward_values_filtered)
 

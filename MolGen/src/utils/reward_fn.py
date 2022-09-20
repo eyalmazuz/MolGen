@@ -26,14 +26,14 @@ def get_reward_fn(reward_names: List[str], paths: List[str]=None, multipliers: L
             reward_fn = SimilarityReward(path, reward_name, multiplier=eval(mult))
         
         elif reward_name == 'QED':
-            reward_fn = QEDReward(reward_name, multiplier=eval(mult)
+            reward_fn = QEDReward(reward_name, multiplier=eval(mult))
         
         reward_fns.append(reward_fn)
 
     if len(reward_fns) == 1:
         return reward_fns[0]
     else:
-        return MultiReward(reward_fns)
+        return MultiReward(name='MultiReward', reward_fns=reward_fns)
 
 class Reward(ABC):
     def __init__(self, name, multiplier:  Optional[Callable[[float], float]]=None, eval_: bool=False, **kwargs) -> None:
@@ -51,16 +51,14 @@ class Reward(ABC):
 
     @eval.setter
     def eval(self, val):
-        for fn in self.reward_fns:
-            if hasattr(fn, '_eval'):
-                fn.eval = val
         self._eval = val
 
     def __str__(self,):
         return self.name
 
 class MultiReward(Reward):
-    def __init__(self, reward_fns) -> None:
+    def __init__(self, name, reward_fns) -> None:
+        super().__init__(name=name)
         self.reward_fns = reward_fns
 
     def __call__(self, smiles):
@@ -69,14 +67,18 @@ class MultiReward(Reward):
             reward = fn(smiles)
             rewards[str(fn)] =  reward
 
-        if not self._eval:
+        if not self.eval:
             rewards = list(zip(*list(rewards.values())))
             rewards = [sum(rewards) for rewards in rewards]
 
         return rewards
 
-    def __str__(self):
-        return "MultiReward"
+    @Reward.eval.setter
+    def eval(self, val):
+        for fn in self.reward_fns:
+            if hasattr(fn, '_eval'):
+                fn.eval = val
+        Reward.eval.fset(self, val)
 
 class SimilarityReward(Reward):
     def __init__(self, smiles, name, multiplier=None, **kwargs):
@@ -88,13 +90,14 @@ class SimilarityReward(Reward):
 
     def __call__(self, smiles: List[str]):
         mols = [Chem.MolFromSmiles(s) for s in smiles]
-        fps = [Chem.RDKFingerprint(mol) for mol in mols if mol is not None]
+        filtered_mols = [mol for mol in mols if mol is not None]
+        fps = [Chem.RDKFingerprint(mol) for mol in filtered_mols]
         sims = DataStructs.BulkTanimotoSimilarity(self.fp, fps)
-        
-        rewards = [sims[i] if mols[i] is not None else 0 for i in range(len(mols)]
+
+        rewards = [sims[filtered_mols.index(mols[i])] if mols[i] is not None else 0 for i in range(len(mols))]
 
         if self.multiplier is not None and not self.eval:
-            preds = [self.multiplier(pred) for pred in preds]
+            rewards = [self.multiplier(reward) for reward in rewards]
 
         return rewards
 
@@ -150,17 +153,16 @@ class QEDReward(Reward):
                  **kwargs):
 
         super(QEDReward, self).__init__(name=name, multiplier=multiplier)
-        self.negative_reward = negative_reward
 
     def __call__(self, smiles: str):
         if isinstance(smiles, str):
             smiles = [smiles]
         
-        rewards = [qed(Chem.MolFromSmiles(s) if Chem.MolFromSmiles(s) is not None else 0 for s in smiles]
+        rewards = [qed(Chem.MolFromSmiles(s)) if Chem.MolFromSmiles(s) is not None else 0 for s in smiles]
         
         if self.multiplier is not None and not self.eval:
-            rewards = [self.multiplier(pred) for pred in preds]
-            
+            rewards = [self.multiplier(reward) for reward in rewards]
+
         return rewards
 
 def main():
