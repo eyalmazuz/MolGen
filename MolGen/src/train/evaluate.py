@@ -7,6 +7,7 @@ import moses
 from torch._C import Value
 from torch.utils.data import Dataset
 import numpy as np
+import pandas as pd
 from rdkit import Chem
 from rdkit.Chem import Draw
 from rdkit import RDLogger
@@ -220,9 +221,10 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
         print(len(sorted_args), len(generated_molecules))
         top_k_molecules = np.array(generated_molecules)[sorted_args][:top_k]
         
+        top_k_generated_scores = {}
         for (name, score) in generated_scores.items():
             #print(name, score[:top_k], sorted_args[:top_k])
-            generated_scores[name] = np.array(score)[sorted_args][:top_k]
+            top_k_generated_scores[name] = np.array(score)[sorted_args][:top_k]
             # top_k_scores.append((name, np.array(score)[sorted_args][:top_k]))
         
         for i in range(top_k):
@@ -237,7 +239,7 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
             metrics[f'top_{i+1}_smiles'] = smiles
 
             #for j in range(len(top_k_scores)):
-            for name, score in generated_scores.items():
+            for name, score in top_k_generated_scores.items():
                 #name, score = top_k_scores[j][0], top_k_scores[j][1][i]
                 if score_name != 'qed':
                     metrics[f'top {i+1} {name}'] = score[i]
@@ -404,8 +406,14 @@ def get_stats(train_set: Dataset,
     with open(f'{generated_path}/stats.json', 'w') as f:
         json.dump(stats, f)
 
-    with open(f'{generated_path}/generated_smiles.txt', 'w') as f:
-        f.write('\n'.join(generated_smiles))
+    #with open(f'{generated_path}/generated_smiles.txt', 'w') as f:
+    #    f.write('\n'.join(generated_smiles))
+    data = {**{'Smiles': generated_smiles}, **generated_reward_values}
+
+    for k, v in data.items():
+        print(f'{k=} {len(v)=}')
+    df = pd.DataFrame(data)
+    df.to_csv(f'{generated_path}/generated_smiles.csv', index=False)
 
     if scaffold is not None:
         with open(f'{generated_path}/scaffold.txt', 'w') as f:
