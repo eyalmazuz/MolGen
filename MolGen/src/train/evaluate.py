@@ -169,7 +169,10 @@ def calc_set_stat(mol_set: List[Chem.rdchem.Mol],
     if isinstance(batch_rewards, dict):
         transformed_batch_rewards = []
         for fn, values in zip(func.reward_fns, batch_rewards.values()):
-            transformed_batch_rewards.append(list(map(fn.multiplier, values)))
+            if fn.multiplier is not None:
+                transformed_batch_rewards.append(list(map(fn.multiplier, values)))
+            else:
+               transformed_batch_rewards.append(values)
 
         transformed_batch_rewards = list(zip(*transformed_batch_rewards))
         transformed_batch_rewards = [sum(rewards) for rewards in transformed_batch_rewards]
@@ -408,6 +411,8 @@ def get_stats(train_set: Dataset,
 
     #with open(f'{generated_path}/generated_smiles.txt', 'w') as f:
     #    f.write('\n'.join(generated_smiles))
+    if not isinstance(generated_reward_values, dict):
+        generated_reward_values = {str(reward_fn): generated_reward_values}
     data = {**{'Smiles': generated_smiles}, **generated_reward_values}
 
     for k, v in data.items():
