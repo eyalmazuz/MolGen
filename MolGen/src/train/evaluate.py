@@ -285,7 +285,7 @@ def get_stats(train_set: Dataset,
     print('Filtering invlaid mols')
     generated_molecules = filter_invalid_molecules(generated_molecules)
 
-    generated_smiles = [Chem.MolToSmiles(mol) for mol in generated_molecules]
+    valid_generated_smiles = [Chem.MolToSmiles(mol) for mol in generated_molecules]
 
     # Calculating statistics on the generated-set.
     print('Calculating Generated set stats')
@@ -302,7 +302,7 @@ def get_stats(train_set: Dataset,
     
     if str(reward_fn) != 'QED':
         print(f'Calculating {reward_fn}')
-        generated_reward_values, generated_reward_stats = calc_set_stat(generated_smiles,
+        generated_reward_values, generated_reward_stats = calc_set_stat(valid_generated_smiles,
                                                                         reward_fn,
                                                                         lst=True,
                                                                         value_range=(0, 1),
@@ -402,6 +402,9 @@ def get_stats(train_set: Dataset,
     generated_set_valid_count = calc_valid_molecules(generated_smiles)
     stats['validity'] = generated_set_valid_count
 
+    print('Calculating count of valid smiles')
+    stats['count'] = len(valid_generated_smiles)
+
     print('calculating average SMILES length')
     stats['average_length'] = sum(map(len, generated_smiles)) / len(generated_smiles)
 
@@ -409,11 +412,9 @@ def get_stats(train_set: Dataset,
     with open(f'{generated_path}/stats.json', 'w') as f:
         json.dump(stats, f)
 
-    #with open(f'{generated_path}/generated_smiles.txt', 'w') as f:
-    #    f.write('\n'.join(generated_smiles))
     if not isinstance(generated_reward_values, dict):
         generated_reward_values = {str(reward_fn): generated_reward_values}
-    data = {**{'Smiles': generated_smiles}, **generated_reward_values}
+    data = {**{'Smiles': valid_generated_smiles}, **generated_reward_values}
 
     for k, v in data.items():
         print(f'{k=} {len(v)=}')
