@@ -105,9 +105,8 @@ class CharTokenizer():
 
         print('Building tokenzier')
 
-        tokens = set()
         id2token = {}
-        for i, token in enumerate(tokens):
+        for i, token in enumerate(self.molecules):  # BUG: iterating on empty set
             id2token[i] = token
         
         return id2token
