@@ -23,6 +23,7 @@ from src.models.model_builder import get_model
 from src.models.gpt import GPTValue
 from src.models.bert import Bert, BertConfig
 from src.tokenizers.CharTokenizer import CharTokenizer
+from src.tokenizers.BPETokenizer import BPETokenizer
 from src.train.train import Trainer, PredictorTrainer
 from src.train.evaluate import generate_smiles, generate_smiles_scaffolds, get_stats, gen_till_train
 from src.train.reinforcement import policy_gradients
@@ -84,8 +85,9 @@ def main():
     print(parser.device)
     
     max_smiles_len = get_max_smiles_len(parser.dataset_path) + 50
+    print(f'{max_smiles_len=}')
     #max_smiles_len = 256
-    tokenizer = CharTokenizer(parser.tokenizer_path, parser.dataset_path)
+    tokenizer = BPETokenizer(parser.tokenizer_path, parser.dataset_path, 500)
 
     dataset = get_dataset(data_path=parser.dataset_path,
                           tokenizer=tokenizer,
@@ -134,7 +136,7 @@ def main():
     print(eval_save_path)
     
     if not parser.load_pretrained and parser.do_train:
-        optim = torch.optim.Adam(model.parameters())
+        optim = torch.optim.Adam(model.parameters(), lr=parser.learning_rate)
         criterion = torch.nn.CrossEntropyLoss()
 
         trainer = Trainer(dataset, model, optim, criterion)

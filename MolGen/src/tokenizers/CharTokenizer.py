@@ -9,11 +9,14 @@ class CharTokenizer():
     
     def __init__(self, tokenizer_path: str='./tokenizers/', data_path: str='./data/') -> None:
 
+        print(f'{tokenizer_path=}', f'{os.path.exists(tokenizer_path)=}')
         if tokenizer_path and os.path.exists(tokenizer_path):
+            print('Loading Existing tokenizer')
             with open(tokenizer_path, 'r') as f:
                 self.id2token = json.load(f)
                 self.id2token = {int(k): v for k, v in self.id2token.items()}
         else:
+            print('Building tokenizer')
             self.id2token = {}
             if os.path.isdir(data_path):
                 for path in os.listdir(data_path):
@@ -100,16 +103,20 @@ class CharTokenizer():
     def build_tokenizer(self, data_path:str) -> Dict[int, str]:
 
         with open(data_path, 'r') as f:
-            self.molecules = f.readlines()
-            self.molecules = [smiles.strip() for smiles in self.molecules]
+            molecules = f.readlines()
+            molecules = [smiles.strip() for smiles in molecules]
 
         print('Building tokenzier')
 
         tokens = set()
+
+        for mol in molecules:
+            tokens |= set(mol)
+
         id2token = {}
         for i, token in enumerate(tokens):
             id2token[i] = token
-        
+
         return id2token
 
 
