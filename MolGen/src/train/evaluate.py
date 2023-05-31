@@ -235,9 +235,10 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
         #for i, (molecule, (name, scores)) in enumerate(zip(top_k_molecules, top_k_scores)):
             smiles = Chem.MolToSmiles(molecule)
             try:
-                Draw.MolToFile(molecule, f'{save_path}/top_{i+1}_{smiles}.png')
-            except Exception:
+                Draw.MolToFile(molecule, f'{save_path}/top_{i+1}_{smiles.replace("/", "_")}.png')
+            except Exception as e:
                 print('failed to save ', smiles)
+                print(e)
 
             metrics[f'top_{i+1}_smiles'] = smiles
 
@@ -292,6 +293,8 @@ def get_stats(train_set: Dataset,
     
     if folder_name:
         generated_path = os.path.join(save_path, folder_name)
+
+    generated_reward_values = {}
 
     print('Calculating QED')
     generated_qed_values, generated_qed_stats = calc_set_stat(generated_molecules,

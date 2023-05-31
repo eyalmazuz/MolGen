@@ -25,8 +25,10 @@ def parse_arguments():
                         help='batch size for the language modeling task')
     parser.add_argument('--epochs', type=int, default=3,
                         help='number of training epochs for the language modeling task')
-    parser.add_argument('--load_pretrained', type=bool, default=False, help='if to load a pre-trained model instead of training one.')
-    parser.add_argument('--do_train', type=bool, default=False, help='if to train a model with the LM task.')
+    parser.add_argument('--learning_rate', type=float, default=1e-3,
+                        help='residual layers dropout rate')
+    parser.add_argument('--load_pretrained', action='store_true', help='if to load a pre-trained model instead of training one.')
+    parser.add_argument('--do_train', action='store_true', help='if to train a model with the LM task.')
     parser.add_argument('--pretrained_path', type=str, default='./data/models/gpt_pre_rl_gdb13.pt')
 
     parser.add_argument('--rl_batch_size', type=int, default=500,
@@ -41,7 +43,7 @@ def parse_arguments():
                         help='number of molecules to generate on each eval step during the RL stage')
     parser.add_argument('--reward_fns', type=str, default=['QED'], nargs='+', choices=['QED', 'Sim', 'Anti Cancer', 'LIDI'],
                         help='reward function to use during the rl stage')
-    parser.add_argument('--do_eval', type=bool, default=True,
+    parser.add_argument('--do_eval', action='store_true',
                         help='eval the model during the RL stage')
     parser.add_argument('--eval_steps', type=int, default=10,
                         help='every how many steps do eval during the RL stage')
@@ -83,26 +85,26 @@ def parse_arguments():
     parser.add_argument('--predictor_dataset_path', type=str, default='./data/csvs/bs1.csv')
     parser.add_argument('--predictor_tokenizer_path', type=str, default='./data/tokenizers/predictor_tokenizer.json')
     parser.add_argument('--predictor_save_path,', type=str, default='./data/models/predictor_model.pt')
-    parser.add_argument('--train_predictor', type=bool, default=False)
+    parser.add_argument('--train_predictor', action='store_true')
     parser.add_argument('--predictor_batch_size', type=int, default=32)
     parser.add_argument('--predictor_epochs', type=int, default=10)
     parser.add_argument('--preditor_n_embd', type=int, default=512,
                         help='model embedding size')
-    parser.add_argument('--preditor_d_model', type=int, default=1024,
+    parser.add_argument('--predictor_d_model', type=int, default=1024,
                         help='model ffn size')
-    parser.add_argument('--preditor_n_layers', type=int, default=4,
+    parser.add_argument('--predictor_n_layers', type=int, default=4,
                         help='number of ltsm/decoder layers')
-    parser.add_argument('--preditor_num_heads', type=int, default=8,
+    parser.add_argument('--predictor_num_heads', type=int, default=8,
                         help='number of attention heads') 
-    parser.add_argument('--preditor_block_size', type=int, default=512,
+    parser.add_argument('--predictor_block_size', type=int, default=512,
                         help='the maximum length of token for the model')
-    parser.add_argument('--preditor_proj_size', type=int, default=256,
+    parser.add_argument('--predictor_proj_size', type=int, default=256,
                         help='projection size for the attnetion')
-    parser.add_argument('--preditor_attn_dropout_rate', type=float, default=0.1,
+    parser.add_argument('--predictor_attn_dropout_rate', type=float, default=0.1,
                         help='attention dropout rate')
-    parser.add_argument('--preditor_proj_dropout_rate', type=float, default=0.1,
+    parser.add_argument('--predictor_proj_dropout_rate', type=float, default=0.1,
                         help='projection dropout rate')
-    parser.add_argument('--preditor_resid_dropout_rate', type=float, default=0.1,
+    parser.add_argument('--predictor_resid_dropout_rate', type=float, default=0.1,
                         help='residual layers dropout rate')
 
     parser.add_argument('--dataset_path', type=str, default='./data/gdb/gdb13/gdb13.smi',
@@ -111,7 +113,7 @@ def parse_arguments():
                         help='path to tokenizer')
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--model', default=ModelOpt.GPT, type=lambda opt: ModelOpt[opt], choices=list(ModelOpt))
-    parser.add_argument('--use_scaffold', default=False, type=bool, help='whether to use scaffold')
+    parser.add_argument('--use_scaffold', action='store_true', help='whether to use scaffold')
     
     return parser.parse_args()
 
@@ -160,7 +162,8 @@ def sample(model,
 
     x = torch.tensor([start_token] * size, dtype=torch.long).to(device)
     for k in trange(max_len, leave=False):
-        logits = model(x)
+        with torch.no_grad():
+            logits = model(x)
 
         if isinstance(logits, tuple):
                 logits = logits[0]
