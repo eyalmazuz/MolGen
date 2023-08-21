@@ -128,7 +128,13 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-/data/
+/data/models/
+/data/results/
+/data/csvs/
+/data/checkpoints/
+/data/pickles/
+/data/zinc/
+/data/ic50_smiles.smi
 .vscode/settings.json
 /*.out
 /sbatch_gpu.example

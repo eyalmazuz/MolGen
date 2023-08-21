@@ -23,3 +23,19 @@ Please follow the prerequisite before running the code:
 All the code contains the hyper-parameters used in all of the expremiments
 so to reproduce the results simply run the following command
 ```python3 MolGen/main.py```
+
+# Cite
+Mazuz, E., Shtar, G., Shapira, B. et al. Molecule generation using transformers and policy gradient reinforcement learning. Sci Rep 13, 8799 (2023). https://doi.org/10.1038/s41598-023-35648-w
+
+```
+@article{mazuz2023molecule,
+  title={Molecule generation using transformers and policy gradient reinforcement learning},
+  author={Mazuz, Eyal and Shtar, Guy and Shapira, Bracha and Rokach, Lior},
+  journal={Scientific Reports},
+  volume={13},
+  number={1},
+  pages={8799},
+  year={2023},
+  publisher={Nature Publishing Group UK London}
+}
+```
