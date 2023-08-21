@@ -49,7 +49,7 @@ def parse_arguments():
                         help='every how many steps do eval during the RL stage')
     parser.add_argument('--rl_temprature', type=float, default=1,
                         help='temprature during the RL stage')
-    parser.add_argument('--multipliers', type=str, default=[None], nargs='+',
+    parser.add_argument('--multipliers', type=str, default=["lambda x: x"], nargs='+',
                         help='predictor path for the Property Predictor reward function')
     parser.add_argument('--predictor_paths', type=str, default=[None], nargs='+',
                         help='predictor path for the Property Predictor reward function')

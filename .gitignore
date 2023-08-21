@@ -135,6 +135,9 @@ dmypy.json
 /data/pickles/
 /data/zinc/
 /data/ic50_smiles.smi
+/data/moses.smi
+/data/gdb
+/data/proteins
 .vscode/settings.json
 /*.out
 /sbatch_gpu.example
