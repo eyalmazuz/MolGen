@@ -4,8 +4,11 @@ from collections import OrderedDict
 import math
 from typing import Callable, Optional, Union, List
 
-from autodock_vina import Vina
 import chemprop
+
+from meeko import MoleculePreparation
+from meeko import PDBQTWriterLegacy
+
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem.QED import qed
@@ -13,7 +16,8 @@ from rdkit import DataStructs
 from rdkit import RDLogger
 RDLogger.DisableLog('rdApp.*')
 import torch
-from tqdm import tqdm
+from tqdm.auto import tqdm
+from vina import Vina
 
 def get_reward_fn(reward_names: List[str], paths: List[str]=None, multipliers: List[str]=None, **kwargs):
     reward_fns = []
@@ -85,20 +89,22 @@ class MultiReward(Reward):
                 fn.eval = val
         Reward.eval.fset(self, val)
 
-class DockingReward(Reawrd):
-    def __init__(self, ligand_path, name, multiplier=None, **kwargs):
-        super().__init__(name=f"{ligand_path.split('/')[-1].split('.')[0]}_{name}", multiplier=multiplier, **kwargs)
+class DockingReward(Reward):
+    def __init__(self, receptor_path, name, multiplier=None, **kwargs):
+        super().__init__(name=f"{receptor_path.split('/')[-1].split('.')[0]}_{name}", multiplier=multiplier, **kwargs)
 
-        self.ligand_path = ligand_path
-        protein = Chem.MolFromPDBFile(ligand_path[:-2]) #we remove the last 2 chars with will resutls in reading the PDB file
+        self.receptor_path = receptor_path
+        protein = Chem.MolFromPDBFile(receptor_path[:-2]) #we remove the last 2 chars with will resutls in reading the PDB file
         pos = protein.GetConformer(0).GetPositions()
         self.center = (pos.max(0) + pos.min(0)) / 2
+        print(f"Protein center is: {self.center}")
 
     def __call__(self, smiles: List[str]):
         if isinstance(smiles, str):
+            print("Converting smiles to list")
             smiles = [smiles]
 
-        rewards = [self.__dock(s) if Chem.MolFromSmiles(s) is not None else 0 for s in smiles]
+        rewards = [self.__dock(s) if Chem.MolFromSmiles(s) is not None else 0 for s in tqdm(smiles)]
 
         if self.multiplier is not None and not self.eval:
             rewards = [self.multiplier(reward) for reward in rewards]
@@ -109,28 +115,40 @@ class DockingReward(Reawrd):
 
         # Create RDKit molecule object
         mol = Chem.MolFromSmiles(smiles)
+        mol = AllChem.AddHs(mol)
+        AllChem.EmbedMolecule(mol, AllChem.ETKDG())
+        if mol.GetNumConformers() > 0:
+            AllChem.MMFFOptimizeMolecule(mol)
 
-        # Generate 3D coordinates
-        AllChem.EmbedMolecule(mol)
-        AllChem.MMFFOptimizeMolecule(mol)
+        else:
+            return 0
 
-        # Save as PDBQT file (required by Vina)
-        with open("/tmp/ligand.pdbqt", "w") as f:
-            f.write(AllChem.MolToPDBQTBlock(mol))
+        # Prepare mol
+        preparator = MoleculePreparation()
+        mol_setups = preparator.prepare(mol)
+        for setup in mol_setups:
+            pdbqt_string, is_ok, error_msg = PDBQTWriterLegacy.write_string(setup)
 
+        with open(f"./data/proteins/{smiles}.pdbqt", 'w') as f:
+            f.write(pdbqt_string)
+        
         # Configure Vina
         vina = Vina(sf_name='vina')
-        vina.set_receptor(self.ligand_path)
-        vina.set_ligand_from_file('/tmp/ligand.pdbqt')
+        vina.set_receptor(self.receptor_path)
+        vina.set_ligand_from_string(pdbqt_string)
 
         # Define the search space (coordinates and dimensions)
-        x, y, z = self.center
-        vina.compute_vina_maps(center=[x, y, z], box_size=[20, 20, 20])
+        try:
+            x, y, z = self.center
+            vina.compute_vina_maps(center=[x, y, z], box_size=[30, 30, 30])
 
-        # Run docking
-        vina.dock(n_poses=9, exhaustiveness=20)
+            # Run docking
+            vina.dock(n_poses=9, exhaustiveness=30)
 
-        score = vina.score()[0]
+            score = vina.score()[0]
+
+        except RuntimeError:
+            return 0
 
         return score
 

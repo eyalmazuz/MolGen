@@ -128,8 +128,12 @@ def generate_smiles(model,
     if return_smiles:
         model.eval()
     gen_smiles = []
+
+    batches = 1 if size // batch_size == 0 else size // batch_size
+    batch_size = batch_size if size > batch_size else size
+
     
-    for batch in trange(size // batch_size, disable=disable):
+    for batch in trange(batches, disable=disable):
         tokens = sample(model, [tokenizer.bos_token_id], batch_size, max_len, temprature, device)
         tokens = tokens.tolist()
 
@@ -148,6 +152,7 @@ def generate_smiles(model,
     return gen_smiles
 
 def fail_safe(func: Callable[[Chem.rdchem.Mol], float], mol: Chem.rdchem.Mol) -> float:
+    return func(mol) 
     try:
         res = func(mol)
     except Exception as e:

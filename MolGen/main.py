@@ -85,9 +85,9 @@ def main():
     print(parser.device)
     
     max_smiles_len = get_max_smiles_len(parser.dataset_path) + 50
+    max_smiles_len = 256
     print(f'{max_smiles_len=}')
-    #max_smiles_len = 256
-    tokenizer = BPETokenizer(parser.tokenizer_path, parser.dataset_path, 500)
+    tokenizer = CharTokenizer(parser.tokenizer_path, parser.dataset_path, vocab_size=500)
 
     dataset = get_dataset(data_path=parser.dataset_path,
                           tokenizer=tokenizer,
@@ -151,6 +151,7 @@ def main():
     torch.save(model.state_dict(), f"{eval_save_path}/pre_rl.pt")
     
     if parser.use_scaffold:
+        print("Using scaffolds")
         generated_smiles = generate_smiles_scaffolds(model=model,
                                                     tokenizer=tokenizer,
                                                     scaffolds=dataset.scaffolds,

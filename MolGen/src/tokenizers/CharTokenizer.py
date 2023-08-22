@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 class CharTokenizer():
     
-    def __init__(self, tokenizer_path: str='./tokenizers/', data_path: str='./data/') -> None:
+    def __init__(self, tokenizer_path: str='./tokenizers/', data_path: str='./data/', **kwargs) -> None:
 
         print(f'{tokenizer_path=}', f'{os.path.exists(tokenizer_path)=}')
         if tokenizer_path and os.path.exists(tokenizer_path):
