@@ -129,16 +129,16 @@ class DockingReward(Reward):
         for setup in mol_setups:
             pdbqt_string, is_ok, error_msg = PDBQTWriterLegacy.write_string(setup)
 
-        with open(f"./data/proteins/{smiles}.pdbqt", 'w') as f:
-            f.write(pdbqt_string)
-        
-        # Configure Vina
-        vina = Vina(sf_name='vina')
-        vina.set_receptor(self.receptor_path)
-        vina.set_ligand_from_string(pdbqt_string)
-
-        # Define the search space (coordinates and dimensions)
         try:
+            # with open(f"./data/proteins/{smiles}.pdbqt", 'w') as f:
+            #    f.write(pdbqt_string)
+        
+            # Configure Vina
+            vina = Vina(sf_name='vina')
+            vina.set_receptor(self.receptor_path)
+            vina.set_ligand_from_string(pdbqt_string)
+
+            # Define the search space (coordinates and dimensions)
             x, y, z = self.center
             vina.compute_vina_maps(center=[x, y, z], box_size=[30, 30, 30])
 
@@ -147,7 +147,7 @@ class DockingReward(Reward):
 
             score = vina.score()[0]
 
-        except RuntimeError:
+        except Exception:
             return 0
 
         return score

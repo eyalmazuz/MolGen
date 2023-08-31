@@ -25,6 +25,7 @@ def policy_gradients(model,
                      scaffolds=[],
                      eval_steps: int=50,
                      do_eval: bool=False,
+                     no_batched_rl: bool=False,
                      device=torch.device('cuda'),
                      **kwargs):
     print(f'Reinfocement {device}')
@@ -38,26 +39,43 @@ def policy_gradients(model,
 
         loss = 0
         batch_reward = 0
-        if use_scaffold:
-            scaffold = random.choice(scaffolds)
-            scaffold_tokens = tokenizer('[BOS]' + scaffold + '[SEP]')['input_ids']
-            batch_tokens = generate_smiles_scaffolds(model=model,
-                                                     tokenizer=tokenizer,
-                                                     scaffolds=[scaffold],
-                                                     temprature=kwargs['temprature'],
-                                                     size=batch_size,
-                                                     num_samples=1,
-                                                     batch_size=batch_size // 5,
-                                                     max_len=max_len,
-                                                     device=device,
-                                                     return_smiles=False)
-        else:
-            batch_tokens = generate_smiles(model=model, tokenizer=tokenizer,
-                                temprature=kwargs['temprature'], size=batch_size, batch_size=batch_size // 2, max_len=max_len, device=device, return_smiles=False)
 
-        len_scaffold = len(scaffold_tokens) - 1 if use_scaffold else 0
-        batch_smiles = [tokenizer.decode(tokens[len_scaffold+1:-1]) for tokens in batch_tokens]
-        batch_rewards = reward_fn(batch_smiles)
+        print(no_batched_rl)
+
+        if not no_batched_rl:
+            if use_scaffold:
+                scaffold = random.choice(scaffolds)
+                scaffold_tokens = tokenizer('[BOS]' + scaffold + '[SEP]')['input_ids']
+                batch_tokens = generate_smiles_scaffolds(model=model,
+                                                        tokenizer=tokenizer,
+                                                        scaffolds=[scaffold],
+                                                        temprature=kwargs['temprature'],
+                                                        size=batch_size,
+                                                        num_samples=1,
+                                                        batch_size=batch_size // 5,
+                                                        max_len=max_len,
+                                                        device=device,
+                                                        return_smiles=False)
+            else:
+                batch_tokens = generate_smiles(model=model, tokenizer=tokenizer,
+                                    temprature=kwargs['temprature'], size=batch_size, batch_size=batch_size // 2, max_len=max_len, device=device, return_smiles=False)
+
+                len_scaffold = len(scaffold_tokens) - 1 if use_scaffold else 0
+                batch_smiles = [tokenizer.decode(tokens[len_scaffold+1:-1]) for tokens in batch_tokens]
+                batch_rewards = reward_fn(batch_smiles)
+
+        else:
+
+            batch_rewards = []
+            for _ in trange(batch_size // 50):
+                batch_tokens = generate_smiles(model=model, tokenizer=tokenizer,
+                                    temprature=kwargs['temprature'], size=50, batch_size=1, max_len=max_len, device=device, return_smiles=False)
+
+                len_scaffold = len(scaffold_tokens) - 1 if use_scaffold else 0
+                smiles = [tokenizer.decode(tokens[len_scaffold+1:-1]) for tokens in batch_tokens]
+                reward = reward_fn(smiles)
+
+                batch_rewards = batch_rewards + reward
 
         # if isinstance(batch_rewards, dict):
         #     batch_rewards = list(zip(*list(batch_rewards.values())))

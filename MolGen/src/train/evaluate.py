@@ -152,7 +152,7 @@ def generate_smiles(model,
     return gen_smiles
 
 def fail_safe(func: Callable[[Chem.rdchem.Mol], float], mol: Chem.rdchem.Mol) -> float:
-    return func(mol) 
+    # return func(mol)
     try:
         res = func(mol)
     except Exception as e:
@@ -220,6 +220,7 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
                    generated_scores: Union[List[float], Dict[str, List[float]]],
                    top_k: int=5,
                    score_name: str='qed',
+                   get_max: bool=True,
                    save_path: str=None) -> Dict[str, float]:
     metrics = {}
 
@@ -258,7 +259,7 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
             metrics[f'top {i+1} len'] = len(smiles)
 
     else:
-        sorted_molecules, sorted_scores = list(zip(*list(sorted(zip(generated_molecules, generated_scores), key=lambda x: x[1], reverse=True))))
+        sorted_molecules, sorted_scores = list(zip(*list(sorted(zip(generated_molecules, generated_scores), key=lambda x: x[1], reverse=get_max))))
         top_k_molecules, top_k_scores = sorted_molecules[:top_k], sorted_scores[:top_k]
         for i, (molecule, score) in enumerate(zip(top_k_molecules, top_k_scores)):
             smiles = Chem.MolToSmiles(molecule)
@@ -379,6 +380,7 @@ def get_stats(train_set: Dataset,
                                        generated_reward_values,
                                        top_k=top_k,
                                        score_name=str(reward_fn),
+                                       get_max=("Docking" not in str(reward_fn)),
                                        save_path=generated_path)
     else:
         top_k_metrics = get_top_k_mols(generated_molecules,
@@ -422,7 +424,11 @@ def get_stats(train_set: Dataset,
 
     if not isinstance(generated_reward_values, dict):
         generated_reward_values = {str(reward_fn): generated_reward_values}
-    data = {**{'Smiles': valid_generated_smiles}, **generated_reward_values}
+    data = {**{'Smiles': valid_generated_smiles},
+            **generated_reward_values,
+            **{"QED": generated_qed_values},
+            **{"SAS": generated_sas_values},
+            }
 
     for k, v in data.items():
         print(f'{k=} {len(v)=}')

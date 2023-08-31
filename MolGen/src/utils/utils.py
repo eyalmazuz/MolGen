@@ -30,6 +30,7 @@ def parse_arguments():
     parser.add_argument('--load_pretrained', action='store_true', help='if to load a pre-trained model instead of training one.')
     parser.add_argument('--do_train', action='store_true', help='if to train a model with the LM task.')
     parser.add_argument('--pretrained_path', type=str, default='./data/models/gpt_pre_rl_gdb13.pt')
+    parser.add_argument('--tokenizer', type=str, default='Char', choices=['Char', 'BPE'])
 
     parser.add_argument('--rl_batch_size', type=int, default=500,
                         help='number of episode to compute batch for the policy gradient')
@@ -51,6 +52,7 @@ def parse_arguments():
                         help='temprature during the RL stage')
     parser.add_argument('--multipliers', type=str, default=["lambda x: x"], nargs='+',
                         help='predictor path for the Property Predictor reward function')
+    parser.add_argument('--no_batched_rl', action='store_true', help='if to train the rl model with while generating batches.')
     parser.add_argument('--predictor_paths', type=str, default=[None], nargs='+',
                         help='predictor path for the Property Predictor reward function')
 
