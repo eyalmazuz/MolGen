@@ -99,6 +99,8 @@ class DockingReward(Reward):
         self.center = (pos.max(0) + pos.min(0)) / 2
         print(f"Protein center is: {self.center}")
 
+        self.vina = Vina(sf_name='vina', cpu=0, verbosity=1)
+
     def __call__(self, smiles: List[str]):
         if isinstance(smiles, str):
             print("Converting smiles to list")
@@ -112,46 +114,46 @@ class DockingReward(Reward):
         return rewards
 
     def __dock(self, smiles):
-
-        # Create RDKit molecule object
-        mol = Chem.MolFromSmiles(smiles)
-        mol = AllChem.AddHs(mol)
-        AllChem.EmbedMolecule(mol, AllChem.ETKDG())
-        if mol.GetNumConformers() > 0:
-            AllChem.MMFFOptimizeMolecule(mol)
-
-        else:
-            return 0
-
-        # Prepare mol
-        preparator = MoleculePreparation()
-        mol_setups = preparator.prepare(mol)
-        for setup in mol_setups:
-            pdbqt_string, is_ok, error_msg = PDBQTWriterLegacy.write_string(setup)
-
         try:
+            # Create RDKit molecule object
+            mol = Chem.MolFromSmiles(smiles)
+            mol = AllChem.AddHs(mol)
+            AllChem.EmbedMolecule(mol, AllChem.ETKDG())
+            if mol.GetNumConformers() > 0:
+                AllChem.MMFFOptimizeMolecule(mol)
+
+            else:
+                return 0
+
+            # Prepare mol
+            preparator = MoleculePreparation()
+            mol_setups = preparator.prepare(mol)
+            for setup in mol_setups:
+                pdbqt_string, is_ok, error_msg = PDBQTWriterLegacy.write_string(setup)
+
+
+            if not is_ok:
+                return 0
             # with open(f"./data/proteins/{smiles}.pdbqt", 'w') as f:
             #    f.write(pdbqt_string)
         
             # Configure Vina
-            vina = Vina(sf_name='vina')
-            vina.set_receptor(self.receptor_path)
-            vina.set_ligand_from_string(pdbqt_string)
+            self.vina.set_receptor(self.receptor_path)
+            self.vina.set_ligand_from_string(pdbqt_string)
 
             # Define the search space (coordinates and dimensions)
             x, y, z = self.center
-            vina.compute_vina_maps(center=[x, y, z], box_size=[30, 30, 30])
+            self.vina.compute_vina_maps(center=[x, y, z], box_size=[30, 30, 30])
 
             # Run docking
-            vina.dock(n_poses=9, exhaustiveness=30)
+            self.vina.dock(n_poses=5, exhaustiveness=32)
 
-            score = vina.score()[0]
+            score = self.vina.score()[0]
+
+            return score
 
         except Exception:
             return 0
-
-        return score
-
 
 
 class SimilarityReward(Reward):
