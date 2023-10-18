@@ -128,7 +128,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-/data/models/
 /data/results/
 /data/csvs/
 /data/checkpoints/
