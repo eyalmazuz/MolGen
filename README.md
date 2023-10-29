@@ -21,8 +21,12 @@ Please follow the prerequisite before running the code:
 4. Create a results folder in the data folder.
 
 All the code contains the hyper-parameters used in all of the expremiments
-so to reproduce the results simply run the following command
-```python3 MolGen/main.py```
+
+To train a language model and then perform reinforcement learning optimization run:
+``python3 MolGen/main.py --do_train --do_eval --dataset_path ./data/gdb/gdb13/gdb13.smi --tokenizer Char --tokenizer_path ./data/tokenizers/gdb13CharTokenizer.json --reward_fns QED --multipliers "lambda x: x" --batch_size 256``
+
+To only perform reinfocement learning optimization with a pretrained language model run:
+``python3 MolGen/main.py --load_pretrained --pretrained_path ./data/models/gpt_pre_rl_gdb13.pt --do_eval --dataset_path ./data/gdb/gdb13/gdb13.smi --tokenizer Char --tokenizer_path ./data/tokenizers/gdb13CharTokenizer.json --reward_fns QED --multipliers "lambda x: x" --batch_size 256``
 
 # Cite
 Mazuz, E., Shtar, G., Shapira, B. et al. Molecule generation using transformers and policy gradient reinforcement learning. Sci Rep 13, 8799 (2023). https://doi.org/10.1038/s41598-023-35648-w
