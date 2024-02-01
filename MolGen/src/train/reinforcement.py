@@ -65,17 +65,18 @@ def policy_gradients(model,
                 batch_rewards = reward_fn(batch_smiles)
 
         else:
-
+            batch_tokens = []
             batch_rewards = []
             for _ in trange(batch_size // 50):
-                batch_tokens = generate_smiles(model=model, tokenizer=tokenizer,
+                batched_tokens = generate_smiles(model=model, tokenizer=tokenizer,
                                     temprature=kwargs['temprature'], size=50, batch_size=1, max_len=max_len, device=device, return_smiles=False)
 
                 len_scaffold = len(scaffold_tokens) - 1 if use_scaffold else 0
-                smiles = [tokenizer.decode(tokens[len_scaffold+1:-1]) for tokens in batch_tokens]
+                smiles = [tokenizer.decode(tokens[len_scaffold+1:-1]) for tokens in batched_tokens]
                 reward = reward_fn(smiles)
 
                 batch_rewards = batch_rewards + reward
+                batch_tokens = batch_tokens + batched_tokens
 
         # if isinstance(batch_rewards, dict):
         #     batch_rewards = list(zip(*list(batch_rewards.values())))
