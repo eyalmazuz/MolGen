@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 
 import math
-from typing import Callable, Optional, Union, List
+from typing import Callable, List, Optional, Union
 
 import chemprop
 
