@@ -55,6 +55,6 @@ class MultiReward(AbstractReward):
     def __str__(self) -> str:
         name = ""
         for reward in self.rewards:
-            name = name + f"{str(reward}_"
+            name = name + f"{str(reward)}_"
 
         return name
