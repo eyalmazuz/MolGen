@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Type, Union
+from typing import Any, Dict, List, Type, Union
 
 import torch
 
@@ -28,7 +28,7 @@ class AbstractTokenizer(ABC):
 
     @abstractmethod
     @classmethod
-    def load_pretrained(cls: Type["AbstractTokenizer"], path: str) -> "AbstractTokenizer":
+    def load_pretrained(cls: Type["AbstractTokenizer"], path: str, **kwargs: Any) -> "AbstractTokenizer":
         pass
 
 

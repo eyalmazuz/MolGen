@@ -1,13 +1,10 @@
 import json
 import os
-from typing import Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Type, Union
 
 import torch
 
-from molgen.tokenizers.abstract_tokenizer import AbstractTokenizer
-
-
-TokenizedData = Union[List[List[int]], torch.Tensor]
+from molgen.tokenizers.abstract_tokenizer import AbstractTokenizer, TokenizedData
 
 
 class CharTokenizer(AbstractTokenizer):
@@ -32,7 +29,7 @@ class CharTokenizer(AbstractTokenizer):
         if isinstance(texts, str):
             texts = [texts]
 
-        encodings: TokenizedData = []
+        encodings: List[List[int]] = []
         for text in texts:
             encoding = [self.tokens_to_ids[token] for token in list(text)]
             if truncation:
@@ -51,7 +48,7 @@ class CharTokenizer(AbstractTokenizer):
                 max_length = self.model_max_length
 
         if max_length is not None:
-            padded_encodings: TokenizedData = []
+            padded_encodings: List[List[int]] = []
             for encoding in encodings:
                 encoding = encoding + [self.tokens_to_ids["<pad>"]] * (max_length - len(encoding))
 
@@ -60,7 +57,7 @@ class CharTokenizer(AbstractTokenizer):
             encodings = padded_encodings
 
         if return_tensors:
-            encodings = torch.tensor(encodings)
+            return torch.tensor(encodings)
 
         return encodings
 
@@ -80,7 +77,7 @@ class CharTokenizer(AbstractTokenizer):
 
     
     @classmethod
-    def load_pretrained(cls: Type["CharTokenizer"], path: str) -> "CharTokenizer":
+    def load_pretrained(cls: Type["CharTokenizer"], path: str, **kwargs: Any) -> "CharTokenizer":
         if not os.path.isdir(path):
             raise ValueError(f"{path} is not a directory")
 
@@ -90,12 +87,22 @@ class CharTokenizer(AbstractTokenizer):
         with open(f"{path}/vocab.json", "r") as f:
             tokens_to_ids = json.load(f)
 
-        return cls(tokens_to_ids)
+        return cls(tokens_to_ids, **kwargs)
 
  
     def save_pretrained(self, path: str) -> None:
         if not os.path.isdir(path):
             raise ValueError(f"{path} is not a directory")
+
+        config = {
+                "type": "CharTokenizer",
+                "kwargs": {
+                    "model_max_length": self.model_max_length
+                    }
+                }
+
+        with open(f"{path}/config.json", "w") as f:
+            json.dump(config, f)
 
         with open(f"{path}/vocab.json", "w") as f:
             json.dump(self.tokens_to_ids, f)

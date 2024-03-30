@@ -1,0 +1,28 @@
+import json
+import os
+from typing import Type
+
+from molgen.tokenizers.abstract_tokenizer import AbstractTokenizer
+from molgen.tokenizers.char_tokenizer import CharTokenizer
+from molgen.tokenizers.bpe_tokenizer import BPETokenizer
+
+def get_tokenizer(path: str) -> AbstractTokenizer:
+    if not os.path.isdir(path):
+        raise ValueError(f"{path} is not valid tokenizer path")
+
+
+    with open(f"{path}/config.json", "r") as f:
+        config = json.load(f)
+
+    tokenizer_type = config["type"]
+    kwargs = config["kwargs"] if "kwargs" in config else {}
+
+    tokenizer: AbstractTokenizer
+    if tokenizer_type == "CharTokenizer":
+        tokenizer = CharTokenizer.load_pretrained(path, **kwargs)
+
+    if tokenizer_type == "BPETokenizer":
+        tokenizer = BPETokenizer.load_pretrained(path, **kwargs)
+
+    return tokenizer
+
