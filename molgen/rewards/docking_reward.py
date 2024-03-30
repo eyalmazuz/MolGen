@@ -3,7 +3,7 @@ from typing import Callable, List, Optional, Tuple, Union
 
 from rdkit import Chem
 
-from src.rewards.reward import AbstractReward
+from molgen.rewards.reward import AbstractReward
 
 # TODO: consider changing docking to use pydock or something more simple
 class DockingReward(AbstractReward):

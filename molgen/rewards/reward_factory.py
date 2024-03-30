@@ -1,13 +1,13 @@
 from typing import Any, Dict, List
 
-from src.rewards.reward import AbstractReward
-from src.rewards.rdkit_rewards import QEDReward, PenalizedLogpReward
-from src.rewards.multi_reward import MultiReward
+from molgen.rewards.reward import AbstractReward
+from molgen.rewards.rdkit_rewards import QEDReward, PenalizedLogPReward
+from molgen.rewards.multi_reward import MultiReward
 
 
 name_to_reward: Dict[str, AbstractReward] = {
         "QED": QEDReward,
-        "Plogp": PenalizedLogpReward,
+        "PlogP": PenalizedLogPReward,
         }
 
 
