@@ -1,4 +1,5 @@
-from enum import Enumfrom abc import ABC, abstractmethod
+from enum import Enum
+from abc import ABC, abstractmethod
 
 from typing import Callable, Dict, List, Optional, Union
 

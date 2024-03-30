@@ -9,7 +9,7 @@ from rdkit.Chem.rdchem import Mol
 from rdkit.Chem.QED import qed
 from rdkit.Contrib import SA_Score
 
-from MolGen.src.rewards.reward import AbstractReward
+from molgen.rewards.reward import AbstractReward
 
 class QEDReward(AbstractReward):
     def __init__(self,
@@ -38,7 +38,7 @@ class QEDReward(AbstractReward):
 
             return rewards 
 
-class PenalizedLogpReward(AbstractReward):
+class PenalizedLogPReward(AbstractReward):
     def __init__(self,
                  name: Optional[str]=None,
                  scale: Optional[Callable[[float], float]]=None) -> None:

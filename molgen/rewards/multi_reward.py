@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from typing import Dict, List, Union, Optional
 
-from MolGen.src.rewards.reward import AbstractReward
+from molgen.rewards.reward import AbstractReward
 
 
 # TODO: Find a way to fix typing in this class
@@ -55,6 +55,6 @@ class MultiReward(AbstractReward):
     def __str__(self) -> str:
         name = ""
         for reward in self.rewards:
-            name = name + f"{str(reward}_"
+            name = name + f"{str(reward)}_"
 
         return name
