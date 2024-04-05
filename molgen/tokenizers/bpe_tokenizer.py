@@ -78,7 +78,7 @@ class BPETokenizer(AbstractTokenizer):
         return encodings
 
 
-    def decode(self, encodings: TokenizedData) -> List[str]:
+    def decode(self, encodings: TokenizedData, skip_special_tokens: bool) -> List[str]:
         if isinstance(encodings[0], int):
             encodings = [encodings]
 
@@ -91,7 +91,6 @@ class BPETokenizer(AbstractTokenizer):
             texts.append(text)
 
         return texts 
-
 
 
     @classmethod

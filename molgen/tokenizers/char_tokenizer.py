@@ -8,13 +8,18 @@ from molgen.tokenizers.abstract_tokenizer import AbstractTokenizer, TokenizedDat
 
 
 class CharTokenizer(AbstractTokenizer):
-    
     def __init__(self,
                  token2id: Dict[str, int],
+                 special_tokens: Optional[List[str]]=None,
                  model_max_length: int=256) -> None:
         self.tokens_to_ids = token2id
+        self.special_tokens = special_tokens
         self.ids_to_tokens = {id_: token for token, id_ in self.tokens_to_ids.items()}    
         self.model_max_length = model_max_length
+
+
+    def __len__(self) -> int:
+        return len(self.tokens_to_ids)
 
 
     def encode(self,
@@ -40,7 +45,7 @@ class CharTokenizer(AbstractTokenizer):
                 encoding = encoding + [self.tokens_to_ids["</s>"]] 
             encodings.append(encoding)
         
-        if padding or padding == "longest":
+        if (isinstance(padding, bool) and padding) or padding == "longest":
             max_length = max(map(len, encodings))
 
         elif padding == "max_length":
@@ -51,8 +56,7 @@ class CharTokenizer(AbstractTokenizer):
             padded_encodings: List[List[int]] = []
             for encoding in encodings:
                 encoding = encoding + [self.tokens_to_ids["<pad>"]] * (max_length - len(encoding))
-
-            padded_encodings.append(encoding)
+                padded_encodings.append(encoding)
             
             encodings = padded_encodings
 
@@ -61,7 +65,8 @@ class CharTokenizer(AbstractTokenizer):
 
         return encodings
 
-    def decode(self, encodings: TokenizedData) -> List[str]:
+
+    def decode(self, encodings: TokenizedData, skip_special_tokens: bool=False) -> List[str]:
         if isinstance(encodings[0], int):
             encodings = [encodings]
 
@@ -70,7 +75,7 @@ class CharTokenizer(AbstractTokenizer):
 
         texts = []
         for encoding in encodings:
-            text = "".join(self.ids_to_tokens[id_] for id_ in encoding)
+            text = "".join(self.ids_to_tokens[id_] if not skip_special_tokens or self.special_tokens is not None and self.ids_to_tokens[id_] not in self.special_tokens else "" for id_ in encoding)
             texts.append(text)
 
         return texts 
@@ -97,7 +102,8 @@ class CharTokenizer(AbstractTokenizer):
         config = {
                 "type": "CharTokenizer",
                 "kwargs": {
-                    "model_max_length": self.model_max_length
+                    "model_max_length": self.model_max_length,
+                    "special_tokens": self.special_tokens,
                     }
                 }
 

@@ -22,12 +22,12 @@ class AbstractTokenizer(ABC):
 
     
     @abstractmethod
-    def decode(self, encodings: TokenizedData) -> List[str]:
+    def decode(self, encodings: TokenizedData, skip_special_tokens: bool) -> List[str]:
         pass
 
 
-    @abstractmethod
     @classmethod
+    @abstractmethod
     def load_pretrained(cls: Type["AbstractTokenizer"], path: str, **kwargs: Any) -> "AbstractTokenizer":
         pass
 
