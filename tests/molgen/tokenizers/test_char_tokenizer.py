@@ -15,36 +15,36 @@ def token_to_id():
 
 
 @pytest.fixture
-def tmpdir():
-    tmpdir = tempfile.TemporaryDirectory()
-    yield tmpdir
-    tmpdir.cleanup()
+def tempdir():
+    tempdir = tempfile.TemporaryDirectory()
+    yield tempdir
+    tempdir.cleanup()
 
 def test_load_pretrained_invalid_path():
     with pytest.raises(ValueError):
         CharTokenizer.load_pretrained(path="/foo/bar")
 
 
-def test_load_pretrained_empty_path(tmpdir):
+def test_load_pretrained_empty_path(tempdir):
     with pytest.raises(ValueError):
-        CharTokenizer.load_pretrained(path=tmpdir.name)
+        CharTokenizer.load_pretrained(path=tempdir.name)
 
 
-def test_load_pretrained_valid_path(tmpdir, token_to_id):
-    with open(f"{tmpdir.name}/vocab.json", "w") as f:
+def test_load_pretrained_valid_path(tempdir, token_to_id):
+    with open(f"{tempdir.name}/vocab.json", "w") as f:
         json.dump(token_to_id, f)
 
-    tokenizer = CharTokenizer.load_pretrained(path=tmpdir.name)
+    tokenizer = CharTokenizer.load_pretrained(path=tempdir.name)
     
     assert token_to_id == tokenizer.tokens_to_ids
     assert {v: k for k, v in token_to_id.items()} == tokenizer.ids_to_tokens
 
 
-def test_load_pretrained_valid_path_and_config(tmpdir, token_to_id):
-    with open(f"{tmpdir.name}/vocab.json", "w") as f:
+def test_load_pretrained_valid_path_and_config(tempdir, token_to_id):
+    with open(f"{tempdir.name}/vocab.json", "w") as f:
         json.dump(token_to_id, f)
 
-    tokenizer = CharTokenizer.load_pretrained(path=tmpdir.name, model_max_length=16)
+    tokenizer = CharTokenizer.load_pretrained(path=tempdir.name, model_max_length=16)
     
     assert token_to_id == tokenizer.tokens_to_ids
     assert {v: k for k, v in token_to_id.items()} == tokenizer.ids_to_tokens
@@ -57,20 +57,20 @@ def test_save_pretained_invalid_path(token_to_id):
         tokenizer.save_pretrained("/foobar/") 
 
 
-def test_save_pretained_valid_path(tmpdir, token_to_id):
+def test_save_pretained_valid_path(tempdir, token_to_id):
     tokenizer = CharTokenizer(token_to_id) 
-    tokenizer.save_pretrained(tmpdir.name) 
+    tokenizer.save_pretrained(tempdir.name) 
 
-    assert os.path.exists(f"{tmpdir.name}/config.json")
-    assert os.path.exists(f"{tmpdir.name}/vocab.json")
+    assert os.path.exists(f"{tempdir.name}/config.json")
+    assert os.path.exists(f"{tempdir.name}/vocab.json")
 
-    with open(f"{tmpdir.name}/config.json", "r") as f:
+    with open(f"{tempdir.name}/config.json", "r") as f:
         config = json.load(f)
         assert config == {"type": "CharTokenizer",
                           "kwargs": {"model_max_length": 256,
                                      "special_tokens": None}}
 
-    with open(f"{tmpdir.name}/vocab.json", "r") as f:
+    with open(f"{tempdir.name}/vocab.json", "r") as f:
         vocab = json.load(f)
         assert vocab == token_to_id
 

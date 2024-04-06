@@ -7,9 +7,11 @@ from molgen.tokenizers.char_tokenizer import CharTokenizer
 from molgen.tokenizers.bpe_tokenizer import BPETokenizer
 
 def get_tokenizer(path: str) -> AbstractTokenizer:
-    if not os.path.isdir(path):
+    if not os.path.isdir(path) or not os.path.exists(path):
         raise ValueError(f"{path} is not valid tokenizer path")
 
+    if not os.path.exists(f"{path}/config.json"):
+        raise ValueError(f"config.json not found in {path}")
 
     with open(f"{path}/config.json", "r") as f:
         config = json.load(f)
