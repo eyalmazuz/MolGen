@@ -1,6 +1,5 @@
 import json
 import os
-from typing import Type
 
 from molgen.tokenizers.abstract_tokenizer import AbstractTokenizer
 from molgen.tokenizers.char_tokenizer import CharTokenizer

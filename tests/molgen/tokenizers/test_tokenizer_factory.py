@@ -44,10 +44,10 @@ def test_valid_char_tokenizer(tempdir, char_tokenizer, token_to_id):
 
 def test_invalid_path():
     with pytest.raises(ValueError):
-        tokenizer = get_tokenizer("/foo/bar")
+        _ = get_tokenizer("/foo/bar")
 
 
 def test_no_config(tempdir):
     with pytest.raises(ValueError):
-        tokenizer = get_tokenizer(tempdir.name)
+        _ = get_tokenizer(tempdir.name)
 
