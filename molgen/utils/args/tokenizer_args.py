@@ -12,7 +12,7 @@ def parse_tokenizer_args() -> argparse.Namespace:
     parser.add_argument("--add_special_tokens", action="store_true", help="Whether to add special tokens to the tokenizer")
 
 
-    return parser.prase_args()
+    return parser.parse_args()
 
 
 def validate_tokenizer_args(args: argparse.Namespace) -> None:

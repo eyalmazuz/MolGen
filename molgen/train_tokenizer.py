@@ -1,9 +1,8 @@
 import argparse
 
-from molgen.tokenizers.trainer.char_tokenizer_trainer import build_char_tokenizer 
+from molgen.tokenizers.trainers.char_tokenizer_trainer import build_char_tokenizer
 
-def train_tokenizer(args: argparase.Namespace):
-    
+def train_tokenizer(args: argparse.Namespace):
     if args.type == "Char":
         build_char_tokenizer(args.data_path, args.save_path, args.add_special_tokens, args.model_max_length)
 

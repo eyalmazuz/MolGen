@@ -128,15 +128,4 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-/data/results/
-/data/csvs/
-/data/checkpoints/
-/data/pickles/
-/data/zinc/
-/data/ic50_smiles.smi
-/data/moses.smi
-/data/gdb
-/data/proteins
-.vscode/settings.json
-/*.out
-/sbatch_gpu.example
+data/

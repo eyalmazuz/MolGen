@@ -27,15 +27,15 @@ def build_char_tokenizer(data_paths: List[str], save_path: str, add_special_toke
 
     
     if not os.path.exists(save_path):
-        os.makedirs(path, exist_ok=True)
+        os.makedirs(save_path, exist_ok=True)
 
-    with open(f"{path}/config.json", "w") as f:
+    with open(f"{save_path}/config.json", "w") as f:
         config: Dict[str, Any] = {"type": "CharTokenizer", "kwargs": {}}
         if model_max_length is not None:
             config["kwargs"]["model_max_length"] = model_max_length
 
         json.dump(config, f)
 
-    with open(f"{path}/vocab.json", "w") as f:
+    with open(f"{save_path}/vocab.json", "w") as f:
         json.dump(tokens_to_ids, f)
 
