@@ -76,18 +76,18 @@ def test_save_pretained_valid_path(tempdir, token_to_id):
 
 
 def test_encode(token_to_id):
-    tokenizer = CharTokenizer(token_to_id)
+    tokenizer = CharTokenizer(token_to_id, special_tokens=["<s>", "</s>", "<pad>"])
 
     encoding = tokenizer.encode("ACB")
     assert encoding == [[3,5,4]]
 
-    encoding = tokenizer.encode("ACB", add_bos_token=True)
+    encoding = tokenizer.encode("<s>ACB")
     assert encoding == [[1,3,5,4]]
 
-    encoding = tokenizer.encode("ACB", add_eos_token=True)
+    encoding = tokenizer.encode("ACB</s>")
     assert encoding == [[3,5,4,2]]
 
-    encoding = tokenizer.encode("ACB", add_bos_token=True, add_eos_token=True)
+    encoding = tokenizer.encode("<s>ACB</s>")
     assert encoding == [[1,3,5,4,2]]
 
     encoding = tokenizer.encode("ACB", return_tensors=True)
@@ -95,21 +95,21 @@ def test_encode(token_to_id):
 
 
 def test_encode_padding(token_to_id):
-    tokenizer = CharTokenizer(token_to_id, model_max_length=6)
+    tokenizer = CharTokenizer(token_to_id, model_max_length=6, special_tokens=["<s>", "</s>", "<pad>"])
 
     encoding = tokenizer.encode("ACB", padding="max_length")
     assert encoding == [[3,5,4,0,0,0]]
 
-    encoding = tokenizer.encode("ACB", add_bos_token=True, padding="max_length", max_length=5)
+    encoding = tokenizer.encode("<s>ACB", padding="max_length", max_length=5)
     assert encoding == [[1,3,5,4,0]]
 
-    encoding = tokenizer.encode(["ACB", "CCCC"], add_eos_token=True, padding=True)
-    assert encoding == [[3,5,4,2,0], [5,5,5,5,2]]
+    encoding = tokenizer.encode(["<s>ACB", "<s>CCCC"], padding=True)
+    assert encoding == [[1,3,5,4,0], [1,5,5,5,5]]
 
-    encoding = tokenizer.encode(["ACB", "CCCC"], add_bos_token=True, add_eos_token=True, padding=True)
+    encoding = tokenizer.encode(["<s>ACB</s>", "<s>CCCC</s>"], padding=True)
     assert encoding == [[1,3,5,4,2,0], [1,5,5,5,5,2]]
 
-    encoding = tokenizer.encode(["ACB", "CCCC"], add_eos_token=True, padding=True, return_tensors=True)
+    encoding = tokenizer.encode(["ACB</s>", "CCCC</s>"], padding=True, return_tensors=True)
     assert torch.all(encoding == torch.tensor([[3,5,4,2,0], [5,5,5,5,2]]))
 
 

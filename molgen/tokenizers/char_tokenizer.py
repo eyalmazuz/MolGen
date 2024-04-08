@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from typing import Any, Dict, List, Optional, Type, Union
 
 import torch
@@ -27,8 +28,6 @@ class CharTokenizer(AbstractTokenizer):
                padding: Union[str, bool]=False,
                truncation: Union[str, bool]=False,
                max_length: Optional[int]=None,
-               add_bos_token: bool=False,
-               add_eos_token: bool=False,
                return_tensors: bool=False) -> TokenizedData:
 
         if isinstance(texts, str):
@@ -36,13 +35,23 @@ class CharTokenizer(AbstractTokenizer):
 
         encodings: List[List[int]] = []
         for text in texts:
-            encoding = [self.tokens_to_ids[token] for token in list(text)]
+            if self.special_tokens:
+                special_pattern = "(" + "|".join(re.escape(k) for k in self.special_tokens) + ")"
+                chunks = re.split(special_pattern, text)
+            else:
+                chunks = list(text)
+            encoding = []
+            for chunk in chunks:
+                if chunk == "":
+                    continue
+                else:
+                    if chunk in self.special_tokens:
+                        encoding.append(self.tokens_to_ids[chunk])
+                    else:
+                        encoding += [self.tokens_to_ids[token] for token in chunk]
+            # encoding = [self.tokens_to_ids[token] for token in special_chunks if token != ""]
             if truncation:
                 encoding = encoding[:self.model_max_length]
-            if add_bos_token:
-                encoding = [self.tokens_to_ids["<s>"]] + encoding
-            if add_eos_token:
-                encoding = encoding + [self.tokens_to_ids["</s>"]] 
             encodings.append(encoding)
         
         if (isinstance(padding, bool) and padding) or padding == "longest":
