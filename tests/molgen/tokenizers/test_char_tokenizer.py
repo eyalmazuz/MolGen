@@ -1,5 +1,4 @@
 import json
-import os
 import tempfile
 
 import pytest
@@ -44,35 +43,10 @@ def test_load_pretrained_valid_path_and_config(tempdir, token_to_id):
     with open(f"{tempdir.name}/vocab.json", "w") as f:
         json.dump(token_to_id, f)
 
-    tokenizer = CharTokenizer.load_pretrained(path=tempdir.name, model_max_length=16)
+    tokenizer = CharTokenizer.load_pretrained(path=tempdir.name)
     
     assert token_to_id == tokenizer.tokens_to_ids
     assert {v: k for k, v in token_to_id.items()} == tokenizer.ids_to_tokens
-    assert tokenizer.model_max_length == 16
-
-
-def test_save_pretained_invalid_path(token_to_id):
-    tokenizer = CharTokenizer(token_to_id) 
-    with pytest.raises(ValueError):
-        tokenizer.save_pretrained("/foobar/") 
-
-
-def test_save_pretained_valid_path(tempdir, token_to_id):
-    tokenizer = CharTokenizer(token_to_id) 
-    tokenizer.save_pretrained(tempdir.name) 
-
-    assert os.path.exists(f"{tempdir.name}/config.json")
-    assert os.path.exists(f"{tempdir.name}/vocab.json")
-
-    with open(f"{tempdir.name}/config.json", "r") as f:
-        config = json.load(f)
-        assert config == {"type": "CharTokenizer",
-                          "kwargs": {"model_max_length": 256,
-                                     "special_tokens": None}}
-
-    with open(f"{tempdir.name}/vocab.json", "r") as f:
-        vocab = json.load(f)
-        assert vocab == token_to_id
 
 
 def test_encode(token_to_id):
@@ -82,57 +56,57 @@ def test_encode(token_to_id):
     assert encoding == [[3,5,4]]
 
     encoding = tokenizer.encode("<s>ACB")
-    assert encoding == [[1,3,5,4]]
+    assert encoding == [[6,3,5,4]]
 
     encoding = tokenizer.encode("ACB</s>")
-    assert encoding == [[3,5,4,2]]
+    assert encoding == [[3,5,4,7]]
 
     encoding = tokenizer.encode("<s>ACB</s>")
-    assert encoding == [[1,3,5,4,2]]
+    assert encoding == [[6,3,5,4,7]]
 
     encoding = tokenizer.encode("ACB", return_tensors=True)
     assert torch.all(encoding == torch.tensor([[3,5,4]]))
 
 
 def test_encode_padding(token_to_id):
-    tokenizer = CharTokenizer(token_to_id, model_max_length=6, special_tokens=["<s>", "</s>", "<pad>"])
+    tokenizer = CharTokenizer(token_to_id, special_tokens=["<s>", "</s>", "<pad>"])
 
-    encoding = tokenizer.encode("ACB", padding="max_length")
-    assert encoding == [[3,5,4,0,0,0]]
+    encoding = tokenizer.encode("ACB", padding="max_length", max_length=6)
+    assert encoding == [[3,5,4,8,8,8]]
 
     encoding = tokenizer.encode("<s>ACB", padding="max_length", max_length=5)
-    assert encoding == [[1,3,5,4,0]]
+    assert encoding == [[6,3,5,4,8]]
 
     encoding = tokenizer.encode(["<s>ACB", "<s>CCCC"], padding=True)
-    assert encoding == [[1,3,5,4,0], [1,5,5,5,5]]
+    assert encoding == [[6,3,5,4,8], [6,5,5,5,5]]
 
     encoding = tokenizer.encode(["<s>ACB</s>", "<s>CCCC</s>"], padding=True)
-    assert encoding == [[1,3,5,4,2,0], [1,5,5,5,5,2]]
+    assert encoding == [[6,3,5,4,7,8], [6,5,5,5,5,7]]
 
     encoding = tokenizer.encode(["ACB</s>", "CCCC</s>"], padding=True, return_tensors=True)
-    assert torch.all(encoding == torch.tensor([[3,5,4,2,0], [5,5,5,5,2]]))
+    assert torch.all(encoding == torch.tensor([[3,5,4,7,8], [5,5,5,5,7]]))
 
 
 def test_decode(token_to_id):
     tokenizer = CharTokenizer(token_to_id, special_tokens=["<s>",
                                                            "</s>", 
-                                                           "<pad>"], model_max_length=6)
+                                                           "<pad>"])
 
-    text = tokenizer.decode([3,5,4,0,0,0])
+    text = tokenizer.decode([3,5,4,8,8,8])
     assert text == ["ACB<pad><pad><pad>"]
 
-    text = tokenizer.decode([3,5,4,0,0,0], skip_special_tokens=True)
+    text = tokenizer.decode([3,5,4,8,8,8], skip_special_tokens=True)
     assert text == ["ACB"]
 
-    text = tokenizer.decode([1,3,5,4])
+    text = tokenizer.decode([6,3,5,4])
     assert text == ["<s>ACB"]
 
-    text = tokenizer.decode([1,3,5,4], skip_special_tokens=True)
+    text = tokenizer.decode([6,3,5,4], skip_special_tokens=True)
     assert text == ["ACB"]
 
-    text = tokenizer.decode([1,3,5,4,2], skip_special_tokens=True)
+    text = tokenizer.decode([6,3,5,4,7], skip_special_tokens=True)
     assert text == ["ACB"]
 
-    text = tokenizer.decode([1,3,5,4,2])
+    text = tokenizer.decode([6,3,5,4,7])
     assert text == ["<s>ACB</s>"]
 

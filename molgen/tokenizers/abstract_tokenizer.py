@@ -15,8 +15,6 @@ class AbstractTokenizer(ABC):
                padding: Union[str, bool],
                truncation: Union[str, bool],
                max_length: int,
-               add_bos_token: bool,
-               add_eos_token: bool,
                return_tensors: bool) -> TokenizedData:
         pass
 
@@ -32,11 +30,6 @@ class AbstractTokenizer(ABC):
         pass
 
 
-    @abstractmethod
-    def save_pretrained(self, path: str) -> None:
-        pass
-
-    
     @abstractmethod
     def __len__(self) -> int:
         pass

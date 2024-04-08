@@ -3,7 +3,7 @@ import os
 from typing import Any, Dict, List, Optional, Set
 
 
-def build_char_tokenizer(data_paths: List[str], save_path: str, add_special_tokens: bool, model_max_length: Optional[int]) -> None:
+def build_char_tokenizer(data_paths: List[str], save_path: str, special_tokens: Optional[List[str]]) -> None:
     unique_tokens: Set[str] = set()
 
     for path in data_paths:
@@ -15,24 +15,15 @@ def build_char_tokenizer(data_paths: List[str], save_path: str, add_special_toke
             for text in texts:
                 unique_tokens |= set(text)
 
-
-    if add_special_tokens:
-        tokens_to_ids = {"<pad>": 0, "<s>": 1, "</s>": 2}
-    else:
-        tokens_to_ids = {}
-
-    offset = len(tokens_to_ids)
-    for i, token in enumerate(unique_tokens):
-        tokens_to_ids[token] = i + offset
-
+    tokens_to_ids = {token: i for i, token in enumerate(unique_tokens)}
     
     if not os.path.exists(save_path):
         os.makedirs(save_path, exist_ok=True)
 
     with open(f"{save_path}/config.json", "w") as f:
         config: Dict[str, Any] = {"type": "CharTokenizer", "kwargs": {}}
-        if model_max_length is not None:
-            config["kwargs"]["model_max_length"] = model_max_length
+        if special_tokens:
+            config["kwargs"]["special_tokens"] = special_tokens
 
         json.dump(config, f)
 

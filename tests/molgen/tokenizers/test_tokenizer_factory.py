@@ -21,8 +21,7 @@ def token_to_id():
 @pytest.fixture
 def char_config():
     config = {"type": "CharTokenizer",
-              "kwargs": {"model_max_length": 16,
-                         "special_tokens": None}}
+              "kwargs": {"special_tokens": None}}
     return config
 
 
@@ -39,7 +38,6 @@ def test_valid_char_tokenizer(tempdir, char_tokenizer, token_to_id):
     tokenizer = get_tokenizer(tempdir.name)
     
     assert tokenizer.tokens_to_ids == token_to_id
-    assert tokenizer.model_max_length == 16
 
 
 def test_invalid_path():
