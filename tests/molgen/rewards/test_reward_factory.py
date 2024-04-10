@@ -2,6 +2,7 @@ from molgen.rewards.reward_factory import get_rewards
 from molgen.rewards.functions.rdkit_rewards import QEDReward, PenalizedLogPReward
 from molgen.rewards.functions.multi_reward import MultiReward
 
+
 def test_get_single_reward_empty_dict():
     rewards_dict = {
         "QED": {}
