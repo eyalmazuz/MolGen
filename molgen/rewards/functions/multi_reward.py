@@ -7,7 +7,7 @@ from molgen.rewards.reward import AbstractReward
 # TODO: Find a way to fix typing in this class
 class MultiReward(AbstractReward):
     def __init__(self, rewards: List[AbstractReward], name: Optional[str]=None) -> None:
-        super(MultiReward, self).__init__(name=name)
+        super(MultiReward, self).__init__(name=name, scale=None)
         self.rewards = rewards
 
     def __call__(self, smiles: Union[str, List[str]]) -> Union[float, List[float]]:
@@ -58,3 +58,11 @@ class MultiReward(AbstractReward):
             name = name + f"{str(reward)}_"
 
         return name
+
+    def __repr__(self) -> str:
+        name = ""
+        for reward in self.rewards:
+            name = name + f"{reward.__repr__()}_"
+
+        return name
+

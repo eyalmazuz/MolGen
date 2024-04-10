@@ -1,16 +1,37 @@
-from enum import Enum
 from abc import ABC, abstractmethod
+from enum import Enum
+from functools import partial
+from typing import Any, Dict, List, Optional, Union
 
-from typing import Callable, Dict, List, Optional, Union
+from molgen.rewards import reward_scales
+
+RewardScale = Optional[Union[str, Dict[str, Any]]]
 
 class AbstractReward(ABC):
     def __init__(self,
                  name: Optional[str]=None,
-                 scale: Optional[Callable[[float], float]]=None,
+                 scale: RewardScale=None,
                  eval_: bool=False) -> None:
         self.name = name
-        self.scale = scale
         self._eval = eval_
+
+        if scale is not None:
+            if isinstance(scale, dict):
+                func_name = scale.pop("name")
+                kwargs = scale
+            elif isinstance(scale, str):
+                func_name = scale
+                kwargs = {}
+            else:
+                raise ValueError("Invalid scale config")
+            
+            if not hasattr(reward_scales, func_name):
+                raise ValueError(f"{func_name} is not defined in reward scales")
+
+            func = getattr(reward_scales, func_name)
+            self.scale = partial(func, **kwargs)
+        else:
+            self.scale = None
 
     @abstractmethod
     def __call__(self, smiles: Union[str, List[str]]) -> Union[float, List[float]]:
@@ -34,4 +55,5 @@ class AbstractReward(ABC):
             return self.__class__.__name__
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}_{self.name=}_{str(self.scale)=}_{self._eval=}"
+        scale_str = str(self.scale) if self.scale is not None else ""
+        return f"{self.__class__.__name__}_self.scale={scale_str}_{self._eval=}"
