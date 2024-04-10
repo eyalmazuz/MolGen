@@ -3,7 +3,7 @@ import pytest
 from rdkit import Chem
 from rdkit.Chem.QED import qed
 
-from molgen.rewards.rdkit_rewards import QEDReward, PenalizedLogPReward
+from molgen.rewards.functions.rdkit_rewards import QEDReward, PenalizedLogPReward
 
 
 @pytest.fixture

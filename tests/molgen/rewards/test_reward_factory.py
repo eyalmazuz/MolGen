@@ -1,9 +1,8 @@
 from molgen.rewards.reward_factory import get_rewards
-from molgen.rewards.rdkit_rewards import QEDReward, PenalizedLogPReward
-from molgen.rewards.multi_reward import MultiReward
+from molgen.rewards.functions.rdkit_rewards import QEDReward, PenalizedLogPReward
+from molgen.rewards.functions.multi_reward import MultiReward
 
 
-# TODO: learn how to do setup and teardown in pytest
 def test_get_single_reward_empty_dict():
     rewards_dict = {
         "QED": {}
