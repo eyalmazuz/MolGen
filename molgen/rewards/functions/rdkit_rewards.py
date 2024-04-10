@@ -7,7 +7,7 @@ from rdkit.Chem import AllChem
 from rdkit.Chem import Descriptors
 from rdkit.Chem.rdchem import Mol
 from rdkit.Chem.QED import qed
-from rdkit.Contrib import SA_Score
+from rdkit.Contrib.SA_Score import sascorer
 
 from molgen.rewards.reward import AbstractReward
 
@@ -50,7 +50,7 @@ class PenalizedLogPReward(AbstractReward):
             if mol is None:
                 return 0
             else:
-                plogp = PenalizedLogPReward.penalized_logp(mol)
+                reward = PenalizedLogPReward.penalized_logp(mol)
                 if self.scale is not None and not self.eval:
                     reward = self.scale(plogp)
                     
@@ -91,8 +91,8 @@ class PenalizedLogPReward(AbstractReward):
     @staticmethod
     def penalized_logp(molecule: Mol) -> float:
       log_p = Descriptors.MolLogP(molecule)
-      sas_score = SA_Score.sascorer.calculateScore(molecule)
-      cycle_score = num_long_cycles(molecule)
+      sas_score = sascorer.calculateScore(molecule)
+      cycle_score = PenalizedLogPReward.num_long_cycles(molecule)
       return log_p - sas_score - cycle_score
 
 

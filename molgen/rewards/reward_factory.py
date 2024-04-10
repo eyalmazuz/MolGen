@@ -1,8 +1,8 @@
 from typing import Any, Dict, List
 
 from molgen.rewards.reward import AbstractReward
-from molgen.rewards.rdkit_rewards import QEDReward, PenalizedLogPReward
-from molgen.rewards.multi_reward import MultiReward
+from molgen.rewards.functions.rdkit_rewards import QEDReward, PenalizedLogPReward
+from molgen.rewards.functions.multi_reward import MultiReward
 
 
 name_to_reward: Dict[str, AbstractReward] = {
