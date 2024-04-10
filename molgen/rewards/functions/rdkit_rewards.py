@@ -8,11 +8,8 @@ from rdkit.Chem import Descriptors
 from rdkit.Chem.rdchem import Mol
 from rdkit.Chem.QED import qed
 from rdkit.Contrib.SA_Score import sascorer
-<<<<<<< HEAD
 
 from molgen.rewards.reward import AbstractReward, RewardScale
-=======
->>>>>>> 5c44949 (Moved rewards to new directory and fixed some bugs)
 
 
 class QEDReward(AbstractReward):
