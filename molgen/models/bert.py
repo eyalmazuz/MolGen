@@ -25,7 +25,7 @@ class BertConfig():
 
 
 class Bert(nn.Module):
-    def __init__(self, config: GPTConfig) -> None:
+    def __init__(self, config: BertConfig) -> None:
         super(Bert, self).__init__()
 
         self.block_size = config.block_size
@@ -52,7 +52,7 @@ class Bert(nn.Module):
             torch.nn.init.zeros_(module.bias)
             torch.nn.init.ones_(module.weight)
 
-    def forward(self, idx, targets=None):
+    def forward(self, idx, mask=None, targets=None):
         device = idx.device
         b, t = idx.size()
         assert t <= self.block_size, f"Cannot forward sequence of length {t}, block size is only {self.block_size}"
@@ -62,7 +62,7 @@ class Bert(nn.Module):
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (1, t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
-            x = block(x)
+            x = block(x, mask)
         x = self.transformer.ln_f(x)
         logits = self.lm_head(x)
 

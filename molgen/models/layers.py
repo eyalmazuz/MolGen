@@ -85,12 +85,13 @@ class SelfAttention(nn.Module):
 
 
     def forward(self, q, k, v, mask=None):
-        B, T, C = q.size() # batch size, sequence length, embedding dimensionality (n_embd)
+        qB, qT, qC = q.size() # batch size, sequence length, embedding dimensionality (n_embd)
+        kB, kT, kC = k.size() # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q = self.q_attn(q).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        k = self.k_attn(k).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        v = self.v_attn(v).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        q = self.q_attn(q).view(qB, qT, self.n_head, qC // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        k = self.k_attn(k).view(kB, kT, self.n_head, kC // self.n_head).transpose(1, 2) # (B, nh, T, hs)
+        v = self.v_attn(v).view(kB, kT, self.n_head, kC // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
@@ -101,7 +102,7 @@ class SelfAttention(nn.Module):
         att = F.softmax(att, dim=-1)
         att = self.attn_dropout(att)
         y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
+        y = y.transpose(1, 2).contiguous().view(qB, qT, qC) # re-assemble all head outputs side by side
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))
@@ -146,9 +147,9 @@ class DecoderBlock(nn.Module):
         m = self.mlp
         self.mlpf = lambda x: m.dropout(m.c_proj(m.act(m.c_fc(x)))) # MLP forward
 
-    def forward(self, x, encoder_hidden_state):
+    def forward(self, x, enc_h, mask=None):
         x = x + self.masked_attn(self.ln_1(x))
-        x = x + self.cross_attn(self.ln_2(x, encoder_hidden_state, encoder_hidden_state))
+        x = x + self.cross_attn(self.ln_2(x), enc_h, enc_h, mask=mask)
         x = x + self.mlpf(self.ln_3(x))
         return x
 
@@ -168,8 +169,9 @@ class EncoderBlock(nn.Module):
         m = self.mlp
         self.mlpf = lambda x: m.dropout(m.c_proj(m.act(m.c_fc(x)))) # MLP forward
 
-    def forward(self, x):
-        x = x + self.attn(self.ln_1(x, x, x))
+    def forward(self, x, mask=None):
+        y = self.ln_1(x)
+        x = x + self.attn(y, y, y, mask=mask)
         x = x + self.mlpf(self.ln_2(x))
         return x
 

@@ -1,114 +1,143 @@
+"""
+Code based on andrej karpathy minGPT code with a little bit of modifications
+https://github.com/karpathy/minGPT/
+"""
+from dataclasses import dataclass
+
 import numpy as np
 import torch
 from torch import nn
+import torch.nn.functional as F
 
-from .layers import Encoder, Decoder
+from molgen.models.layers import EncoderBlock, DecoderBlock
 
+
+@dataclass(init=True)
 class TransformerConfig():
-    def __init__(self,
-                vocab_size=512,
-                n_embd=512,
-                block_size=512,
-                proj_size=512,
-                d_model=512,
-                num_heads=8,
-                n_layers=12,
-                attn_dropout_rate=0.1,
-                proj_dropout_rate=0.1,
-                resid_dropout_rate=0.1,
-                embd_dropout_rate=0.1,
-                **kwargs
-                ) -> None:
-        self.vocab_size = vocab_size
-        self.block_size = block_size
-        self.n_embd = n_embd
-        self.proj_size = proj_size
-        self.d_model = d_model
-        self.num_heads = num_heads
-        self.n_layers = n_layers
-        self.attn_dropout_rate = attn_dropout_rate
-        self.proj_dropout_rate = proj_dropout_rate
-        self.resid_dropout_rate = resid_dropout_rate
-        self.embd_dropout_rate = embd_dropout_rate
-
-class Transoformer(nn.Module):
-
-    def __init__(self, config: TransformerConfig):
-        super(Transoformer, self).__init__()
-
-        self.encoder = Encoder(config)
-        self.decoder = Decoder(config)
-
-        self.config = config
-        self.register_buffer('mask', 1 - torch.tril(torch.ones(config.block_size, config.block_size))
-                                        .view(1, 1, config.block_size, config.block_size))
+    vocab_size: int = 32768
+    block_size: int = 512
+    n_embd: int = 768
+    n_head: int = 12
+    n_layer: int = 12
+    embd_pdrop: float = 0.1
+    attn_pdrop: float = 0.1
+    resid_pdrop: float = 0.1
 
 
-        self.logits = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+class Transformer(nn.Module):
+    def __init__(self, config: TransformerConfig) -> None:
+        super(Transformer, self).__init__()
 
-
-    def forward(self, enc_inp, dec_inp, enc_padding_mask=None, dec_padding_mask=None, labels=None, **kwargs):
-        B_dec, T_dec = dec_inp.size()
-        B_enc, T_enc = enc_inp.size()
-
-        look_ahead_mask = self.mask[:, :, :T_dec, :T_dec]
-
-        if dec_padding_mask is not None:
-            attention_mask = dec_padding_mask.view(B_dec, 1, 1, T_dec)
-            look_ahead_mask = torch.maximum(look_ahead_mask, attention_mask)
-
-        if enc_padding_mask is not None:
-            enc_padding_mask = enc_padding_mask.view(B_enc, 1, 1, T_enc)
-
-        if dec_padding_mask is not None:
-            dec_padding_mask = dec_padding_mask.view(B_dec, 1, 1, T_dec)
-
-        enc_out, enc_attnetions = self.encoder(enc_inp, enc_padding_mask)
+        self.block_size = config.block_size
         
-        dec_out, dec_attentions = self.decoder(dec_inp, enc_out, look_ahead_mask, dec_padding_mask)
+        self.encoder = nn.ModuleDict(dict(
+            wte = nn.Embedding(config.vocab_size, config.n_embd),
+            wpe = nn.Embedding(config.block_size, config.n_embd),
+            drop = nn.Dropout(config.embd_pdrop),
+            h = nn.ModuleList([EncoderBlock(config) for _ in range(config.n_layer)]),
+            ln_f = nn.LayerNorm(config.n_embd),
+        ))
+ 
+        self.decoder = nn.ModuleDict(dict(
+            wte = nn.Embedding(config.vocab_size, config.n_embd),
+            wpe = nn.Embedding(config.block_size, config.n_embd),
+            drop = nn.Dropout(config.embd_pdrop),
+            h = nn.ModuleList([DecoderBlock(config) for _ in range(config.n_layer)]),
+            ln_f = nn.LayerNorm(config.n_embd),
+        ))
         
-        logits = self.logits(dec_out)
+        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
-        
-        if labels is not None:
-            shift_logits = logits[..., :-1, :].contiguous()
-            shift_labels = labels[..., 1:].contiguous()
-            loss_fct = nn.CrossEntropyLoss()
-            loss = loss_fct(shift_logits.transpose(1, 2), shift_labels)
-            return loss, logits, {**enc_attnetions, **dec_attentions}
-        
-        else:
-            return logits, {**enc_attnetions, **dec_attentions}
-
-    def generate(self, initial_token, end_token, enc_inp, enc_padding_mask,
-                 temprature: int=1, max_len: int=100, device=torch.device('cuda')):
-        tokens = [initial_token]
-        next_token = -1
-        enc_inp = torch.tensor([enc_inp]).to(device)
-        enc_padding_mask = torch.tensor([enc_padding_mask]).to(device)
-        while next_token != end_token and len(tokens) < max_len:
-            x = torch.tensor([tokens]).to(device)
-            
-            y_pred = self.forward(enc_inp, x, enc_padding_mask=enc_padding_mask)
-
-            if isinstance(y_pred, tuple):
-                y_pred = y_pred[0]
-
-            last_word_logits = y_pred[0][-1]
-            p = torch.nn.functional.softmax(last_word_logits, dim=0)
-            if p.device.type != 'cpu':
-                p = p.cpu()
-            next_token = np.random.choice(len(last_word_logits), p=p.detach().numpy())
-            tokens.append(next_token)
-
-        return tokens
-
-    def __str__(self):
-        return f"Transformer_Layers_{self.config.n_layers}_Heads_{self.config.num_heads}_Emb_{self.config.n_embd}_Dmodel_{self.config.d_model}"
+        self.apply(self._init_weights)
 
 
-def main():
-    print(5)
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+        elif isinstance(module, nn.LayerNorm):
+            torch.nn.init.zeros_(module.bias)
+            torch.nn.init.ones_(module.weight)
 
-if __name__ == "__main__":
-    main()
+
+    def forward(self, enc_idx, dec_idx, enc_mask=None, targets=None):
+        enc_h = self.enc(enc_idx, enc_mask)
+        logits = self.dec(dec_idx, enc_h, enc_mask)
+
+        # if we are given some desired targets also calculate the loss
+        loss = None
+        if targets is not None:
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+
+        return logits, loss
+
+
+    def enc(self, idx, mask=None):
+        device = idx.device
+        b, t = idx.size()
+        assert t <= self.block_size, f"Cannot forward encoder sequence of length {t}, block size is only {self.block_size}"
+        pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0) # shape (1, t)
+
+        # forward the Enocder model itself
+        tok_emb = self.encoder.wte(idx) # token embeddings of shape (b, t, n_embd)
+        pos_emb = self.encoder.wpe(pos) # position embeddings of shape (1, t, n_embd)
+        x = self.encoder.drop(tok_emb + pos_emb)
+        for block in self.encoder.h:
+            x = block(x, mask)
+        x = self.encoder.ln_f(x)
+
+        return x
+
+
+    def dec(self, idx, enc_h, enc_mask=None):
+        device = idx.device
+        b, t = idx.size()
+        assert t <= self.block_size, f"Cannot forward decoder sequence of length {t}, block size is only {self.block_size}"
+        pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0) # shape (1, t)
+
+       # forward the Decoder model itself
+        tok_emb = self.decoder.wte(idx) # token embeddings of shape (b, t, n_embd)
+        pos_emb = self.decoder.wpe(pos) # position embeddings of shape (1, t, n_embd)
+        x = self.decoder.drop(tok_emb + pos_emb)
+        for block in self.decoder.h:
+            x = block(x, enc_h, mask=enc_mask)
+
+        x = self.decoder.ln_f(x)
+        logits = self.lm_head(x)
+
+        return logits
+
+
+    @torch.no_grad()
+    def generate(self, enc_idx, dec_idx, max_new_tokens, temperature=1.0, do_sample=False, top_k=None):
+        """
+        Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
+        the sequence max_new_tokens times, feeding the predictions back into the model each time.
+        Most likely you'll want to make sure to be in model.eval() mode of operation for this.
+        """
+        enc_h = self.enc(enc_idx, enc_mask)
+        for _ in range(max_new_tokens):
+            # if the sequence context is growing too long we must crop it at block_size
+            idx_cond = idx if idx.size(1) <= self.block_size else idx[:, -self.block_size:]
+            # forward the model to get the logits for the index in the sequence
+            logits, _ = self.dec(idx_cond, enc_h, enc_mask)
+            # pluck the logits at the final step and scale by desired temperature
+            logits = logits[:, -1, :] / temperature
+            # optionally crop the logits to only the top k options
+            if top_k is not None:
+                v, _ = torch.topk(logits, top_k)
+                logits[logits < v[:, [-1]]] = -float('Inf')
+            # apply softmax to convert logits to (normalized) probabilities
+            probs = F.softmax(logits, dim=-1)
+            # either sample from the distribution or take the most likely element
+            if do_sample:
+                idx_next = torch.multinomial(probs, num_samples=1)
+            else:
+                _, idx_next = torch.topk(probs, k=1, dim=-1)
+            # append sampled index to the running sequence and continue
+            idx = torch.cat((idx, idx_next), dim=1)
+
+        return idx
