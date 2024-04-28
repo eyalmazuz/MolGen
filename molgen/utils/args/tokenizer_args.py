@@ -1,7 +1,7 @@
 import argparse
 
 
-def parse_tokenizer_args() -> argparse.Namespace:
+def get_tokenizer_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--type", type=str, choices=["Char", "BPE"], help="Type of tokenizer to train")
@@ -11,7 +11,7 @@ def parse_tokenizer_args() -> argparse.Namespace:
     parser.add_argument("--special_tokens", type=str, nargs="+", help="special tokens to add to the tokenizer")
 
 
-    return parser.parse_args()
+    return parser
 
 
 def validate_tokenizer_args(args: argparse.Namespace) -> None:
