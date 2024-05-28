@@ -1,10 +1,8 @@
-from typing import Callable, List, Optional, Union
+from typing import List, Optional, Union
 
 import networkx as nx
 from rdkit import Chem
-from rdkit import DataStructs
-from rdkit.Chem import AllChem
-from rdkit.Chem import Descriptors
+from rdkit.Chem.Crippen import MolLogP
 from rdkit.Chem.rdchem import Mol
 from rdkit.Chem.QED import qed
 from rdkit.Contrib.SA_Score import sascorer
@@ -53,7 +51,7 @@ class PenalizedLogPReward(AbstractReward):
             else:
                 reward = PenalizedLogPReward.penalized_logp(mol)
                 if self.scale is not None and not self.eval:
-                    reward = self.scale(plogp)
+                    reward = self.scale(reward)
                     
                 return reward
 
@@ -91,7 +89,7 @@ class PenalizedLogPReward(AbstractReward):
 
     @staticmethod
     def penalized_logp(molecule: Mol) -> float:
-      log_p = Descriptors.MolLogP(molecule)
+      log_p = MolLogP(molecule)
       sas_score = sascorer.calculateScore(molecule)
       cycle_score = PenalizedLogPReward.num_long_cycles(molecule)
       return log_p - sas_score - cycle_score

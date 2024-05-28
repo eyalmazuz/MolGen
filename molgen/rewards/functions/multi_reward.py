@@ -1,19 +1,21 @@
-from collections import OrderedDict
-from typing import Dict, List, Union, Optional
+from functools import reduce
+from typing import List, Union, Optional
 
 from molgen.rewards.reward import AbstractReward
+from molgen.rewards.reward_utils import agg_to_op
 
 
 # TODO: Find a way to fix typing in this class
 class MultiReward(AbstractReward):
-    def __init__(self, rewards: List[AbstractReward], name: Optional[str]=None) -> None:
+    def __init__(self, rewards: List[AbstractReward], agg_type: str="add", name: Optional[str]=None) -> None:
         super(MultiReward, self).__init__(name=name, scale=None)
         self.rewards = rewards
+        self.op = agg_to_op(agg_type)
 
     def __call__(self, smiles: Union[str, List[str]]) -> Union[float, List[float]]:
         if isinstance(smiles, str):
             smiles_reward = [reward_fn(smiles) for reward_fn in self.rewards]
-            final_reward = sum(smiles_reward)  # type: ignore
+            final_reward = reduce(self.op, smiles_reward)  # type: ignore
             
             return final_reward
         else:
@@ -27,7 +29,7 @@ class MultiReward(AbstractReward):
             # all the different rewards for the first SMILES molecule and so forth
             if not self.eval:
                 rewards = list(zip(*list(smiles_rewards.values())))
-                rewards = [sum(rewards) for rewards in rewards]
+                rewards = [reduce(self.op, rewards) for rewards in rewards]
 
                 return rewards
 

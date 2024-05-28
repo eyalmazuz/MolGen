@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from enum import Enum
 from functools import partial
 from typing import Any, Dict, List, Optional, Union
 
@@ -14,6 +13,24 @@ class AbstractReward(ABC):
                  eval_: bool=False) -> None:
         self.name = name
         self._eval = eval_
+        self.scale: Optional[partial[Any]]
+        if scale is not None:
+            if isinstance(scale, dict):
+                func_name = scale.pop("name")
+                kwargs = scale
+            elif isinstance(scale, str):
+                func_name = scale
+                kwargs = {}
+            else:
+                raise ValueError("Invalid scale config")
+            
+            if not hasattr(reward_scales, func_name):
+                raise ValueError(f"{func_name} is not defined in reward scales")
+
+            func = getattr(reward_scales, func_name)
+            self.scale = partial(func, **kwargs)
+        else:
+            self.scale = None
 
         if scale is not None:
             if isinstance(scale, dict):

@@ -8,7 +8,7 @@ from molgen.rewards.functions.rdkit_rewards import QEDReward, PenalizedLogPRewar
 
 @pytest.fixture
 def reward_fn_scale():
-    return QEDReward(scale=lambda x: 10 * x)
+    return QEDReward(scale="mult")
 
 
 @pytest.fixture
