@@ -1,16 +1,17 @@
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 from rdkit import Chem
+from rdkit.Chem import AllChem
 
-from molgen.rewards.reward import AbstractReward
+from molgen.rewards.reward import AbstractReward, RewardScale
 
 # TODO: consider changing docking to use pydock or something more simple
 class DockingReward(AbstractReward):
     def __init__(self,
                  receptor_path,
                  name: Optional[str]=None,
-                 scale: Optional[Callable[[float], float]]=None,
+                 scale: Optional[RewardScale]=None,
                  center: Optional[Tuple[float, float, float]]=None,
                  size: Optional[Tuple[float, float, float]]=None) -> None:
 
@@ -34,7 +35,7 @@ class DockingReward(AbstractReward):
             if mol is None:
                 return 0
             else:
-                return self.__dock(s)
+                return self.__dock(smiles)
         else:
             rewards = [self.__dock(s) if Chem.MolFromSmiles(s) is not None else 0 for s in smiles]
             if self.scale is not None and not self.eval:
@@ -71,8 +72,8 @@ class DockingReward(AbstractReward):
 
             # Define the search space (coordinates and dimensions)
             x, y, z = self.center
-            if self.box_size is None:
-                size_x = size_y = size_z = 30
+            if self.size is None:
+                size_x = size_y = size_z = 30.
             else:
                 size_x, size_y, size_z = self.size
 
