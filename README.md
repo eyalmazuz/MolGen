@@ -129,28 +129,49 @@ Rewards use a TOML file format to define how to load and choose rewards during o
 
 Example of a reward TOML config:
 ```
-[rewards.QED]
-name = "testQED"
+[reward]
 
-[rewards.QED.scale]
+[[reward.functions]]
+type = "QED"
+
+[reward.functions.scale]
 name = "mult"
 factor = 10
 
-[rewards.PlogP]
-name = "PLOGP"
-
-[rewards.Docking]
-name = "Docking BRCA1"
-scale = "negate"
+[[reward.functions]]
+type = "PLOGP"
 ```
 
 This TOML config will generate two reward functions one for QED and the other for PlogP.
 
 Since we are using multiple rewards, the code will automatically generate a class called MultiReward that will act as a single reward which is a weighted sum of all the rewards in the TOML config
 
-To define a reward in a TOML format you need to configue the following this
-``[rewards.<Reward Name>]``
-This will create an entry in the general config file that will use ``<Reward Name>`` class for our reward. Under this we can define two values that can be used in our rewards
+To define a reward in a TOML format you need to configue the following:
+``[[rewards.functions]]``
+
+Each double square brackets define in item in the list of rewards, a reward is defined by its type which let the code know which reward to load.
+
+If we want to define reward specific information we'll define a TOML table under the defined type
+in the above example we'll get the following JSON:
+```
+{
+  "reward": {
+    "functions": [
+      {
+        "type": "QED",
+        "scale": {
+          "name": "mult",
+          "factor": 10
+        }
+      },
+      {
+        "type": "PLOGP",
+        "name": "Penalized LogP"
+      }
+    ]
+  }
+}
+```
 1. name- A string-based name for our reward function that is used for debug purposed and human-readable format when evaluating, etc.
 
 2. scale- This will define if you want to apply a numerical transformation to the reward value, scale can be either a string (simiar to name, see Docking in the example config) or a sub key-value entry under ``[rewards.<Reward Name>.scale]`` in our reward dict (see QED example).
@@ -172,6 +193,24 @@ Then, simply add the new reward into the ``name_to_reward`` dictionary located i
 To create a new scale function for any given reward, simply create a new method in ``molgen/rewards/reward_scales.py``, This method needs to support at least receiving the reward score as a parameter and return a single value as their return value.
 
 If additional parameters are needed to the scale, they must follow the value parameter. This is because partial will attempt to put the reward value in the first parameter when calling the function and if there's already a default value given by the user it'll throw an error.
+
+
+### Multi-Reward Aggregation
+one can defined different aggregation schemes when using multiple rewards, the default aggregation scheme is to sum all rewards together. If one wish to change that then in the toml config file under ``[reward]`` they should add ``agg = "aggregtion type"``
+
+this will create the following JSON
+```
+{
+  "reward": {
+    "agg": "mult",
+    "functions": [
+    ....
+```
+
+Currently supported aggretation types:
+
+1. Sum
+2. Multiplication
 
 # Running Demo
 
