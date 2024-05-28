@@ -14,6 +14,7 @@ class AbstractReward(ABC):
         self.name = name
         self._eval = eval_
         self.scale: Optional[partial[Any]]
+
         if scale is not None:
             if isinstance(scale, dict):
                 func_name = scale.pop("name")
@@ -31,6 +32,7 @@ class AbstractReward(ABC):
             self.scale = partial(func, **kwargs)
         else:
             self.scale = None
+
 
     @abstractmethod
     def __call__(self, smiles: Union[str, List[str]]) -> Union[float, List[float]]:
