@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from enum import Enum
 from functools import partial
 from typing import Any, Dict, List, Optional, Union
 
@@ -14,7 +13,7 @@ class AbstractReward(ABC):
                  eval_: bool=False) -> None:
         self.name = name
         self._eval = eval_
-
+        self.scale: Optional[partial[Any]]
         if scale is not None:
             if isinstance(scale, dict):
                 func_name = scale.pop("name")
