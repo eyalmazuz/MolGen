@@ -3,7 +3,7 @@ from enum import Enum
 import torch.nn as nn
 
 from molgen.models.model_options import ModelType
-from molgen.models.gpt import GPT, GTPConfig
+from molgen.models.gpt import GPT, GPTConfig
 from molgen.models.bert import Bert, BertConfig
 from molgen.models.transformer import Transformer, TransformerConfig
 from molgen.models.recurrent import RNN, RNNConfig

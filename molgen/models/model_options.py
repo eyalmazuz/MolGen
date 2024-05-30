@@ -4,17 +4,19 @@ from enum import Enum, auto
 class ModelType(Enum):
     GPT = auto()
     BERT = auto()
-    Transformer = auto()
+    TRANSFORMER = auto()
     RNN = auto()
 
-    @classmethod
+    @staticmethod
     def from_str(label: str) -> "ModelType":
-        if label.lower() == "gpt":
-            return ModelType.GPT
-        elif label.lower() == "bert":
-            return modelType.BERT
-        elif label.lower() == "transformer":
-            return modelType.TRANSFORMER
-        elif label.lower() == "rnn":
-            return modelType.RNN
+        if label.upper() == "GPT":
+            type_ = ModelType.GPT
+        elif label.upper() == "BERT":
+            type_ = ModelType.BERT
+        elif label.upper() == "TRANSFORMER":
+            type_ = ModelType.TRANSFORMER
+        elif label.upper() == "RNN":
+            type_ = ModelType.RNN
+
+        return type_
 
