@@ -21,7 +21,6 @@ repos:
     hooks:
     -   id: mypy
         args: [--pretty,  --extra-checks]
-        language: python
 
 -   repo: local
     hooks:
