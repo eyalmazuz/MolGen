@@ -21,6 +21,8 @@ repos:
     hooks:
     -   id: mypy
         args: [--pretty,  --extra-checks]
+        additional_dependencies: [types-tqdm, numpy, torch]
+
 
 -   repo: local
     hooks:

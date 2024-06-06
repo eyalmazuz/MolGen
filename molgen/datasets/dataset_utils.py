@@ -50,7 +50,8 @@ class LengthBatchSampler(BatchSampler):
         if self.shuffle:
             random.shuffle(batches)
 
-        yield from batches
+        for b in batches:
+            yield b
 
     def __len__(self):
         if self.drop_last:
