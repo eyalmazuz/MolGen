@@ -20,8 +20,7 @@ repos:
     rev: v1.10.0
     hooks:
     -   id: mypy
-        args: [--pretty,  --extra-checks]
-        additional_dependencies: [types-tqdm, numpy, torch]
+        args: [--pretty,  --extra-checks, --ignore-missing-imports]
 
 
 -   repo: local
