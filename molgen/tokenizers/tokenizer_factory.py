@@ -1,7 +1,7 @@
 import json
 import os
 
-from molgen.tokenizers.abstract_tokenizer import AbstractTokenizer
+from molgen.tokenizers.tokenizer import AbstractTokenizer
 from molgen.tokenizers.char_tokenizer import CharTokenizer
 from molgen.tokenizers.bpe_tokenizer import BPETokenizer
 
@@ -26,4 +26,3 @@ def get_tokenizer(path: str) -> AbstractTokenizer:
         tokenizer = BPETokenizer.load_pretrained(path, **kwargs)
 
     return tokenizer
-

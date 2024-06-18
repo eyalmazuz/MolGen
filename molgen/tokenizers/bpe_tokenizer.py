@@ -5,12 +5,12 @@ import warnings
 
 import torch
 
-from molgen.tokenizers.abstract_tokenizer import AbstractTokenizer, TokenizedData
+from molgen.tokenizers.tokenizer import AbstractTokenizer, TokenizedData
 from molgen.tokenizers.tokenizers_utils import get_stats, merge
 
 
 class BPETokenizer(AbstractTokenizer):
-    
+
     def __init__(self, merges: Dict[Tuple[int, int], int], special_tokens: Optional[List[str]]=None) -> None:
         self.merges = merges
 
@@ -76,7 +76,7 @@ class BPETokenizer(AbstractTokenizer):
                 encoding = encoding + [self.special_tokens["<pad>"]] * (max_length - len(encoding))
 
             padded_encodings.append(encoding)
-            
+
             encodings = padded_encodings
 
         if return_tensors:
@@ -129,7 +129,7 @@ class BPETokenizer(AbstractTokenizer):
             text = text_bytes.decode("utf-8", errors="replace")
             texts.append(text)
 
-        return texts 
+        return texts
 
 
     @classmethod
@@ -149,4 +149,3 @@ class BPETokenizer(AbstractTokenizer):
                 idx += 1
 
         return cls(merges, **kwargs)
-

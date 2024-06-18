@@ -18,7 +18,7 @@ class AbstractTokenizer(ABC):
                return_tensors: bool) -> TokenizedData:
         pass
 
-    
+
     @abstractmethod
     def decode(self, encodings: TokenizedData, skip_special_tokens: bool) -> List[str]:
         pass
