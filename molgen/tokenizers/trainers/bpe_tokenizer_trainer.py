@@ -17,12 +17,12 @@ def build_bpe_tokenizer(data_paths: List[str], save_path: str, special_tokens: L
         if not os.path.exists(path):
             raise ValueError(f"{path} is invalid path")
 
-        with open(path, "r", encoding="utf-8") as f:
-            texts += [line.strip() for line in f.readlines()]
+        with open(path, "r", encoding="utf-8") as fd:
+            texts += [line.strip() for line in fd.readlines()]
 
     assert vocab_size >= 256
     num_merges = vocab_size - 256
-    
+
     # input text preprocessing
     ids = [list(ch.encode("utf-8")) for ch in texts]
 
@@ -47,24 +47,24 @@ def build_bpe_tokenizer(data_paths: List[str], save_path: str, special_tokens: L
         if verbose:
             print(f"merge {i+1}/{num_merges}: {pair} -> {idx} ({vocab[idx]!r}) had {stats[pair]} occurrences")
 
-    
+
     if not os.path.exists(save_path):
         os.makedirs(save_path, exist_ok=True)
 
-    with open(f"{save_path}/config.json", "w") as f:
+    with open(f"{save_path}/config.json", "w") as fd:
         config: Dict[str, Any] = {"type": "BPETokenizer", "kwargs": {}}
         config["kwargs"]["vocab_size"] = vocab_size
         if special_tokens:
-            config["kwargs"]["special_tokens"] = special_tokens 
+            config["kwargs"]["special_tokens"] = special_tokens
 
-        json.dump(config, f)
+        json.dump(config, fd)
 
-    with open(f"{save_path}/merges.txt", "w") as f:
+    with open(f"{save_path}/merges.txt", "w") as fd:
         for idx1, idx2 in merges:
-            f.write(f"{idx1} {idx2}\n")
+            fd.write(f"{idx1} {idx2}\n")
 
     inverted_merges = {idx: pair for pair, idx in merges.items()}
-    with open(f"{save_path}/vocab.txt", "w", encoding="utf-8") as f:
+    with open(f"{save_path}/vocab.txt", "w", encoding="utf-8") as fd:
         for idx, token in vocab.items():
             # note: many tokens may be partial utf-8 sequences
             # and cannot be decoded into valid strings. Here we're using
@@ -78,9 +78,8 @@ def build_bpe_tokenizer(data_paths: List[str], save_path: str, special_tokens: L
                 idx0, idx1 = inverted_merges[idx]
                 s0 = render_token(vocab[idx0])
                 s1 = render_token(vocab[idx1])
-                f.write(f"[{s0}][{s1}] -> [{s}] {idx}\n")
+                fd.write(f"[{s0}][{s1}] -> [{s}] {idx}\n")
             else:
                 # otherwise this is leaf token, just print it
                 # (this should just be the first 256 tokens, the bytes)
-                f.write(f"[{s}] {idx}\n")
-
+                fd.write(f"[{s}] {idx}\n")

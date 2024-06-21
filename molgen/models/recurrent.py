@@ -2,7 +2,8 @@ import numpy as np
 import torch
 from torch import nn
 
-class RecurrentConfig():
+
+class RNNConfig():
     def __init__(self,
                 vocab_size=26,
                 n_embd=512,
@@ -18,7 +19,7 @@ class RecurrentConfig():
 
 class RecurrentModel(nn.Module):
 
-    def __init__(self, config: RecurrentConfig):
+    def __init__(self, config: RNNConfig):
 
         super(RecurrentModel, self).__init__()
 
@@ -37,7 +38,7 @@ class RecurrentModel(nn.Module):
 
 
     def forward(self, input_ids, padding_mask=None, labels=None):
-        
+
         embeddings = self.embedding(input_ids)
         output, _ = self.lstm(embeddings)
         logits = self.fc(output)
@@ -71,24 +72,6 @@ class RecurrentModel(nn.Module):
             tokens.append(next_token)
 
         return tokens
-    
+
     def __str__(self):
         return f"LSTM_Layers_{self.config.n_layers}_Emb_{self.config.n_embd}"
-
-def main():
-    config = RecurrentConfig(padding_idx=4)
-    model = RecurrentModel(config)
-
-    tens = torch.randint(0, 4, (1, 4))
-    print(tens.size())
-    y_hat = model(tens)
-
-    print(y_hat.size())
-    print(y_hat)
-    print(y_hat.argmax(2))
-    print(y_hat[0].gather(1, y_hat.argmax(2).view(-1 ,1)))
-    print(y_hat.transpose(1, 2).size())
-
-
-if __name__ == "__main__":
-    main()

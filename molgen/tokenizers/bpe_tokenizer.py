@@ -10,7 +10,7 @@ from molgen.tokenizers.tokenizers_utils import get_stats, merge
 
 
 class BPETokenizer(AbstractTokenizer):
-    
+
     def __init__(self, merges: Dict[Tuple[int, int], int], special_tokens: Optional[List[str]]=None) -> None:
         self.merges = merges
 
@@ -76,7 +76,7 @@ class BPETokenizer(AbstractTokenizer):
                 encoding = encoding + [self.special_tokens["<pad>"]] * (max_length - len(encoding))
 
             padded_encodings.append(encoding)
-            
+
             encodings = padded_encodings
 
         if return_tensors:
@@ -129,7 +129,7 @@ class BPETokenizer(AbstractTokenizer):
             text = text_bytes.decode("utf-8", errors="replace")
             texts.append(text)
 
-        return texts 
+        return texts
 
 
     @classmethod
@@ -142,11 +142,10 @@ class BPETokenizer(AbstractTokenizer):
 
         merges = {}
         idx = 256
-        with open(f"{path}/merges.txt", "r") as f:
-            for line in f:
+        with open(f"{path}/merges.txt", "r") as fd:
+            for line in fd:
                 idx1, idx2 = map(int, line.split())
                 merges[(idx1, idx2)] = idx
                 idx += 1
 
         return cls(merges, **kwargs)
-

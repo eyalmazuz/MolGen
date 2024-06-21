@@ -1,7 +1,7 @@
 import argparse
 
 
-def get_tokenizer_parser() -> argparse.ArgumentParser:
+def get_tokenizer_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--type", type=str, choices=["Char", "BPE"], help="Type of tokenizer to train")
@@ -11,10 +11,9 @@ def get_tokenizer_parser() -> argparse.ArgumentParser:
     parser.add_argument("--special_tokens", type=str, nargs="+", help="special tokens to add to the tokenizer")
 
 
-    return parser
+    return parser.parse_args()
 
 
 def validate_tokenizer_args(args: argparse.Namespace) -> None:
     if args.type == "Char" and args.vocab_size is not None:
         raise ValueError("Can't specify vocab size with char tokenizer")
-

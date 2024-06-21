@@ -12,8 +12,8 @@ def get_tokenizer(path: str) -> AbstractTokenizer:
     if not os.path.exists(f"{path}/config.json"):
         raise ValueError(f"config.json not found in {path}")
 
-    with open(f"{path}/config.json", "r") as f:
-        config = json.load(f)
+    with open(f"{path}/config.json", "r") as fd:
+        config = json.load(fd)
 
     tokenizer_type = config["type"]
     kwargs = config["kwargs"] if "kwargs" in config else {}
@@ -26,4 +26,3 @@ def get_tokenizer(path: str) -> AbstractTokenizer:
         tokenizer = BPETokenizer.load_pretrained(path, **kwargs)
 
     return tokenizer
-

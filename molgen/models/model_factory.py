@@ -1,33 +1,38 @@
-from enum import Enum
+from typing import Any, Dict, Type, Union
 
-import torch.nn as nn
+from dacite import from_dict
+from torch.nn import Module
 
 from molgen.models.model_options import ModelType
 from molgen.models.gpt import GPT, GPTConfig
 from molgen.models.bert import Bert, BertConfig
 from molgen.models.transformer import Transformer, TransformerConfig
-from molgen.models.recurrent import RNN, RNNConfig
 
-def get_model(model_type: str, model_args):
+
+def get_model(model_type: str, model_config: Dict[str, Any]):
     type_ = ModelType.from_str(model_type)
+
+    config_cls: Union[Type[GPTConfig], Type[BertConfig], Type[TransformerConfig]]
+    model_cls: Module
 
     match type_:
         case ModelType.GPT:
-            config = GPTConfig(**model_args)
-            return GPT(config)
+            config_cls = GPTConfig
+            model_cls = GPT
 
         case ModelType.BERT:
-            config = BertConfig(**model_args)
-            return Bert(config)
+            config_cls = BertConfig
+            model_cls = Bert
 
         case ModelType.TRANSFORMER:
-            config = TransformerConfig(**model_args)
-            return Transformer(config)
-
-        case ModelType.RNN:
-            config = RNNConfig(**model_args)
-            return RNN(config)
+            config_cls = TransformerConfig
+            model_cls = Transformer
 
         case _:
             raise ValueError(f"Invalid ModelType {type_}")
 
+
+    config = from_dict(data_class=config_cls, data=model_config)
+    model = model_cls(config)
+
+    return model

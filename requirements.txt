@@ -1,0 +1,4 @@
+dacite
+networkx
+pytorch>=2.0.0
+rdkit
