@@ -9,28 +9,25 @@ from molgen.models.bert import Bert, BertConfig
 from molgen.models.transformer import Transformer, TransformerConfig
 
 
-def get_model(model_type: str, model_config: Dict[str, Any]):
-    type_ = ModelType.from_str(model_type)
+config_type = Union[Type[GPTConfig], Type[BertConfig], Type[TransformerConfig]]
 
-    config_cls: Union[Type[GPTConfig], Type[BertConfig], Type[TransformerConfig]]
+
+def get_model(model_type: ModelType, model_config: Dict[str, Any]) -> Module:
+    config_cls: config_type
     model_cls: Module
 
-    match type_:
+    match model_type:
         case ModelType.GPT:
             config_cls = GPTConfig
             model_cls = GPT
-
         case ModelType.BERT:
             config_cls = BertConfig
             model_cls = Bert
-
         case ModelType.TRANSFORMER:
             config_cls = TransformerConfig
             model_cls = Transformer
-
         case _:
-            raise ValueError(f"Invalid ModelType {type_}")
-
+            raise ValueError(f"Invalid model type {model_type}")
 
     config = from_dict(data_class=config_cls, data=model_config)
     model = model_cls(config)

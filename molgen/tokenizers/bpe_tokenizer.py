@@ -10,7 +10,6 @@ from molgen.tokenizers.tokenizers_utils import get_stats, merge
 
 
 class BPETokenizer(AbstractTokenizer):
-
     def __init__(self, merges: Dict[Tuple[int, int], int], special_tokens: Optional[List[str]]=None) -> None:
         self.merges = merges
 
@@ -31,6 +30,10 @@ class BPETokenizer(AbstractTokenizer):
 
     def __len__(self) -> int:
         return len(self.vocab)
+
+
+    def get_pad_token_id(self) -> int:
+        return self.special_tokens["<pad>"]
 
 
     def encode(self,

@@ -10,7 +10,7 @@ from tqdm.auto import tqdm
 from molgen.tokeniszers.tokenizer import AbstractTokenizer
 
 
-class PreTrainSmilesDataset(Dataset):
+class PreTrainGPTSmilesDataset(Dataset):
     def __init__(self,
                  dataset_path: str,
                  tokenizer: AbstractTokenizer) -> None:

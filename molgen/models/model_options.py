@@ -17,6 +17,7 @@ class ModelType(Enum):
             type_ = ModelType.TRANSFORMER
         elif label.upper() == "RNN":
             type_ = ModelType.RNN
+        else:
+            raise ValueError(f"Invalid type: {label}")
 
         return type_
-

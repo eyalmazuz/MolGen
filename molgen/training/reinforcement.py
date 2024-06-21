@@ -1,16 +1,13 @@
-import copy
-import math
 import random
 
-import numpy as np
-from numpy.lib.arraysetops import isin
-from rdkit import Chem
 from rdkit import RDLogger
-RDLogger.DisableLog('rdApp.*')
 import torch
 from tqdm import trange, tqdm
 
 from .evaluate import generate_smiles, generate_smiles_scaffolds, get_stats
+
+RDLogger.DisableLog('rdApp.*')
+
 
 def policy_gradients(model,
                      tokenizer,
@@ -37,8 +34,8 @@ def policy_gradients(model,
         if hasattr(reward_fn, 'eval'):
             reward_fn.eval = False
 
-        loss = 0
-        batch_reward = 0
+        loss = torch.tensor(0.0)
+        batch_reward = 0.0
 
         print(no_batched_rl)
 
@@ -85,15 +82,15 @@ def policy_gradients(model,
 
         for tokens, reward in tqdm(zip(batch_tokens, batch_rewards), leave=False):
             discounted_returns = (torch.pow(discount_factor, torch.arange(len(tokens[:-1]), 0, -1)) * reward).to(device)
-            
+
             y_hat = model(torch.tensor([tokens[:-1]], dtype=torch.long).to(device))
             if isinstance(y_hat, tuple):
                     y_hat = y_hat[0]
             log_preds = torch.nn.functional.log_softmax(y_hat[0], dim=1)
-            
+
             idxs = torch.tensor(tokens[1:], dtype=torch.long).to(device).view(-1, 1)
             action_values = log_preds.gather(dim=1, index=idxs).view(-1, 1)
-            
+
             expected_reward = -torch.sum(action_values * discounted_returns.view(-1, 1))
             batch_reward = batch_reward + reward
             loss = loss + expected_reward
@@ -116,7 +113,7 @@ def policy_gradients(model,
                                             batch_size=100,
                                             max_len=max_len,
                                             device=device)
-    
+
             else:
                 generated_smiles = generate_smiles(model=model,
                                           tokenizer=tokenizer,
@@ -124,7 +121,7 @@ def policy_gradients(model,
                                           size=kwargs['size'],
                                           max_len=max_len,
                                           device=device)
-                                          
+
 
             if hasattr(reward_fn, 'eval'):
                 reward_fn.eval = True

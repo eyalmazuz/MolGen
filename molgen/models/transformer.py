@@ -4,7 +4,6 @@ https://github.com/karpathy/minGPT/
 """
 from dataclasses import dataclass
 
-import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -29,7 +28,7 @@ class Transformer(nn.Module):
         super(Transformer, self).__init__()
 
         self.block_size = config.block_size
-        
+
         self.encoder = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.block_size, config.n_embd),
@@ -37,7 +36,7 @@ class Transformer(nn.Module):
             h = nn.ModuleList([EncoderBlock(config) for _ in range(config.n_layer)]),
             ln_f = nn.LayerNorm(config.n_embd),
         ))
- 
+
         self.decoder = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.block_size, config.n_embd),
@@ -45,7 +44,7 @@ class Transformer(nn.Module):
             h = nn.ModuleList([DecoderBlock(config) for _ in range(config.n_layer)]),
             ln_f = nn.LayerNorm(config.n_embd),
         ))
-        
+
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
         self.apply(self._init_weights)
@@ -112,7 +111,7 @@ class Transformer(nn.Module):
 
 
     @torch.no_grad()
-    def generate(self, enc_idx, dec_idx, max_new_tokens, temperature=1.0, do_sample=False, top_k=None):
+    def generate(self, enc_idx, idx, enc_mask, max_new_tokens, temperature=1.0, do_sample=False, top_k=None):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.

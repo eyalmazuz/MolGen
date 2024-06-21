@@ -1,8 +1,10 @@
+from typing import Dict, List
 import random
 
 import numpy as np
 from tqdm import tqdm
 
+import torch
 from torch.utils.data import BatchSampler, Dataset
 
 
@@ -58,3 +60,37 @@ class LengthBatchSampler(BatchSampler):
             return len(self.lengths) // self.batch_size
         else:
             return len(self.lengths) // self.batch_size + (len(self.lengths) % self.batch_size > 0)
+
+
+class PadCollate():
+    def __init__(self, pad_token_id: int, ignore_index: int=-100) -> None:
+        self.pad_token_id = pad_token_id
+        self.ignore_index = ignore_index
+
+
+    def __call__(self, batches: List[Dict[str, List[int]]]) -> Dict[str, torch.tensor]:
+        max_length = max(len(item["input_ids"]) for item in batches)
+
+        batch_input_ids = []
+        batch_attention_mask = []
+        batch_labels = []
+
+        for batch in batches:
+            input_ids = batch["input_ids"]
+            attention_mask = batch["attention_mask"]
+            labels = batch["labels"]
+
+            if len(input_ids) < max_length:
+                input_ids += [self.pad_token_id] * (max_length - len(input_ids))
+                attention_mask += [0] * (max_length - len(attention_mask))
+                labels += [self.ignore_index] * (max_length - len(labels))
+
+            batch_input_ids.append(input_ids)
+            batch_attention_mask.append(attention_mask)
+            batch_labels.append(labels)
+
+        return {
+                "input_ids": torch.tensor(batch_input_ids[:-1], dtype=torch.int64),
+                "attention_mask": torch.tensor(batch_attention_mask[:-1], dtype=torch.int64),
+                "labels": torch.tensor(batch_labels[1:], dtype=torch.int64)
+        }

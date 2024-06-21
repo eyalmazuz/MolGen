@@ -10,7 +10,6 @@ from molgen.tokenizers.tokenizer import AbstractTokenizer, TokenizedData
 
 
 class CharTokenizer(AbstractTokenizer):
-
     def __init__(self,
                  token2id: Dict[str, int],
                  special_tokens: Optional[List[str]]=None,) -> None:
@@ -24,8 +23,13 @@ class CharTokenizer(AbstractTokenizer):
 
         self.ids_to_tokens = {id_: token for token, id_ in self.tokens_to_ids.items()}
 
+
     def __len__(self) -> int:
         return len(self.tokens_to_ids)
+
+
+    def get_pad_token_id(self) -> int:
+        return self.tokens_to_ids["<pad>"]
 
 
     def encode(self,

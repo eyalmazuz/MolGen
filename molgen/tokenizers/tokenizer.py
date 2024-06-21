@@ -33,3 +33,6 @@ class AbstractTokenizer(ABC):
     @abstractmethod
     def __len__(self) -> int:
         pass
+
+    def get_pad_token_id(self) -> int:
+        return 0

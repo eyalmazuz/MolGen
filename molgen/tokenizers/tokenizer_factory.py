@@ -19,10 +19,12 @@ def get_tokenizer(path: str) -> AbstractTokenizer:
     kwargs = config["kwargs"] if "kwargs" in config else {}
 
     tokenizer: AbstractTokenizer
-    if tokenizer_type == "CharTokenizer":
-        tokenizer = CharTokenizer.load_pretrained(path, **kwargs)
-
-    if tokenizer_type == "BPETokenizer":
-        tokenizer = BPETokenizer.load_pretrained(path, **kwargs)
+    match tokenizer_type:
+        case "CharTokenizer":
+            tokenizer = CharTokenizer.load_pretrained(path, **kwargs)
+        case "BPETokenizer":
+            tokenizer = BPETokenizer.load_pretrained(path, **kwargs)
+        case _:
+            raise ValueError(f"Invalid tokenizer type {tokenizer_type}")
 
     return tokenizer

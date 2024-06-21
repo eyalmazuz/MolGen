@@ -1,14 +1,20 @@
 from contextlib import nullcontext
+import os
 
 import torch
+
+from molgen.utils.utils import is_distributed_run
 
 
 def setup_torch(seed: int=0, device: str="cuda", dtype: str="bfloat16"):
     torch.manual_seed(seed)
 
-    if device.startswith("cuda"):
+    if device == "cuda":
         torch.backends.cuda.matmul_allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
+        if is_distributed_run():
+            ddp_local_rank = int(os.environ["LOCAL_RANK"])
+            device = f"cuda:{ddp_local_rank}"
         torch.cuda.set_device(device)
 
         if dtype == "bfloat16" and not torch.cuda.is_bf16_support():
