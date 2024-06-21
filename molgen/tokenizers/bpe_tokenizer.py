@@ -5,7 +5,7 @@ import warnings
 
 import torch
 
-from molgen.tokenizers.abstract_tokenizer import AbstractTokenizer, TokenizedData
+from molgen.tokenizers.tokenizer import AbstractTokenizer, TokenizedData
 from molgen.tokenizers.tokenizers_utils import get_stats, merge
 
 
