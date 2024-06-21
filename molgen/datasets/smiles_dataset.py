@@ -1,75 +1,61 @@
-from random import sample
-from typing import List, Dict
+import copy
+import os
+from typing import Dict, List
 
 from rdkit import Chem
-from rdkit.Chem.Scaffolds import MurckoScaffold
 import torch
 from torch.utils.data import Dataset
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
-from ..utils.mol_utils import get_molecule_scaffold
+from molgen.tokeniszers.tokenizer import AbstractTokenizer
 
 
-
-class SmilesDataset(Dataset):
-
+class PreTrainSmilesDataset(Dataset):
     def __init__(self,
-                 data_path: str,
-                 tokenizer,
-                 use_scaffold=False,
-                 max_len: int=0) -> None:
+                 dataset_path: str,
+                 tokenizer: AbstractTokenizer) -> None:
 
-        self.max_len = max_len
-        self.data_path = data_path 
-        self.use_scaffold = use_scaffold
-
-        self._molecules = self.load_molecules()
-
-        if self.use_scaffold:
-            self.scaffolds = list(set([get_molecule_scaffold(mol) for mol in tqdm(self._molecules[:100000], desc='generating scaffolds')]))
-
+        self.dataset = self.load_smiles(dataset_path)
         self.tokenizer = tokenizer
 
-    @property
-    def molecules(self) -> List[str]:
-        return self._molecules
-        
-    def load_molecules(self,) -> List[str]:
-        molecules = []
-        with open(self.data_path, 'r') as f:
-            molecules = f.readlines()
-            molecules = [smiles.strip() for smiles in molecules]
-        return molecules
 
     def __len__(self) -> int:
-        return len(self._molecules)
+        return len(self.dataset)
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
-        smiles = self._molecules[idx]
-        
-        if self.use_scaffold:
-            scaffold = MurckoScaffold.MurckoScaffoldSmilesFromSmiles(smiles)
-            smiles = '[BOS]' + scaffold + '[SEP]' + smiles + '[EOS]' 
+
+    def __getitem__ (self, idx: int) -> Dict[str, List[str]]:
+        smiles = self.dataset[idx]
+        example = self.tokenizer.ecode(smiles)
+        example = [self.tokenizer.bos_token_id] + example + [self.tokenizer.eos_token_id]
+        example = torch.tensor(example, dtype=torch.int64)
+
+        labels = copy.deepcopy(example)
+        attention_mask = torch.ones_like(example)
+
+        return {
+            "input_ids": example.tolist(),
+            "labels": labels.tolist(),
+            "attention_mask": attention_mask.tolist()
+        }
+
+
+    def load_smiles(self, dataset_path: str) -> List[str]:
+        if not os.path.exists(dataset_path):
+            raise ValueError("Invalid path")
+
+        if os.path.isdir(dataset_path):
+            print("Given path is a directory, attemping loading all files in the directory")
+            smiles = []
+            for file_ in tqdm(os.listdir(dataset_path)):
+                with open(f"{dataset_path}/{file_}", "r") as f:
+                    smiles += [s.strip() for s in f.readlines()]
+
         else:
-            smiles = '[BOS]' + smiles + '[EOS]'
-        encodings = self.tokenizer(smiles, padding=True, max_length=self.max_len)
-        encodings['labels'] = encodings['input_ids']
+            print("Loading Data")
+            with open(dataset_path, "r") as f:
+                smiles = [s.strip() for s in f.readlines()]
 
-        encodings = {k: torch.tensor(v) for k, v in encodings.items()}
-        return encodings
+        print("Converting SMILES to Canonical SMILES")
+        smiles = [Chem.MolToSmiles(Chem.MolFromSmiles(s)) for s in tqdm(smiles) if Chem.MolFromSmiles is not None]
 
-def main():
-
-    dataset = SmilesDataset('./data/gdb/gdb13/full/1.smi',
-                                 './data/tokenizers/gdb13FullCharTokenizer.json')
-
-    smiles = 'CCO'
-    
-    encoding = dataset.tokenizer.encode(smiles)
-    print(encoding)
-    rec_smiles = dataset.tokenizer.decode(encoding)
-    print(rec_smiles)
-    print(rec_smiles == smiles)
-
-if __name__ == "__main__":
-    main()
+        return smiles

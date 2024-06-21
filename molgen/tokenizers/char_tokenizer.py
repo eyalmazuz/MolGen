@@ -6,7 +6,7 @@ import warnings
 
 import torch
 
-from molgen.tokenizers.abstract_tokenizer import AbstractTokenizer, TokenizedData
+from molgen.tokenizers.tokenizer import AbstractTokenizer, TokenizedData
 
 
 class CharTokenizer(AbstractTokenizer):
@@ -16,13 +16,13 @@ class CharTokenizer(AbstractTokenizer):
                  special_tokens: Optional[List[str]]=None,) -> None:
         self.special_tokens = special_tokens
         self.tokens_to_ids = token2id
-        self.ids_to_tokens = {id_: token for token, id_ in self.tokens_to_ids.items()}    
+        self.ids_to_tokens = {id_: token for token, id_ in self.tokens_to_ids.items()}
 
         if self.special_tokens is not None:
             for i, special_token in enumerate(self.special_tokens):
                 self.tokens_to_ids[special_token] = len(self.tokens_to_ids) + i
-            
-        self.ids_to_tokens = {id_: token for token, id_ in self.tokens_to_ids.items()}    
+
+        self.ids_to_tokens = {id_: token for token, id_ in self.tokens_to_ids.items()}
 
     def __len__(self) -> int:
         return len(self.tokens_to_ids)
@@ -59,7 +59,7 @@ class CharTokenizer(AbstractTokenizer):
                 encoding = encoding[:max_length]
 
             encodings.append(encoding)
-        
+
         if (isinstance(padding, bool) and padding) or padding == "longest":
             max_length = max(map(len, encodings))
 
@@ -73,7 +73,7 @@ class CharTokenizer(AbstractTokenizer):
             for encoding in encodings:
                 encoding = encoding + [self.tokens_to_ids["<pad>"]] * (max_length - len(encoding))
                 padded_encodings.append(encoding)
-            
+
             encodings = padded_encodings
 
         if return_tensors:
@@ -102,9 +102,9 @@ class CharTokenizer(AbstractTokenizer):
             text = "".join(token_list)
             texts.append(text)
 
-        return texts 
+        return texts
 
-    
+
     @classmethod
     def load_pretrained(cls: Type["CharTokenizer"], path: str, **kwargs: Any) -> "CharTokenizer":
         if not os.path.isdir(path):
@@ -117,4 +117,3 @@ class CharTokenizer(AbstractTokenizer):
             tokens_to_ids = json.load(f)
 
         return cls(tokens_to_ids, **kwargs)
-
