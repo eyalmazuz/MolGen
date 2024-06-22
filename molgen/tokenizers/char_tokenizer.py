@@ -36,6 +36,38 @@ class CharTokenizer(AbstractTokenizer):
 
 
     @property
+    def bos_token_id(self) -> int:
+        if self.bos_token_ is not None:
+            return self.special_tokens[self.bos_token_]
+        else:
+            raise ValueError("bos token is not defined")
+
+
+    @property
+    def bos_token(self) -> str:
+        if self.bos_token_ is not None:
+            return self.bos_token_
+        else:
+            raise ValueError("bos token is not defined")
+
+
+    @property
+    def eos_token_id(self) -> int:
+        if self.eos_token_ is not None:
+            return self.special_tokens[self.eos_token_]
+        else:
+            raise ValueError("eos token is not defined")
+
+
+    @property
+    def eos_token(self) -> str:
+        if self.eos_token_ is not None:
+            return self.eos_token_
+        else:
+            raise ValueError("eos token is not defined")
+
+
+    @property
     def pad_token_id(self) -> int:
         if self.pad_token_ is not None:
             return self.special_tokens[self.pad_token_]
