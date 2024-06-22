@@ -11,7 +11,12 @@ from molgen.tokenizers.tokenizers_utils import get_stats, merge
 
 class BPETokenizer(AbstractTokenizer):
 
-    def __init__(self, merges: Dict[Tuple[int, int], int], special_tokens: Optional[List[str]]=None) -> None:
+    def __init__(self,
+                 merges: Dict[Tuple[int, int], int],
+                 bos_token: Optional[str]=None,
+                 eos_token: Optional[str]=None,
+                 pad_token: Optional[str]=None,
+                 special_tokens: Optional[Dict[str, int]]=None) -> None:
         self.merges = merges
 
         # build the vocab back from the merges
@@ -19,18 +24,39 @@ class BPETokenizer(AbstractTokenizer):
         for (p0, p1), idx in self.merges.items():
             self.vocab[idx] = self.vocab[p0] + self.vocab[p1]
 
-        # add special tokens if they exists
-        if special_tokens is not None:
-            self.inverse_special_tokens: Dict[int, str] = {}
-            self.special_tokens: Dict[str, int] = {}
-            idx = len(self.vocab)
-            for offset, special in enumerate(special_tokens):
-                self.inverse_special_tokens[idx+offset] = special
-                self.special_tokens[special] = idx + offset
+        self.special_tokens = {}
+        self.inverse_special_tokens = {}
+        if special_tokens:
+            self.special_tokens = special_tokens
+            self.inverse_special_tokens = {id_: token for token, id_ in self.special_tokens.items()}
+
+        self.bos_token_  = bos_token
+        self.eos_token_  = eos_token
+        self.pad_token_  = pad_token
 
 
     def __len__(self) -> int:
-        return len(self.vocab)
+        return len(self.vocab) + len(self.special_tokens)
+
+
+    @property
+    def pad_token_id(self) -> int:
+        if self.pad_token_ is not None:
+            return self.special_tokens[self.pad_token_]
+        elif self.pad_token_ is None and self.eos_token_ is not None:
+            return self.special_tokens[self.eos_token_]
+        else:
+            raise ValueError("both pad token and eos token are not defined")
+
+
+    @property
+    def pad_token(self) -> str:
+        if self.pad_token_ is not None:
+            return self.pad_token_
+        elif self.pad_token_ is None and self.eos_token_ is not None:
+            return self.eos_token_
+        else:
+            raise ValueError("both pad token and eos token are not defined")
 
 
     def encode(self,
@@ -120,7 +146,7 @@ class BPETokenizer(AbstractTokenizer):
                 if skip_special_tokens and self.special_tokens is not None and idx in self.inverse_special_tokens:
                     continue
                 elif not skip_special_tokens and self.special_tokens is not None and idx in self.inverse_special_tokens:
-                    part_bytes.append(self.vocab[idx])
+                    part_bytes.append(self.inverse_special_tokens[idx].encode("utf-8"))
                 elif idx in self.vocab:
                     part_bytes.append(self.vocab[idx])
                 else:

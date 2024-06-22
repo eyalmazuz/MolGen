@@ -6,12 +6,19 @@ Under the MIT license
 
 import json
 import os
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from molgen.tokenizers.tokenizers_utils import get_stats, merge, render_token
 
-def build_bpe_tokenizer(data_paths: List[str], save_path: str, special_tokens: List[str], vocab_size: int, verbose: bool=False) -> None:
-
+def build_bpe_tokenizer(data_paths: List[str],
+                        save_path: str,
+                        vocab_size: int,
+                        bos_token: Optional[str]=None,
+                        eos_token: Optional[str]=None,
+                        pad_token: Optional[str]=None,
+                        unk_token: Optional[str]=None,
+                        extra_special_tokens: Optional[List[str]]=None,
+                        verbose: bool=False) -> None:
     texts = []
     for path in data_paths:
         if not os.path.exists(path):
@@ -22,7 +29,7 @@ def build_bpe_tokenizer(data_paths: List[str], save_path: str, special_tokens: L
 
     assert vocab_size >= 256
     num_merges = vocab_size - 256
-    
+
     # input text preprocessing
     ids = [list(ch.encode("utf-8")) for ch in texts]
 
@@ -47,15 +54,24 @@ def build_bpe_tokenizer(data_paths: List[str], save_path: str, special_tokens: L
         if verbose:
             print(f"merge {i+1}/{num_merges}: {pair} -> {idx} ({vocab[idx]!r}) had {stats[pair]} occurrences")
 
-    
+
     if not os.path.exists(save_path):
         os.makedirs(save_path, exist_ok=True)
 
     with open(f"{save_path}/config.json", "w") as f:
         config: Dict[str, Any] = {"type": "BPETokenizer", "kwargs": {}}
-        config["kwargs"]["vocab_size"] = vocab_size
-        if special_tokens:
-            config["kwargs"]["special_tokens"] = special_tokens 
+        # config["kwargs"]["vocab_size"] = vocab_size # It's probably not needed but might be changed in the future
+        config["kwargs"]["bos_token"] = bos_token
+        config["kwargs"]["eos_token"] = eos_token
+        config["kwargs"]["pad_token"] = pad_token
+
+        special_tokens = [bos_token, eos_token, pad_token]
+        if extra_special_tokens:
+            special_tokens += extra_special_tokens
+
+        special_to_id = {tok: len(vocab) + i for i, tok in enumerate(special_tokens) if tok is not None}
+        if special_to_id:
+            config["kwargs"]["special_tokens"] = special_to_id
 
         json.dump(config, f)
 
@@ -83,4 +99,3 @@ def build_bpe_tokenizer(data_paths: List[str], save_path: str, special_tokens: L
                 # otherwise this is leaf token, just print it
                 # (this should just be the first 256 tokens, the bytes)
                 f.write(f"[{s}] {idx}\n")
-
