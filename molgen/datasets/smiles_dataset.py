@@ -14,7 +14,6 @@ class PreTrainGPTSmilesDataset(Dataset):
     def __init__(self,
                  dataset_path: str,
                  tokenizer: AbstractTokenizer) -> None:
-
         self.dataset = self.load_smiles(dataset_path)
         self.tokenizer = tokenizer
 
@@ -25,7 +24,7 @@ class PreTrainGPTSmilesDataset(Dataset):
 
     def __getitem__ (self, idx: int) -> Dict[str, List[str]]:
         smiles = self.dataset[idx]
-        example = self.tokenizer.ecode(smiles)
+        example = self.tokenizer.encode(smiles)
         example = [self.tokenizer.bos_token_id] + example + [self.tokenizer.eos_token_id]
         example = torch.tensor(example, dtype=torch.int64)
 
@@ -33,9 +32,9 @@ class PreTrainGPTSmilesDataset(Dataset):
         attention_mask = torch.ones_like(example)
 
         return {
-            "input_ids": example.tolist(),
-            "labels": labels.tolist(),
-            "attention_mask": attention_mask.tolist()
+            "input_ids": example.tolist()[:-1],
+            "labels": labels.tolist()[1:],
+            "attention_mask": attention_mask.tolist()[:-1]
         }
 
 

@@ -90,7 +90,7 @@ class PadCollate():
             batch_labels.append(labels)
 
         return {
-                "input_ids": torch.tensor(batch_input_ids[:-1], dtype=torch.int64),
-                "attention_mask": torch.tensor(batch_attention_mask[:-1], dtype=torch.int64),
-                "labels": torch.tensor(batch_labels[1:], dtype=torch.int64)
+                "input_ids": torch.tensor(batch_input_ids, dtype=torch.int64),
+                "attention_mask": torch.tensor(batch_attention_mask, dtype=torch.int64),
+                "labels": torch.tensor(batch_labels, dtype=torch.int64)
         }

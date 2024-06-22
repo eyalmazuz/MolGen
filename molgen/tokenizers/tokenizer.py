@@ -34,5 +34,38 @@ class AbstractTokenizer(ABC):
     def __len__(self) -> int:
         pass
 
-    def get_pad_token_id(self) -> int:
-        return 0
+
+    @property
+    @abstractmethod
+    def bos_token(self):
+        raise NotImplementedError
+
+
+    @property
+    @abstractmethod
+    def bos_token_id(self):
+        raise NotImplementedError
+
+
+    @property
+    @abstractmethod
+    def eos_token(self):
+        raise NotImplementedError
+
+
+    @property
+    @abstractmethod
+    def eos_token_id(self):
+        raise NotImplementedError
+
+
+    @property
+    @abstractmethod
+    def pad_token(self):
+        raise NotImplementedError
+
+
+    @property
+    @abstractmethod
+    def pad_token_id(self):
+        raise NotImplementedError

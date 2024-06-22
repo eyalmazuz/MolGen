@@ -10,7 +10,7 @@ from molgen.models.model_factory import get_model
 from molgen.models.model_options import ModelType
 from molgen.tokenizers.tokenizer_factory import get_tokenizer
 from molgen.training.train import run_training
-from molgen.utils.train_utils import setup_torch
+from molgen.utils.train_utils import setup_torch, setup_mixed_precision
 
 
 def single_gpu_training(args) -> None:
@@ -20,21 +20,21 @@ def single_gpu_training(args) -> None:
     train_config = config["train_config"]
     model_config = config["model_config"]
 
-    ctx, scaler = setup_torch(train_config["seed"], train_config["device"], train_config["dtype"])
+    setup_torch(train_config["seed"], train_config["device"])
+    ctx, scaler = setup_mixed_precision(train_config["device"], train_config["dtype"])
 
     model_type = ModelType.from_str(args.model_type)
-    model = get_model(model_type, model_config)
-
-    tokenizer = get_tokenizer(args.tokenizer_path)
-
     dataset_type = DatasetType.from_str(args.dataset_type)
+
+    model = get_model(model_type, model_config)
+    tokenizer = get_tokenizer(args.tokenizer_path)
     dataset = get_dataset(dataset_type,
                           model_type,
                           dataset_path=args.dataset_path,
                           tokenizer=tokenizer)
 
     batch_sampler = LengthBatchSampler(dataset, train_config["batch_size"], drop_last=False)
-    collate_fn = PadCollate(tokenizer.get_pad_token_id())
+    collate_fn = PadCollate(tokenizer.pad_token_id)
     dataloader = DataLoader(dataset,
                             batch_sampler=batch_sampler,
                             collate_fn=collate_fn,
