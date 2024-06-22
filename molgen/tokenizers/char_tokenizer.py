@@ -12,24 +12,47 @@ from molgen.tokenizers.tokenizer import AbstractTokenizer, TokenizedData
 class CharTokenizer(AbstractTokenizer):
     def __init__(self,
                  token2id: Dict[str, int],
-                 special_tokens: Optional[List[str]]=None,) -> None:
-        self.special_tokens = special_tokens
+                 bos_token: Optional[str]=None,
+                 eos_token: Optional[str]=None,
+                 pad_token: Optional[str]=None,
+                 special_tokens: Optional[Dict[str, int]]=None) -> None:
         self.tokens_to_ids = token2id
         self.ids_to_tokens = {id_: token for token, id_ in self.tokens_to_ids.items()}
 
-        if self.special_tokens is not None:
-            for i, special_token in enumerate(self.special_tokens):
-                self.tokens_to_ids[special_token] = len(self.tokens_to_ids) + i
+        self.special_tokens = {}
+        self.inverse_special_tokens = {}
+        if special_tokens:
+            self.special_tokens = special_tokens
+            self.inverse_special_tokens = {id_: token for token, id_ in self.special_tokens.items()}
 
-        self.ids_to_tokens = {id_: token for token, id_ in self.tokens_to_ids.items()}
+        self.bos_token_  = bos_token
+        self.eos_token_  = eos_token
+        self.pad_token_  = pad_token
+
 
 
     def __len__(self) -> int:
         return len(self.tokens_to_ids)
 
 
-    def get_pad_token_id(self) -> int:
-        return self.tokens_to_ids["<pad>"]
+    @property
+    def pad_token_id(self) -> int:
+        if self.pad_token_ is not None:
+            return self.special_tokens[self.pad_token_]
+        elif self.pad_token_ is None and self.eos_token_ is not None:
+            return self.special_tokens[self.eos_token_]
+        else:
+            raise ValueError("both pad token and eos token are not defined")
+
+
+    @property
+    def pad_token(self) -> str:
+        if self.pad_token_ is not None:
+            return self.pad_token_
+        elif self.pad_token_ is None and self.eos_token_ is not None:
+            return self.eos_token_
+        else:
+            raise ValueError("both pad token and eos token are not defined")
 
 
     def encode(self,
@@ -38,7 +61,6 @@ class CharTokenizer(AbstractTokenizer):
                truncation: Union[str, bool]=False,
                max_length: Optional[int]=None,
                return_tensors: bool=False) -> TokenizedData:
-
         if isinstance(texts, str):
             texts = [texts]
 
@@ -55,7 +77,7 @@ class CharTokenizer(AbstractTokenizer):
                     continue
                 else:
                     if self.special_tokens is not None and chunk in self.special_tokens:
-                        encoding.append(self.tokens_to_ids[chunk])
+                        encoding.append(self.special_tokens[chunk])
                     else:
                         encoding += [self.tokens_to_ids[token] for token in chunk]
 
@@ -75,7 +97,7 @@ class CharTokenizer(AbstractTokenizer):
         if max_length is not None:
             padded_encodings: List[List[int]] = []
             for encoding in encodings:
-                encoding = encoding + [self.tokens_to_ids["<pad>"]] * (max_length - len(encoding))
+                encoding = encoding + [self.special_tokens[self.pad_token]] * (max_length - len(encoding))
                 padded_encodings.append(encoding)
 
             encodings = padded_encodings
@@ -97,8 +119,10 @@ class CharTokenizer(AbstractTokenizer):
         for encoding in encodings:
             token_list = []
             for idx in encoding:
-                if skip_special_tokens and self.special_tokens is not None and self.ids_to_tokens[idx] in self.special_tokens:
+                if skip_special_tokens and self.special_tokens is not None and idx in self.inverse_special_tokens:
                     continue
+                elif not skip_special_tokens and self.special_tokens is not None and idx in self.inverse_special_tokens:
+                    token_list.append(self.inverse_special_tokens[idx])
                 elif idx in self.ids_to_tokens:
                     token_list.append(self.ids_to_tokens[idx])
                 else:
