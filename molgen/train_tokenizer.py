@@ -10,6 +10,7 @@ def train_tokenizer(args: argparse.Namespace):
                              args.bos_token,
                              args.eos_token,
                              args.pad_token,
+                             args.sep_token,
                              args.extra_special_tokens)
 
     elif args.type == "BPE":
@@ -19,6 +20,7 @@ def train_tokenizer(args: argparse.Namespace):
                             args.bos_token,
                             args.eos_token,
                             args.pad_token,
+                            args.sep_token,
                             args.extra_special_tokens,
                             verbose=True)
 

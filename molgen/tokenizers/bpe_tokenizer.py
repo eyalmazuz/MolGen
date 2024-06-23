@@ -16,6 +16,7 @@ class BPETokenizer(AbstractTokenizer):
                  bos_token: Optional[str]=None,
                  eos_token: Optional[str]=None,
                  pad_token: Optional[str]=None,
+                 sep_token: Optional[str]=None,
                  special_tokens: Optional[Dict[str, int]]=None) -> None:
         self.merges = merges
 
@@ -33,6 +34,13 @@ class BPETokenizer(AbstractTokenizer):
         self.bos_token_  = bos_token
         self.eos_token_  = eos_token
         self.pad_token_  = pad_token
+        self.sep_token_  = sep_token
+
+        if pad_token is None:
+            print("pad token is not defined will default to eos token if available")
+
+        if sep_token is None:
+            print("sep token is not defined will default to eos token if available")
 
 
     def __len__(self) -> int:
@@ -89,6 +97,26 @@ class BPETokenizer(AbstractTokenizer):
             return self.eos_token_
         else:
             raise ValueError("both pad token and eos token are not defined")
+
+
+    @property
+    def sep_token_id(self) -> int:
+        if self.sep_token_ is not None:
+            return self.special_tokens[self.sep_token_]
+        elif self.sep_token_ is None and self.eos_token_ is not None:
+            return self.special_tokens[self.eos_token_]
+        else:
+            raise ValueError("both sep token and eos token are not defined")
+
+
+    @property
+    def sep_token(self) -> str:
+        if self.sep_token_ is not None:
+            return self.sep_token_
+        elif self.sep_token_ is None and self.eos_token_ is not None:
+            return self.eos_token_
+        else:
+            raise ValueError("both sep token and eos token are not defined")
 
 
     def encode(self,
