@@ -69,3 +69,15 @@ class AbstractTokenizer(ABC):
     @abstractmethod
     def pad_token_id(self):
         raise NotImplementedError
+
+
+    @property
+    @abstractmethod
+    def sep_token(self):
+        raise NotImplementedError
+
+
+    @property
+    @abstractmethod
+    def sep_token_id(self):
+        raise NotImplementedError

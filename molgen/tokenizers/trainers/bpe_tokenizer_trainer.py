@@ -16,7 +16,7 @@ def build_bpe_tokenizer(data_paths: List[str],
                         bos_token: Optional[str]=None,
                         eos_token: Optional[str]=None,
                         pad_token: Optional[str]=None,
-                        unk_token: Optional[str]=None,
+                        sep_token: Optional[str]=None,
                         extra_special_tokens: Optional[List[str]]=None,
                         verbose: bool=False) -> None:
     texts = []
@@ -64,8 +64,9 @@ def build_bpe_tokenizer(data_paths: List[str],
         config["kwargs"]["bos_token"] = bos_token
         config["kwargs"]["eos_token"] = eos_token
         config["kwargs"]["pad_token"] = pad_token
+        config["kwargs"]["sep_token"] = sep_token
 
-        special_tokens = [bos_token, eos_token, pad_token]
+        special_tokens = [bos_token, eos_token, pad_token, sep_token]
         if extra_special_tokens:
             special_tokens += extra_special_tokens
 

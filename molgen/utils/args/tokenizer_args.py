@@ -9,6 +9,7 @@ def get_tokenizer_args() -> argparse.Namespace:
     parser.add_argument("--save_path", type=str, required=True, help="Where to save the trained tokenizer")
     parser.add_argument("--data_path", type=str, nargs="+", required=True, help="Where to save the trained tokenizer")
     parser.add_argument("--pad_token", type=str, help="pad token to add to the tokenizer")
+    parser.add_argument("--sep_token", type=str, help="sep token to add to the tokenizer")
     parser.add_argument("--bos_token", type=str, help="bos token to add to the tokenizer")
     parser.add_argument("--eos_token", type=str, help="eos token to add to the tokenizer")
     parser.add_argument("--extra_special_tokens", type=str, nargs="+", help="special tokens to add to the tokenizer")
