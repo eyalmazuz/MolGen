@@ -1,0 +1,28 @@
+name: thesis
+channels:
+  - conda-forge
+  - nvidia
+  - defaults
+dependencies:
+  - python
+  - pip
+  - numpy
+  - pandas
+  - scikit-learn
+  - transformers
+  - rdkit
+  - parso
+  - wandb
+  - tqdm
+  - chemprop
+  - meeko
+  - seaborn
+  - pip:
+    - --extra-index-url https://download.pytorch.org/whl/cu118
+    - torch
+    - torchvision
+    - torchaudio
+    - x_transformers==1.26.2
+    - tensorboard
+    - vina
+    - moses
