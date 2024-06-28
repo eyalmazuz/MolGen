@@ -1,8 +1,7 @@
 import json
 import os
 import re
-from typing import Any, Dict, List, Optional, Type, Union
-import warnings
+from typing import Any
 
 import torch
 
@@ -11,12 +10,12 @@ from molgen.tokenizers.tokenizer import AbstractTokenizer, TokenizedData
 
 class CharTokenizer(AbstractTokenizer):
     def __init__(self,
-                 token2id: Dict[str, int],
-                 bos_token: Optional[str]=None,
-                 eos_token: Optional[str]=None,
-                 pad_token: Optional[str]=None,
-                 sep_token: Optional[str]=None,
-                 special_tokens: Optional[Dict[str, int]]=None) -> None:
+                 token2id: dict[str, int],
+                 bos_token: str | None=None,
+                 eos_token: str | None=None,
+                 pad_token: str | None=None,
+                 sep_token: str | None=None,
+                 special_tokens: dict[str, int] | None=None) -> None:
         self.tokens_to_ids = token2id
         self.ids_to_tokens = {id_: token for token, id_ in self.tokens_to_ids.items()}
 
@@ -31,10 +30,10 @@ class CharTokenizer(AbstractTokenizer):
         self.pad_token_  = pad_token
         self.sep_token_  = sep_token
 
-        if pad_token is None:
+        if pad_token is None and eos_token is not None:
             print("pad token is not defined will default to eos token if available")
 
-        if sep_token is None:
+        if sep_token is None and eos_token is not None:
             print("sep token is not defined will default to eos token if available")
 
 
@@ -116,19 +115,16 @@ class CharTokenizer(AbstractTokenizer):
 
 
     def encode(self,
-               texts: Union[str, List[str]],
-               padding: Union[str, bool]=False,
-               truncation: Union[str, bool]=False,
-               max_length: Optional[int]=None,
+               texts: str | list[str],
                return_tensors: bool=False) -> TokenizedData:
         if isinstance(texts, str):
             texts = [texts]
 
-        encodings: List[List[int]] = []
+        encodings: list[list[int]] = []
         for text in texts:
             if self.special_tokens is not None and len(self.special_tokens) > 0:
                 special_pattern = "(" + "|".join(re.escape(k) for k in self.special_tokens) + ")"
-                chunks: List[str] = re.split(special_pattern, text)
+                chunks: list[str] = re.split(special_pattern, text)
             else:
                 chunks = list(text)
             encoding = []
@@ -141,26 +137,7 @@ class CharTokenizer(AbstractTokenizer):
                     else:
                         encoding += [self.tokens_to_ids[token] for token in chunk]
 
-            if truncation and max_length is not None:
-                encoding = encoding[:max_length]
-
             encodings.append(encoding)
-
-        if (isinstance(padding, bool) and padding) or padding == "longest":
-            max_length = max(map(len, encodings))
-
-        if padding == "max_length":
-            if max_length is None:
-                warnings.warn("when using padding='max_length' length is needed to be specified by the max_length argument defaulting to 512")
-                max_length = 512
-
-        if max_length is not None:
-            padded_encodings: List[List[int]] = []
-            for encoding in encodings:
-                encoding = encoding + [self.special_tokens[self.pad_token]] * (max_length - len(encoding))
-                padded_encodings.append(encoding)
-
-            encodings = padded_encodings
 
         if return_tensors:
             return torch.tensor(encodings)
@@ -168,7 +145,7 @@ class CharTokenizer(AbstractTokenizer):
         return encodings
 
 
-    def decode(self, encodings: TokenizedData, skip_special_tokens: bool=False) -> List[str]:
+    def decode(self, encodings: TokenizedData, skip_special_tokens: bool=False) -> list[str]:
         if isinstance(encodings[0], int):
             encodings = [encodings]
 
@@ -194,14 +171,14 @@ class CharTokenizer(AbstractTokenizer):
 
 
     @classmethod
-    def load_pretrained(cls: Type["CharTokenizer"], path: str, **kwargs: Any) -> "CharTokenizer":
+    def load_pretrained(cls: type["CharTokenizer"], path: str, **kwargs: Any) -> "CharTokenizer":
         if not os.path.isdir(path):
             raise ValueError(f"{path} is not a directory")
 
         if os.path.isdir(path) and not os.path.exists(f"{path}/vocab.json"):
             raise ValueError(f"{path} doesn't contain vocab.json file")
 
-        with open(f"{path}/vocab.json", "r") as fd:
+        with open(f"{path}/vocab.json") as fd:
             tokens_to_ids = json.load(fd)
 
         return cls(tokens_to_ids, **kwargs)

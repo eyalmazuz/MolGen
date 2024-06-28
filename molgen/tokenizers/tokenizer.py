@@ -1,32 +1,26 @@
 from abc import ABC, abstractmethod
-from typing import Any, List, Type, Union
+from typing import Any, TypeAlias
 
 import torch
 
-
-TokenizedData = Union[List[List[int]], torch.Tensor]
+TokenizedData: TypeAlias = list[list[int]] | torch.Tensor
 
 
 class AbstractTokenizer(ABC):
 
     @abstractmethod
-    def encode(self,
-               texts: Union[str, List[str]],
-               padding: Union[str, bool],
-               truncation: Union[str, bool],
-               max_length: int,
-               return_tensors: bool) -> TokenizedData:
+    def encode(self, texts: str | list[str], return_tensors: bool) -> TokenizedData:
         pass
 
 
     @abstractmethod
-    def decode(self, encodings: TokenizedData, skip_special_tokens: bool) -> List[str]:
+    def decode(self, encodings: TokenizedData, skip_special_tokens: bool) -> list[str]:
         pass
 
 
     @classmethod
     @abstractmethod
-    def load_pretrained(cls: Type["AbstractTokenizer"], path: str, **kwargs: Any) -> "AbstractTokenizer":
+    def load_pretrained(cls: type["AbstractTokenizer"], path: str, **kwargs: Any) -> "AbstractTokenizer":
         pass
 
 

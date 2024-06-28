@@ -1,7 +1,6 @@
 import os
 import re
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
-import warnings
+from typing import Any
 
 import torch
 
@@ -11,12 +10,12 @@ from molgen.tokenizers.tokenizers_utils import get_stats, merge
 
 class BPETokenizer(AbstractTokenizer):
     def __init__(self,
-                 merges: Dict[Tuple[int, int], int],
-                 bos_token: Optional[str]=None,
-                 eos_token: Optional[str]=None,
-                 pad_token: Optional[str]=None,
-                 sep_token: Optional[str]=None,
-                 special_tokens: Optional[Dict[str, int]]=None) -> None:
+                 merges: dict[tuple[int, int], int],
+                 bos_token: str | None=None,
+                 eos_token: str | None=None,
+                 pad_token: str | None=None,
+                 sep_token: str | None=None,
+                 special_tokens: dict[str, int] | None=None) -> None:
         self.merges = merges
 
         # build the vocab back from the merges
@@ -35,10 +34,10 @@ class BPETokenizer(AbstractTokenizer):
         self.pad_token_  = pad_token
         self.sep_token_  = sep_token
 
-        if pad_token is None:
+        if pad_token is None and eos_token is not None:
             print("pad token is not defined will default to eos token if available")
 
-        if sep_token is None:
+        if sep_token is None and eos_token is not None:
             print("sep token is not defined will default to eos token if available")
 
 
@@ -119,20 +118,17 @@ class BPETokenizer(AbstractTokenizer):
 
 
     def encode(self,
-               texts: Union[str, List[str]],
-               padding: Union[str, bool]=False,
-               truncation: Union[str, bool]=False,
-               max_length: Optional[int]=None,
+               texts: str | list[str],
                return_tensors: bool=False) -> TokenizedData:
 
         if isinstance(texts, str):
             texts = [texts]
 
-        encodings: List[List[int]] = []
+        encodings: list[list[int]] = []
         for text in texts:
             if self.special_tokens is not None and len(self.special_tokens) > 0:
                 special_pattern = "(" + "|".join(re.escape(k) for k in self.special_tokens) + ")"
-                chunks: List[str] = re.split(special_pattern, text)
+                chunks: list[str] = re.split(special_pattern, text)
             else:
                 chunks = [text]
 
@@ -145,24 +141,8 @@ class BPETokenizer(AbstractTokenizer):
                         encoding.append(self.special_tokens[chunk])
                     else:
                         encoding += self.__encode_chunk(chunk.encode("utf-8"))
+
             encodings.append(encoding)
-
-        if (isinstance(padding, bool) and padding) or padding == "longest":
-            max_length = max(map(len, encodings))
-
-        if padding == "max_length":
-            if max_length is None:
-                warnings.warn("when using padding='max_length' length is needed to be specified by the max_length argument defaulting to 512")
-                max_length = 512
-
-        if max_length is not None:
-            padded_encodings: List[List[int]] = []
-            for encoding in encodings:
-                encoding = encoding + [self.special_tokens["<pad>"]] * (max_length - len(encoding))
-
-            padded_encodings.append(encoding)
-
-            encodings = padded_encodings
 
         if return_tensors:
             return torch.tensor(encodings)
@@ -170,13 +150,13 @@ class BPETokenizer(AbstractTokenizer):
         return encodings
 
 
-    def __encode_chunk(self, text_bytes: bytes) -> List[int]:
+    def __encode_chunk(self, text_bytes: bytes) -> list[int]:
         # return the token ids
         # let's begin. first, convert all bytes to integers in range 0..255
         ids = list(text_bytes)
         while len(ids) >= 2:
             # find the pair with the lowest merge index
-            stats: Dict[Tuple[int, int], int] = get_stats(ids)
+            stats: dict[tuple[int, int], int] = get_stats(ids)
             pair = min(stats, key=lambda p: self.merges.get(p, float("inf")))
             # subtle: if there are no more merges available, the key will
             # result in an inf for every single pair, and the min will be
@@ -190,7 +170,7 @@ class BPETokenizer(AbstractTokenizer):
         return ids
 
 
-    def decode(self, encodings: TokenizedData, skip_special_tokens: bool=False) -> List[str]:
+    def decode(self, encodings: TokenizedData, skip_special_tokens: bool=False) -> list[str]:
         if isinstance(encodings[0], int):
             encodings = [encodings]
 
@@ -218,7 +198,7 @@ class BPETokenizer(AbstractTokenizer):
 
 
     @classmethod
-    def load_pretrained(cls: Type["BPETokenizer"], path: str, **kwargs: Any) -> "BPETokenizer":
+    def load_pretrained(cls: type["BPETokenizer"], path: str, **kwargs: Any) -> "BPETokenizer":
         if not os.path.isdir(path):
             raise ValueError(f"{path} is not a directory")
 
@@ -227,7 +207,7 @@ class BPETokenizer(AbstractTokenizer):
 
         merges = {}
         idx = 256
-        with open(f"{path}/merges.txt", "r") as fd:
+        with open(f"{path}/merges.txt") as fd:
             for line in fd:
                 idx1, idx2 = map(int, line.split())
                 merges[(idx1, idx2)] = idx
