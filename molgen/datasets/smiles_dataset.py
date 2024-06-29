@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 
 from molgen.tokenizers.tokenizer import AbstractTokenizer
+from molgen.rewards.reward import AbstractReward
 
 
 class PreTrainGPTSmilesDataset(Dataset):
@@ -24,7 +25,7 @@ class PreTrainGPTSmilesDataset(Dataset):
 
     def __getitem__ (self, idx: int) -> Dict[str, List[str]]:
         smiles = self.dataset[idx]
-        example = self.tokenizer.encode(smiles)
+        example = self.tokenizer.encode(smiles)[0]
         example = [self.tokenizer.bos_token_id] + example + [self.tokenizer.eos_token_id]
         example = torch.tensor(example, dtype=torch.int64)
 
@@ -43,7 +44,7 @@ class PreTrainGPTSmilesDataset(Dataset):
             raise ValueError("Invalid path")
 
         if os.path.isdir(dataset_path):
-            print("Given path is a directory, attemping loading all files in the directory")
+            print("Given path is a directory, attempting to load all files in the directory")
             smiles = []
             for file_ in tqdm(os.listdir(dataset_path)):
                 with open(f"{dataset_path}/{file_}", "r") as f:
@@ -63,8 +64,25 @@ class PreTrainGPTSmilesDataset(Dataset):
 class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
     def __init__(self,
                  dataset_path: str,
-                 tokenizer: AbstractTokenizer) -> None:
+                 tokenizer: AbstractTokenizer,
+                 reward_func: AbstractReward) -> None:
         super().__init__(dataset_path, tokenizer)
+        self.reward_func = reward_func
 
-    def __getitem__(self, item):
-        raise NotImplementedError
+    def __getitem__(self, idx: int) -> Dict[str, List[str]]:
+        smiles = self.dataset[idx]
+        base_item = super().__getitem__(idx)
+        reward_to_go = self.reward_func(smiles)
+        trajectory_len = len(base_item["input_ids"]) - 1
+        trajectory = {
+            "reward_to_go": [reward_to_go] * trajectory_len,
+            "states": [base_item["input_ids"][:i + 1] for i in range(trajectory_len)],
+            "actions": base_item["input_ids"]
+        }
+
+        return {
+            "reward_to_go": trajectory["reward_to_go"],
+            "input_ids": trajectory["states"],
+            "labels": trajectory["actions"],
+            "attention_mask": base_item["attention_mask"]
+        }
