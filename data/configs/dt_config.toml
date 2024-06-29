@@ -26,3 +26,8 @@ embd_pdrop = 0.1
 attn_pdrop = 0.1
 resid_pdrop = 0.1
 model_type = "reward_conditioned"
+
+[rewards]
+
+[[reward.functions]]
+type = "QED"

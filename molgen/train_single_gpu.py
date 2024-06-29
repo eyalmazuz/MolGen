@@ -11,6 +11,7 @@ from molgen.models.model_options import ModelType
 from molgen.tokenizers.tokenizer_factory import get_tokenizer
 from molgen.training.train import run_training
 from molgen.utils.train_utils import setup_torch, setup_mixed_precision
+from molgen.rewards.reward_factory import get_rewards
 
 
 def single_gpu_training(args) -> None:
@@ -28,10 +29,17 @@ def single_gpu_training(args) -> None:
 
     model = get_model(model_type, model_config)
     tokenizer = get_tokenizer(args.tokenizer_path)
+
+    kwargs = {
+        "dataset_path": args.data_path,
+        "tokenizer": tokenizer,
+    }
+    if model_type == ModelType.DT:
+        kwargs.update({"reward_func": get_rewards(config["reward"])})
+
     dataset = get_dataset(dataset_type,
                           model_type,
-                          dataset_path=args.data_path,
-                          tokenizer=tokenizer)
+                          **kwargs)
 
     batch_sampler = LengthBatchSampler(dataset, train_config["batch_size"], drop_last=False)
     collate_fn = PadCollate(tokenizer.pad_token_id)
