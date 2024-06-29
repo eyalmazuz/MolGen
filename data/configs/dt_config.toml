@@ -12,8 +12,9 @@ lr_decay_steps = 600000
 min_lr = 6e-5
 dtype = "bfloat16"
 compile = true
-device = "cuda"
+device = "cpu"
 seed = 42
+max_timestep = 2000
 
 [model_config]
 vocab_size = 32768

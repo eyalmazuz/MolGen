@@ -30,7 +30,7 @@ def single_gpu_training(args) -> None:
     tokenizer = get_tokenizer(args.tokenizer_path)
     dataset = get_dataset(dataset_type,
                           model_type,
-                          dataset_path=args.dataset_path,
+                          dataset_path=args.data_path,
                           tokenizer=tokenizer)
 
     batch_sampler = LengthBatchSampler(dataset, train_config["batch_size"], drop_last=False)

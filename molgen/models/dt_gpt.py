@@ -46,6 +46,7 @@ class DTGPTConfig:
     attn_pdrop: float = 0.1
     resid_pdrop: float = 0.1
     model_type: str = "reward_conditioned"
+    max_timestep = 2000
 
 
 class CausalSelfAttention(nn.Module):
