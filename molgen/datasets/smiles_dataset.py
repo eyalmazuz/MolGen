@@ -7,7 +7,7 @@ import torch
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 
-from molgen.tokeniszers.tokenizer import AbstractTokenizer
+from molgen.tokenizers.tokenizer import AbstractTokenizer
 
 
 class PreTrainGPTSmilesDataset(Dataset):
@@ -58,3 +58,13 @@ class PreTrainGPTSmilesDataset(Dataset):
         smiles = [Chem.MolToSmiles(Chem.MolFromSmiles(s)) for s in tqdm(smiles) if Chem.MolFromSmiles is not None]
 
         return smiles
+
+
+class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
+    def __init__(self,
+                 dataset_path: str,
+                 tokenizer: AbstractTokenizer) -> None:
+        super().__init__(dataset_path, tokenizer)
+
+    def __getitem__(self, item):
+        raise NotImplementedError
