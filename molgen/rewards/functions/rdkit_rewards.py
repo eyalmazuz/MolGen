@@ -1,11 +1,14 @@
 from typing import List, Optional, Union
-
+import os
+import sys
 import networkx as nx
 from rdkit import Chem
 from rdkit.Chem.Crippen import MolLogP
 from rdkit.Chem.rdchem import Mol
 from rdkit.Chem.QED import qed
-from rdkit.Contrib.SA_Score import sascorer
+from rdkit.RDConfig import RDContribDir
+sys.path.append(os.path.join(RDContribDir, 'SA_Score'))
+import sascorer
 
 from molgen.rewards.reward import AbstractReward, RewardScale
 
