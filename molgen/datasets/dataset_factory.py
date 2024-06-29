@@ -10,6 +10,8 @@ def get_dataset(dataset_type: DatasetType, model_type: ModelType, **kwargs) -> D
     match model_type:
         case ModelType.GPT:
             dataset = get_gpt_dataset(dataset_type, **kwargs)
+        case ModelType.DT:
+            dataset = get_gpt_dataset(dataset_type, **kwargs)
         case _:
             raise ValueError(f"Invalid model type {model_type}")
 

@@ -18,7 +18,7 @@ def setup_torch(seed: int=0, device: str="cuda") -> None:
 
 
 def setup_mixed_precision(device: str, dtype: str):
-    if dtype == "bfloat16" and not torch.cuda.is_bf16_support():
+    if dtype == "bfloat16" and device == "cuda" and not torch.cuda.is_bf16_supported():
         print("bfloat16 is not supported on this GPU type, reverting to float16")
         dtype = "float16"
 

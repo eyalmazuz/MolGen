@@ -75,13 +75,13 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
         reward_to_go = self.reward_func(smiles)
         trajectory_len = len(base_item["input_ids"]) - 1
         trajectory = {
-            "reward_to_go": [reward_to_go] * trajectory_len,
+            "rtg": [reward_to_go] * trajectory_len,
             "states": [base_item["input_ids"][:i + 1] for i in range(trajectory_len)],
             "actions": base_item["input_ids"]
         }
 
         return {
-            "reward_to_go": trajectory["reward_to_go"],
+            "rtg": trajectory["rtg"],
             "input_ids": trajectory["states"],
             "labels": trajectory["actions"],
             "attention_mask": base_item["attention_mask"]
