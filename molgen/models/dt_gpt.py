@@ -19,13 +19,14 @@ GPT model:
 
 import math
 import logging
+from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
 logger = logging.getLogger(__name__)
-
+import random
 import numpy as np
 
 
@@ -34,24 +35,17 @@ class GELU(nn.Module):
         return F.gelu(input)
 
 
+@dataclass(init=True)
 class DTGPTConfig:
-    """ base GPT config, params common to all GPT versions """
-    embd_pdrop = 0.1
-    resid_pdrop = 0.1
-    attn_pdrop = 0.1
-
-    def __init__(self, vocab_size, block_size, **kwargs):
-        self.vocab_size = vocab_size
-        self.block_size = block_size
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-
-
-class DTGPT1Config(DTGPTConfig):
-    """ GPT-1 like network roughly 125M params """
-    n_layer = 12
-    n_head = 12
-    n_embd = 768
+    vocab_size: int = 32768
+    block_size: int = 512
+    n_embd: int = 768
+    n_head: int = 12
+    n_layer: int = 12
+    embd_pdrop: float = 0.1
+    attn_pdrop: float = 0.1
+    resid_pdrop: float = 0.1
+    model_type: str = "reward_conditioned"
 
 
 class CausalSelfAttention(nn.Module):
@@ -298,3 +292,53 @@ class DtGPT(nn.Module):
             loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1))
 
         return logits, loss
+
+    @staticmethod
+    def set_seed(seed):
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+
+    @staticmethod
+    def top_k_logits(logits, k):
+        v, ix = torch.topk(logits, k)
+        out = logits.clone()
+        out[out < v[:, [-1]]] = -float('Inf')
+        return out
+
+    @torch.no_grad()
+    def sample(self, x, steps, temperature=1.0, sample=False, top_k=None, actions=None, rtgs=None, timesteps=None):
+        """
+        take a conditioning sequence of indices in x (of shape (b,t)) and predict the next token in
+        the sequence, feeding the predictions back into the model each time. Clearly the sampling
+        has quadratic complexity unlike an RNN that is only linear, and has a finite context window
+        of block_size, unlike an RNN that has an infinite context window.
+        """
+        block_size = self.get_block_size()
+        self.eval()
+        for k in range(steps):
+            # x_cond = x if x.size(1) <= block_size else x[:, -block_size:] # crop context if needed
+            x_cond = x if x.size(1) <= block_size // 3 else x[:, -block_size // 3:]  # crop context if needed
+            if actions is not None:
+                actions = actions if actions.size(1) <= block_size // 3 else actions[:,
+                                                                             -block_size // 3:]  # crop context if needed
+            rtgs = rtgs if rtgs.size(1) <= block_size // 3 else rtgs[:, -block_size // 3:]  # crop context if needed
+            logits, _ = self(x_cond, actions=actions, targets=None, rtgs=rtgs, timesteps=timesteps)
+            # pluck the logits at the final step and scale by temperature
+            logits = logits[:, -1, :] / temperature
+            # optionally crop probabilities to only the top k options
+            if top_k is not None:
+                logits = self.top_k_logits(logits, top_k)
+            # apply softmax to convert to probabilities
+            probs = F.softmax(logits, dim=-1)
+            # sample from the distribution or take the most likely
+            if sample:
+                ix = torch.multinomial(probs, num_samples=1)
+            else:
+                _, ix = torch.topk(probs, k=1, dim=-1)
+            # append to the sequence and continue
+            # x = torch.cat((x, ix), dim=1)
+            x = ix
+
+        return x
