@@ -1,0 +1,1 @@
+{"type": "BPETokenizer", "kwargs": {"bos_token": "[BOS]", "eos_token": "[EOS]", "pad_token": "[PAD]", "sep_token": ",", "special_tokens": {"[BOS]": 500, "[EOS]": 501, "[PAD]": 502, ",": 503, "[UNK]": 504}}}
