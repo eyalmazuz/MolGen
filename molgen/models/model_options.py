@@ -3,6 +3,7 @@ from enum import Enum, auto
 
 class ModelType(Enum):
     GPT = auto()
+    DT = auto()
     BERT = auto()
     TRANSFORMER = auto()
     RNN = auto()
@@ -11,6 +12,8 @@ class ModelType(Enum):
     def from_str(label: str) -> "ModelType":
         if label.upper() == "GPT":
             type_ = ModelType.GPT
+        elif label.upper() == "DT":
+            type_ = ModelType.DT
         elif label.upper() == "BERT":
             type_ = ModelType.BERT
         elif label.upper() == "TRANSFORMER":
