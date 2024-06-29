@@ -5,6 +5,7 @@ from torch.nn import Module
 
 from molgen.models.model_options import ModelType
 from molgen.models.gpt import GPT, GPTConfig
+from molgen.models.dt_gpt import DtGPT, DTGPTConfig
 from molgen.models.bert import Bert, BertConfig
 from molgen.models.transformer import Transformer, TransformerConfig
 
@@ -20,6 +21,9 @@ def get_model(model_type: ModelType, model_config: Dict[str, Any]) -> Module:
         case ModelType.GPT:
             config_cls = GPTConfig
             model_cls = GPT
+        case ModelType.DT:
+            config_cls = DTGPTConfig
+            model_cls = DtGPT
         case ModelType.BERT:
             config_cls = BertConfig
             model_cls = Bert
