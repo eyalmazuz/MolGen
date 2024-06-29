@@ -13,6 +13,7 @@ min_lr = 6e-5
 dtype = "bfloat16"
 compile = true
 device = "cuda"
+seed = 42
 
 [model_config]
 vocab_size = 32768
