@@ -28,6 +28,7 @@ from torch.nn import functional as F
 logger = logging.getLogger(__name__)
 import random
 import numpy as np
+import inspect
 
 
 class GELU(nn.Module):
@@ -210,10 +211,15 @@ class DtGPT(nn.Module):
 
         # create the pytorch optimizer object
         optim_groups = [
-            {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": train_config.weight_decay},
+            {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": weight_decay},
             {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
         ]
-        optimizer = torch.optim.AdamW(optim_groups, lr=train_config.learning_rate, betas=train_config.betas)
+        # Create AdamW optimizer and use the fused version if it is available
+        fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
+        use_fused = fused_available and device_type == 'cuda'
+        extra_args = dict(fused=True) if use_fused else dict()
+        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
+        print(f"using fused AdamW: {use_fused}")
         return optimizer
 
     # state, action, and return
@@ -262,14 +268,15 @@ class DtGPT(nn.Module):
             raise NotImplementedError()
 
         batch_size = states.shape[0]
-        all_global_pos_emb = torch.repeat_interleave(self.global_pos_emb, batch_size,
-                                                     dim=0)  # batch_size, traj_length, n_embd
+        all_global_pos_emb = torch.repeat_interleave(
+            self.global_pos_emb, batch_size, dim=0
+        )  # batch_size, traj_length, n_embd
 
-        position_embeddings = torch.gather(all_global_pos_emb, 1, torch.repeat_interleave(timesteps, self.config.n_embd,
-                                                                                          dim=-1)) + self.pos_emb[:, :
-                                                                                                                     token_embeddings.shape[
-                                                                                                                         1],
-                                                                                                     :]
+        position_embeddings = torch.gather(
+            all_global_pos_emb,
+            1,
+            torch.repeat_interleave(timesteps, self.config.n_embd, dim=-1)
+        ) + self.pos_emb[:, : token_embeddings.shape[1], :]
 
         x = self.drop(token_embeddings + position_embeddings)
         x = self.blocks(x)
@@ -294,52 +301,52 @@ class DtGPT(nn.Module):
 
         return logits, loss
 
-    @staticmethod
-    def set_seed(seed):
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
 
-    @staticmethod
-    def top_k_logits(logits, k):
-        v, ix = torch.topk(logits, k)
-        out = logits.clone()
-        out[out < v[:, [-1]]] = -float('Inf')
-        return out
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
-    @torch.no_grad()
-    def sample(self, x, steps, temperature=1.0, sample=False, top_k=None, actions=None, rtgs=None, timesteps=None):
-        """
-        take a conditioning sequence of indices in x (of shape (b,t)) and predict the next token in
-        the sequence, feeding the predictions back into the model each time. Clearly the sampling
-        has quadratic complexity unlike an RNN that is only linear, and has a finite context window
-        of block_size, unlike an RNN that has an infinite context window.
-        """
-        block_size = self.get_block_size()
-        self.eval()
-        for k in range(steps):
-            # x_cond = x if x.size(1) <= block_size else x[:, -block_size:] # crop context if needed
-            x_cond = x if x.size(1) <= block_size // 3 else x[:, -block_size // 3:]  # crop context if needed
-            if actions is not None:
-                actions = actions if actions.size(1) <= block_size // 3 else actions[:,
-                                                                             -block_size // 3:]  # crop context if needed
-            rtgs = rtgs if rtgs.size(1) <= block_size // 3 else rtgs[:, -block_size // 3:]  # crop context if needed
-            logits, _ = self(x_cond, actions=actions, targets=None, rtgs=rtgs, timesteps=timesteps)
-            # pluck the logits at the final step and scale by temperature
-            logits = logits[:, -1, :] / temperature
-            # optionally crop probabilities to only the top k options
-            if top_k is not None:
-                logits = self.top_k_logits(logits, top_k)
-            # apply softmax to convert to probabilities
-            probs = F.softmax(logits, dim=-1)
-            # sample from the distribution or take the most likely
-            if sample:
-                ix = torch.multinomial(probs, num_samples=1)
-            else:
-                _, ix = torch.topk(probs, k=1, dim=-1)
-            # append to the sequence and continue
-            # x = torch.cat((x, ix), dim=1)
-            x = ix
 
-        return x
+def top_k_logits(logits, k):
+    v, ix = torch.topk(logits, k)
+    out = logits.clone()
+    out[out < v[:, [-1]]] = -float('Inf')
+    return out
+
+
+@torch.no_grad()
+def sample(model, x, steps, temperature=1.0, sample=False, top_k=None, actions=None, rtgs=None, timesteps=None):
+    """
+    take a conditioning sequence of indices in x (of shape (b,t)) and predict the next token in
+    the sequence, feeding the predictions back into the model each time. Clearly the sampling
+    has quadratic complexity unlike an RNN that is only linear, and has a finite context window
+    of block_size, unlike an RNN that has an infinite context window.
+    """
+    block_size = model.get_block_size()
+    model.eval()
+    for k in range(steps):
+        # x_cond = x if x.size(1) <= block_size else x[:, -block_size:] # crop context if needed
+        x_cond = x if x.size(1) <= block_size//3 else x[:, -block_size//3:] # crop context if needed
+        if actions is not None:
+            actions = actions if actions.size(1) <= block_size//3 else actions[:, -block_size//3:] # crop context if needed
+        rtgs = rtgs if rtgs.size(1) <= block_size//3 else rtgs[:, -block_size//3:] # crop context if needed
+        logits, _ = model(x_cond, actions=actions, targets=None, rtgs=rtgs, timesteps=timesteps)
+        # pluck the logits at the final step and scale by temperature
+        logits = logits[:, -1, :] / temperature
+        # optionally crop probabilities to only the top k options
+        if top_k is not None:
+            logits = top_k_logits(logits, top_k)
+        # apply softmax to convert to probabilities
+        probs = F.softmax(logits, dim=-1)
+        # sample from the distribution or take the most likely
+        if sample:
+            ix = torch.multinomial(probs, num_samples=1)
+        else:
+            _, ix = torch.topk(probs, k=1, dim=-1)
+        # append to the sequence and continue
+        # x = torch.cat((x, ix), dim=1)
+        x = ix
+
+    return x
