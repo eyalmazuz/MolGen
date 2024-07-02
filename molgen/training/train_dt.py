@@ -39,12 +39,12 @@ class Trainer:
             losses = []
             pbar = tqdm(enumerate(loader), total=len(loader)) if is_train else enumerate(loader)
             for it, batch in pbar:
-
+                batch = {k: v.pin_memory().to(self.device, non_blocking=True) for k, v in batch.items()}
                 # place data on the correct device
-                x = batch["input_ids"].to(self.device)  # states
-                y = batch["labels"].to(self.device)     # actions
-                r = batch["rtg"].to(self.device)        # rtgs (reward-to-go)
-                a = batch["attention_mask"].to(self.device)
+                x = batch["input_ids"]  # states
+                y = batch["labels"]     # actions
+                r = batch["rtg"]        # rtgs (reward-to-go)
+                a = batch["attention_mask"]
 
                 # forward the model
                 with torch.set_grad_enabled(is_train):

@@ -28,7 +28,7 @@ def single_gpu_training(args) -> None:
     model_type = ModelType.from_str(args.model_type)
     dataset_type = DatasetType.from_str(args.dataset_type)
 
-    model = get_model(model_type, model_config)
+    model = get_model(model_type, model_config).to(train_config["device"])
     tokenizer = get_tokenizer(args.tokenizer_path)
 
     kwargs = {
