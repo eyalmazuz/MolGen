@@ -19,14 +19,14 @@ class Trainer:
         self.eos_token_id = train_dataset.dataset.tokenizer.eos_token_id
 
         # take over whatever gpus are on the system
-        self.device = 'cpu'
-        if torch.cuda.is_available():
-            self.device = torch.cuda.current_device()
+        self.device = config["device"]
+        # if torch.cuda.is_available():
+            # self.device = torch.cuda.current_device()
             # self.model = torch.nn.DataParallel(self.model).to(self.device)
 
     def save_checkpoint(self):
         raw_model = self.model.module if hasattr(self.model, "module") else self.model
-        torch.save(raw_model.state_dict(), self.config.ckpt_path)
+        torch.save(raw_model.state_dict(), self.config.get("ckpt_path", "."))
 
     def train(self, optimizer):
         model, config = self.model, self.config
@@ -41,42 +41,43 @@ class Trainer:
             for it, batch in pbar:
 
                 # place data on the correct device
-                x = batch["input_ids"].to(self.device)   # states
-                y = batch["labels"].to(self.device)   # actions
-                r = batch["rtg"].to(self.device)   # rtgs (reward-to-go)
-                t = batch["timesteps"].to(self.device)   # timesteps?
+                x = batch["input_ids"].to(self.device)  # states
+                y = batch["labels"].to(self.device)     # actions
+                r = batch["rtg"].to(self.device)        # rtgs (reward-to-go)
+                a = batch["attention_mask"].to(self.device)
 
                 # forward the model
                 with torch.set_grad_enabled(is_train):
-                    # logits, loss = model(x, y, r)
-                    logits, loss = model(x, y, y, r, t)
+                    logits, loss = model(states=x, actions=y, targets=y, rtgs=r, attention_mask=a)
+                    # logits, loss = model(x, y, y, r, t)
                     loss = loss.mean()  # collapse all losses if they are scattered on multiple gpus
-                    losses.append(loss.item())
+                    losses.append(loss.item())   # TODO: consider removing .item if aggregating
 
                 if is_train:
 
                     # backprop and update the parameters
                     model.zero_grad()
                     loss.backward()     # TODO: scaler.scale(loss).backward()
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), config.grad_norm_clip)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), config.get("grad_clip", 1.0))
                     optimizer.step()
 
                     # decay the learning rate based on our progress
-                    if config.lr_decay:
+                    if config.get("decay_lr", True):
                         self.tokens += (y >= 0).sum()  # number of tokens processed this step (i.e. label is not -100)
-                        if self.tokens < config.warmup_tokens:
+                        warmup_tokens = config.get("warmup_steps", 0)
+                        if self.tokens < warmup_tokens:
                             # linear warmup
-                            lr_mult = float(self.tokens) / float(max(1, config.warmup_tokens))
+                            lr_mult = float(self.tokens) / float(max(1, warmup_tokens))
                         else:
                             # cosine learning rate decay
-                            progress = float(self.tokens - config.warmup_tokens) / float(
-                                max(1, config.final_tokens - config.warmup_tokens))
+                            progress = float(self.tokens - warmup_tokens) / float(
+                                max(1, config.get("lr_decay_steps", warmup_tokens * 300) - warmup_tokens))
                             lr_mult = max(0.1, 0.5 * (1.0 + math.cos(math.pi * progress)))
-                        lr = config.learning_rate * lr_mult
+                        lr = config["learning_rate"] * lr_mult
                         for param_group in optimizer.param_groups:
                             param_group['lr'] = lr
                     else:
-                        lr = config.learning_rate
+                        lr = config["learning_rate"]
 
                     # report progress
                     pbar.set_description(f"epoch {epoch + 1} iter {it}: train loss {loss.item():.5f}. lr {lr:e}")
@@ -104,9 +105,9 @@ class Trainer:
             #     self.save_checkpoint()
 
             # -- pass in target returns
-            if self.config.model_type == 'naive':
+            if self.model.model_type == 'naive':
                 eval_return = self.get_returns(0)
-            elif self.config.model_type == 'reward_conditioned':
+            elif self.model.model_type == 'reward_conditioned':
                 # TODO: return should be based on the reward function, for now put 1 for a scaled reward
                 eval_return = self.get_returns(1)
 

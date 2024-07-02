@@ -43,11 +43,17 @@ def single_gpu_training(args) -> None:
                           **kwargs)
 
     batch_sampler = LengthBatchSampler(dataset, train_config["batch_size"], drop_last=False)
-    collate_fn = PadCollate(tokenizer.pad_token_id)
+    collate_fn = PadCollate(tokenizer.pad_token_id, max_length=model_config["block_size"] // 3)
     dataloader = DataLoader(dataset,
                             batch_sampler=batch_sampler,
                             collate_fn=collate_fn,
-                            pin_memory=True)
+                            pin_memory=True,
+                            # num_workers=train_config["num_workers"]
+                            )
+
+    # if model_config.get("max_timestep", 0) > 0:
+    #     model_config["max_timestep"] = max(batch_sampler.lengths)
+    # model = get_model(model_type, model_config).to(train_config["device"])
 
     optimizer = model.configure_optimizers(train_config["weight_decay"],
                                            train_config["learning_rate"],

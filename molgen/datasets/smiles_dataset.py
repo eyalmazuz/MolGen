@@ -74,8 +74,8 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
         states = [base_item["input_ids"][:i + 1] for i in range(trajectory_len)]
 
         return {
-            "rtg": [reward_to_go] * trajectory_len,     # trajectory rtg
-            "input_ids": states,                        # states
-            "labels": base_item["labels"],              # actions
+            "rtg": [reward_to_go] * trajectory_len,     # trajectory rtg - (block, 1)
+            "input_ids": states,                        # states - (block, state_len)
+            "labels": base_item["labels"],              # actions - (block, 1)
             "attention_mask": base_item["attention_mask"]
         }
