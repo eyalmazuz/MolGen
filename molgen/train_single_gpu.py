@@ -10,6 +10,7 @@ from molgen.models.model_factory import get_model
 from molgen.models.model_options import ModelType
 from molgen.tokenizers.tokenizer_factory import get_tokenizer
 from molgen.training.train import run_training
+from molgen.training.train_dt import run_dt_training
 from molgen.utils.train_utils import setup_torch, setup_mixed_precision
 from molgen.rewards.reward_factory import get_rewards
 
@@ -56,4 +57,7 @@ def single_gpu_training(args) -> None:
     if train_config["compile"]:
         model = torch.compile(model)
 
-    run_training(model, dataloader, optimizer, ctx, scaler, train_config)
+    if model_type == ModelType.DT:
+        run_dt_training(model, dataloader, optimizer, ctx, scaler, kwargs["reward_func"], train_config)
+    else:
+        run_training(model, dataloader, optimizer, ctx, scaler, train_config)
