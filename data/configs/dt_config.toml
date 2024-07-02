@@ -1,5 +1,5 @@
 [train_config]
-batch_size = 12
+batch_size = 16
 gradient_accumulation_steps = 30
 learning_rate = 6e-4
 max_steps = 600000
