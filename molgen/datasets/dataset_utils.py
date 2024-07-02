@@ -37,7 +37,7 @@ class ConcatDataset(Dataset):
 
 class LengthBatchSampler(BatchSampler):
     def __init__(self, dataset, batch_size: int, drop_last: bool, shuffle: bool = True) -> None:
-        self.lengths = [len(d) for d in tqdm(dataset, desc="Processing dataset")]
+        self.lengths = [len(d["input_ids"]) for d in tqdm(dataset, desc="Processing dataset")]
         self.batch_size = batch_size
         self.drop_last = drop_last
         self.shuffle = shuffle
@@ -63,12 +63,13 @@ class LengthBatchSampler(BatchSampler):
 
 
 class PadCollate:
-    def __init__(self, pad_token_id: int, ignore_index: int = -100) -> None:
+    def __init__(self, pad_token_id: int, ignore_index: int = -100, max_length=None) -> None:
         self.pad_token_id = pad_token_id
         self.ignore_index = ignore_index
+        self.max_length = max_length
 
     def __call__(self, batches: List[Dict[str, List[int | List[int]]]]) -> Dict[str, torch.tensor]:
-        max_length = max(len(item["input_ids"]) for item in batches)
+        max_length = max(len(item["input_ids"]) for item in batches) if self.max_length is None else self.max_length
 
         batch_input_ids = []
         batch_attention_mask = []
@@ -105,6 +106,6 @@ class PadCollate:
             "labels": torch.tensor(np.array(batch_labels), dtype=torch.int64)
         }
         if len(batch_rtgs) > 0:
-            return_dict["rtg"] = torch.tensor(batch_rtgs, dtype=torch.float64)
+            return_dict["rtg"] = torch.tensor(batch_rtgs, dtype=torch.float32)
 
         return return_dict
