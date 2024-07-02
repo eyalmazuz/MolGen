@@ -18,12 +18,10 @@ class PreTrainGPTSmilesDataset(Dataset):
         self.dataset = self.load_smiles(dataset_path)
         self.tokenizer = tokenizer
 
-
     def __len__(self) -> int:
         return len(self.dataset)
 
-
-    def __getitem__ (self, idx: int) -> Dict[str, List[str]]:
+    def __getitem__(self, idx: int) -> Dict[str, List[str]]:
         smiles = self.dataset[idx]
         example = self.tokenizer.encode(smiles)[0]
         example = [self.tokenizer.bos_token_id] + example + [self.tokenizer.eos_token_id]
@@ -37,7 +35,6 @@ class PreTrainGPTSmilesDataset(Dataset):
             "labels": labels.tolist()[1:],
             "attention_mask": attention_mask.tolist()[:-1]
         }
-
 
     def load_smiles(self, dataset_path: str) -> List[str]:
         if not os.path.exists(dataset_path):
@@ -73,16 +70,12 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
         smiles = self.dataset[idx]
         base_item = super().__getitem__(idx)
         reward_to_go = self.reward_func(smiles)
-        trajectory_len = len(base_item["input_ids"]) - 1
-        trajectory = {
-            "rtg": [reward_to_go] * trajectory_len,
-            "states": [base_item["input_ids"][:i + 1] for i in range(trajectory_len)],
-            "actions": base_item["input_ids"]
-        }
+        trajectory_len = len(base_item["input_ids"])
+        states = [base_item["input_ids"][:i + 1] for i in range(trajectory_len)]
 
         return {
-            "rtg": trajectory["rtg"],
-            "input_ids": trajectory["states"],
-            "labels": trajectory["actions"],
+            "rtg": [reward_to_go] * trajectory_len,     # trajectory rtg
+            "input_ids": states,                        # states
+            "labels": base_item["labels"],              # actions
             "attention_mask": base_item["attention_mask"]
         }
