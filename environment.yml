@@ -2,6 +2,7 @@ name: thesis
 channels:
   - conda-forge
   - nvidia
+  - pytorch
   - defaults
 dependencies:
   - python<3.12
@@ -9,14 +10,18 @@ dependencies:
   - numpy
   - pandas
   - scikit-learn
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=11.8
   - dacite
   - networkx
   - rdkit
   - wandb
   - tqdm
   - pip:
-    - --extra-index-url https://download.pytorch.org/whl/cu118
-    - torch
-    - torchvision
-    - torchaudio
+#    - --extra-index-url https://download.pytorch.org/whl/cu118
+#    - torch
+#    - torchvision
+#    - torchaudio
     - x_transformers==1.26.2
