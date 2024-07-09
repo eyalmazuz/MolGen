@@ -21,6 +21,8 @@ def single_gpu_training(args) -> None:
 
     train_config = config["train_config"]
     model_config = config["model_config"]
+    if train_config["device"] == "cpu":
+        model_config["vocab_size"] += 3
 
     setup_torch(train_config["seed"], train_config["device"])
     ctx, scaler = setup_mixed_precision(train_config["device"], train_config["dtype"])

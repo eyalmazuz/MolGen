@@ -162,7 +162,7 @@ class DtGPT(nn.Module):
         logger.info("number of parameters: %e", sum(p.numel() for p in self.parameters()))
 
         self.state_embedding = self.tok_emb
-        self.state_encoder = nn.Linear(config.block_size // 3 * config.n_embd, config.n_embd)
+        # self.state_encoder = nn.Linear(config.block_size // 3 * config.n_embd, config.n_embd)
         self.ret_emb = nn.Sequential(nn.Linear(1, config.n_embd), nn.Tanh())
 
         self.action_embeddings = self.tok_emb   # Actions are simply SMILES tokens to add to the state
@@ -234,6 +234,12 @@ class DtGPT(nn.Module):
         print(f"using fused AdamW: {use_fused}")
         return optimizer
 
+    @staticmethod
+    def mean_pooling(model_output, attention_mask):
+        token_embeddings = model_output[0]  # First element of model_output contains all token embeddings
+        input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+        return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+
     # state, action, and return
     def forward(self, states, actions, targets=None, rtgs=None, attention_mask=None):
         # states: (batch, block_size, state_size)
@@ -247,14 +253,12 @@ class DtGPT(nn.Module):
 
         batch_size = states.shape[0]
         block_size = states.shape[1]
-        assert (
-            block_size <= self.block_size,
+        assert block_size <= self.block_size, \
             f"Cannot forward sequence of length {block_size}, block size is only {self.block_size}"
-        )
-        # TODO: verify how should the attention_mask be used here
         state_embeddings = self.state_embedding(states)  # (batch_size, block_size, state_size, n_embd)
-        state_embeddings = state_embeddings.reshape(batch_size, block_size, -1).contiguous()
-        state_embeddings = self.state_encoder(state_embeddings)  # (batch_size, block_size, n_embd)
+        state_embeddings = self.mean_pooling(state_embeddings, attention_mask)
+        # state_embeddings = state_embeddings.reshape(batch_size, block_size, -1).contiguous()
+        # state_embeddings = self.state_encoder(state_embeddings)  # (batch_size, block_size, n_embd)
 
         if actions is not None and self.model_type == 'reward_conditioned':
             rtg_embeddings = self.ret_emb(rtgs.unsqueeze(-1))  # (batch, block_size, n_embd)
