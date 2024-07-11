@@ -94,6 +94,10 @@ class PadCollate:
 
             if rtg is not None:
                 input_ids = [state + [self.pad_token_id] * (max_length - len(state)) for state in input_ids]
+                attention_mask = [
+                    [0] * max_length if mask == 0 else [1] * (i + 1) + [0] * (max_length - (i + 1))
+                    for i, mask in enumerate(attention_mask)
+                ]
                 batch_rtgs.append(rtg)
 
             batch_input_ids.append(input_ids)
