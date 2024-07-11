@@ -17,9 +17,11 @@ class Trainer:
         self.config = config
         self.bos_token_id = train_dataset.dataset.tokenizer.bos_token_id
         self.eos_token_id = train_dataset.dataset.tokenizer.eos_token_id
+        self.pad_token_id = train_dataset.dataset.tokenizer.pad_token_id
+        self.ignore_token_id = train_dataset.collate_fn.ignore_index
 
         # take over whatever gpus are on the system
-        self.device = config["device"]
+        self.device = torch.device(config["device"])
         # if torch.cuda.is_available():
             # self.device = torch.cuda.current_device()
             # self.model = torch.nn.DataParallel(self.model).to(self.device)
@@ -63,7 +65,7 @@ class Trainer:
 
                     # decay the learning rate based on our progress
                     if config.get("decay_lr", True):
-                        self.tokens += (y >= 0).sum()  # number of tokens processed this step (i.e. label is not -100)
+                        self.tokens += (y != self.ignore_token_id).sum()  # number of tokens processed this step (i.e. label is not -100)
                         warmup_tokens = config.get("warmup_steps", 0)
                         if self.tokens < warmup_tokens:
                             # linear warmup
@@ -117,15 +119,21 @@ class Trainer:
         T_rewards, T_Qs = [], []
         done = True
         for i in range(10):
-            # TODO: need BOS token initial state
-            state = torch.tensor(self.bos_token_id, dtype=torch.int64)
+            # TODO: need to define initial state correctly? i.e. shape of block size
+            state = torch.tensor([self.bos_token_id], dtype=torch.int64)
             state = state.to(self.device).unsqueeze(0).unsqueeze(0)
             rtgs = [ret]
             # first state is from env, first rtg is target return, and first timestep is 0
-            sampled_action = sample(self.model.module, state, 1, temperature=1.0, sample=True, actions=None,
-                                    rtgs=torch.tensor(rtgs, dtype=torch.long).to(self.device).unsqueeze(0).unsqueeze(
-                                        -1),
-                                    timesteps=torch.zeros((1, 1, 1), dtype=torch.int64).to(self.device))
+            sampled_action = sample(
+                model=self.model,
+                x=state,
+                steps=1,
+                temperature=1.0,
+                sample=True,
+                actions=None,
+                rtgs=torch.tensor(rtgs, dtype=torch.long).to(self.device).unsqueeze(0).unsqueeze(-1),
+                timesteps=torch.zeros((1, 1, 1), dtype=torch.int64).to(self.device)
+            )
 
             j = 0
             all_states = state
