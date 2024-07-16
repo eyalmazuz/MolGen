@@ -163,7 +163,7 @@ class DtGPT(nn.Module):
 
         self.state_embedding = self.tok_emb
         # self.state_encoder = nn.Linear(config.block_size // 3 * config.n_embd, config.n_embd)
-        self.rtg_emb = nn.Sequential(nn.Linear(1, config.n_embd), nn.Tanh())
+        self.ret_emb = nn.Sequential(nn.Linear(1, config.n_embd), nn.Tanh())
 
         self.action_embeddings = self.tok_emb   # Actions are simply SMILES tokens to add to the state
         nn.init.normal_(self.action_embeddings.weight, mean=0.0, std=0.02)
@@ -236,7 +236,7 @@ class DtGPT(nn.Module):
 
     @staticmethod
     def mean_pooling(model_output, attention_mask):
-        input_mask_expanded = attention_mask.unsqueeze(-1).expand(model_output.size()).float()
+        input_mask_expanded = attention_mask.unsqueeze(-1).expand(model_output.size())
         return torch.sum(model_output * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
         # token_embeddings = model_output[0]  # First element of model_output contains all token embeddings
         # input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
@@ -259,10 +259,13 @@ class DtGPT(nn.Module):
             f"Cannot forward sequence of length {block_size}, block size is only {self.block_size}"
         state_embeddings = self.state_embedding(states)  # (batch_size, block_size, state_size, n_embd)
         # TODO: replace mean_pooling with a mini-transformer model
-        state_embeddings = self.mean_pooling(state_embeddings, attention_mask)  # (batch_size, block_size, n_embd)
+        if attention_mask is not None:
+            state_embeddings = self.mean_pooling(state_embeddings, attention_mask)  # (batch_size, block_size, n_embd)
+        else:
+            state_embeddings = state_embeddings.squeeze(-2)  # (1, 1, n_embd)
 
         if actions is not None and self.model_type == 'reward_conditioned':
-            rtg_embeddings = self.rtg_emb(rtgs.unsqueeze(-1))  # (batch, block_size, n_embd)
+            rtg_embeddings = self.ret_emb(rtgs.unsqueeze(-1))  # (batch, block_size, n_embd)
             action_embeddings = self.action_embeddings(actions)  # (batch, block_size, n_embd)
 
             token_embeddings = torch.zeros(
@@ -358,7 +361,7 @@ def sample(model, x, steps, temperature=1.0, sample=False, top_k=None, actions=N
         if actions is not None:
             actions = actions if actions.size(1) <= block_size//3 else actions[:, -block_size//3:] # crop context if needed
         rtgs = rtgs if rtgs.size(1) <= block_size//3 else rtgs[:, -block_size//3:] # crop context if needed
-        logits, _ = model(x_cond, actions=actions, targets=None, rtgs=rtgs, timesteps=timesteps)
+        logits, _ = model(states=x_cond, actions=actions, targets=None, rtgs=rtgs)  #, timesteps=timesteps)
         # pluck the logits at the final step and scale by temperature
         logits = logits[:, -1, :] / temperature
         # optionally crop probabilities to only the top k options
