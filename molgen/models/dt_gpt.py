@@ -276,7 +276,6 @@ class DtGPT(nn.Module):
             token_embeddings[:, 2::3, :] = action_embeddings[:, -states.shape[1] + int(targets is None):, :]
         elif actions is None and self.model_type == 'reward_conditioned':  # only happens at very first timestep of evaluation
             rtg_embeddings = self.ret_emb(rtgs.type(torch.float32))
-
             token_embeddings = torch.zeros((batch_size, states.shape[1] * 2, self.config.n_embd),
                                            dtype=torch.float32, device=state_embeddings.device)
             token_embeddings[:, ::2, :] = rtg_embeddings  # really just [:,0,:]
@@ -295,7 +294,9 @@ class DtGPT(nn.Module):
         else:
             raise NotImplementedError()
 
-        pos = torch.arange(0, block_size, dtype=torch.long, device=states.device).repeat_interleave(3).unsqueeze(0)
+        pos = torch.arange(
+            0, block_size, dtype=torch.long, device=states.device
+        ).repeat_interleave(token_embeddings.shape[1]).unsqueeze(0)
         pos_emb = self.pos_emb(pos)
         # all_global_pos_emb = torch.repeat_interleave(
         #     self.global_pos_emb, batch_size, dim=0
