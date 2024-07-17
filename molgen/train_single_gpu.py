@@ -21,8 +21,6 @@ def single_gpu_training(args) -> None:
 
     train_config = config["train_config"]
     model_config = config["model_config"]
-    if train_config["device"] == "cpu":
-        model_config["vocab_size"] += 3
 
     setup_torch(train_config["seed"], train_config["device"])
     ctx, scaler = setup_mixed_precision(train_config["device"], train_config["dtype"])
@@ -45,7 +43,11 @@ def single_gpu_training(args) -> None:
                           **kwargs)
 
     batch_sampler = LengthBatchSampler(dataset, train_config["batch_size"], drop_last=False)
-    collate_fn = PadCollate(tokenizer.pad_token_id, max_length=model_config["block_size"] // 3)
+    collate_fn = PadCollate(
+        pad_token_id=tokenizer.pad_token_id,
+        ignore_index=tokenizer.pad_token_id,
+        max_length=model_config["block_size"] // 3
+    )
     dataloader = DataLoader(dataset,
                             batch_sampler=batch_sampler,
                             collate_fn=collate_fn,
