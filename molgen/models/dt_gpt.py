@@ -266,7 +266,7 @@ class DtGPT(nn.Module):
 
         if actions is not None and self.model_type == 'reward_conditioned':
             rtg_embeddings = self.ret_emb(rtgs.unsqueeze(-1))  # (batch, block_size, n_embd)
-            action_embeddings = self.action_embeddings(actions)  # (batch, block_size, n_embd)
+            action_embeddings = self.action_embeddings(actions)  # (batch, block_size, n_embd)  # TODO: Debug this for generation where actions shape is (batch = 1, block_size - 1, n_embd)
 
             token_embeddings = torch.zeros(
                 (batch_size, block_size * 3 - int(targets is None), self.config.n_embd), dtype=torch.float32,
@@ -294,9 +294,10 @@ class DtGPT(nn.Module):
         else:
             raise NotImplementedError()
 
+        n_blocks = 2 if actions is None else 3  # only happens at very first timestep of evaluation
         pos = torch.arange(
             0, block_size, dtype=torch.long, device=states.device
-        ).repeat_interleave(token_embeddings.shape[1]).unsqueeze(0)
+        ).repeat_interleave(n_blocks).unsqueeze(0)
         pos_emb = self.pos_emb(pos)
         # all_global_pos_emb = torch.repeat_interleave(
         #     self.global_pos_emb, batch_size, dim=0
@@ -347,7 +348,7 @@ def top_k_logits(logits, k):
 
 
 @torch.no_grad()
-def sample(model, x, steps, temperature=1.0, sample=False, top_k=None, actions=None, rtgs=None, timesteps=None):
+def sample(model, x, steps, temperature=1.0, sample=False, top_k=None, actions=None, rtgs=None, attention=None):
     """
     take a conditioning sequence of indices in x (of shape (b,t)) and predict the next token in
     the sequence, feeding the predictions back into the model each time. Clearly the sampling
@@ -362,7 +363,7 @@ def sample(model, x, steps, temperature=1.0, sample=False, top_k=None, actions=N
         if actions is not None:
             actions = actions if actions.size(1) <= block_size//3 else actions[:, -block_size//3:] # crop context if needed
         rtgs = rtgs if rtgs.size(1) <= block_size//3 else rtgs[:, -block_size//3:] # crop context if needed
-        logits, _ = model(states=x_cond, actions=actions, targets=None, rtgs=rtgs)  #, timesteps=timesteps)
+        logits, _ = model(states=x_cond, actions=actions, targets=None, rtgs=rtgs, attention_mask=attention)
         # pluck the logits at the final step and scale by temperature
         logits = logits[:, -1, :] / temperature
         # optionally crop probabilities to only the top k options

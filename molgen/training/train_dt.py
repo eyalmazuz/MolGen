@@ -131,8 +131,8 @@ class Trainer:
                 temperature=1.0,
                 sample=True,
                 actions=None,
-                rtgs=torch.tensor(rtgs, dtype=torch.long).to(self.device).unsqueeze(0).unsqueeze(-1),
-                timesteps=torch.zeros((1, 1, 1), dtype=torch.int64).to(self.device)
+                rtgs=torch.tensor(rtgs, dtype=torch.float32).to(self.device).unsqueeze(0).unsqueeze(-1),
+                # timesteps=torch.zeros((1, 1, 1), dtype=torch.int64).to(self.device)
             )
 
             j = 0
@@ -140,17 +140,14 @@ class Trainer:
             actions = []
             while True:
                 if done:
-                    # TODO: need to replace env with tokens, i.e. done is action == EOS token
-                    state, reward_sum, done = (
-                        torch.tensor(self.bos_token_id, dtype=torch.int64), 0, False
-                    )
+                    state, reward_sum, done = ([self.bos_token_id], 0, False)
                 action = sampled_action.cpu().numpy()[0, -1]
                 actions += [sampled_action]
-                # TODO: get next state by appending the action and use EOS token for done
-                state.appened(action)
-                reward = self.reward_func(state)
-                done = action == self.eos_token_id
-                # state, reward, done = env.step(action)
+                state.append(action)
+                reward = self.reward_func(
+                    self.train_dataset.dataset.tokenizer.decode(state, skip_special_tokens=True)
+                )[0]
+                done = action == self.eos_token_id  # mol is complete when [EOS] token is generated
                 reward_sum = reward
                 j += 1
 
@@ -158,22 +155,25 @@ class Trainer:
                     T_rewards.append(reward_sum)
                     break
 
-                state = state.unsqueeze(0).unsqueeze(0).to(self.device)
+                state = torch.tensor(state, device=self.device).unsqueeze(0).unsqueeze(0)
+                all_states = torch.nn.functional.pad(all_states, (0, state.shape[-1] - 1), value=self.pad_token_id)
+                all_states = torch.cat([all_states, state], dim=1)
 
-                all_states = torch.cat([all_states, state], dim=0)
-
-                rtgs += [rtgs[-1] - reward] # TODO: Check this
+                rtgs += [rtgs[-1]]  # - reward]  # TODO: Check this
                 # all_states has all previous states and rtgs has all previous rtgs (will be cut to block_size in utils.sample)
-                # timestep is just current timestep
-                sampled_action = sample(self.model.module, all_states.unsqueeze(0), 1, temperature=1.0, sample=True,
-                                        actions=torch.tensor(actions, dtype=torch.long).to(self.device).unsqueeze(
-                                            1).unsqueeze(0),
-                                        rtgs=torch.tensor(rtgs, dtype=torch.long).to(self.device).unsqueeze(
-                                            0).unsqueeze(-1),
-                                        timesteps=(min(j, self.config.max_timestep) * torch.ones((1, 1, 1),
-                                                                                                 dtype=torch.int64).to(
-                                            self.device)))
-        eval_return = sum(T_rewards) / 10.
+                # timestep is just current timestep # TODO: check the tensor(actions) to verify its correct
+                sampled_action = sample(
+                    model=self.model,
+                    x=all_states,
+                    steps=1,
+                    temperature=1.0,
+                    sample=True,
+                    actions=torch.tensor(actions, dtype=torch.long).to(self.device).unsqueeze(0),
+                    rtgs=torch.tensor(rtgs, dtype=torch.float32).to(self.device).unsqueeze(0),
+                    attention=torch.tensor(np.tril(np.ones(all_states.shape[1:])), dtype=torch.long).to(self.device).unsqueeze(0)
+                    # timesteps=(min(j, self.config.max_timestep) * torch.ones((1, 1, 1), dtype=torch.int64).to(self.device)))
+                )
+        eval_return = sum(T_rewards) / 10.  # TODO: Verify
         print("target return: %d, eval return: %d" % (ret, eval_return))
         self.model.train(True)
         return eval_return
