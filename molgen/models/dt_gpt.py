@@ -236,7 +236,7 @@ class DtGPT(nn.Module):
 
     @staticmethod
     def mean_pooling(model_output, attention_mask):
-        input_mask_expanded = attention_mask.unsqueeze(-1).expand(model_output.size())  # TODO: Debug RuntimeError: The expanded size of the tensor (30) must match the existing size (31) at non-singleton dimension 1.  Target sizes: [1, 30, 31, 768].  Tensor sizes: [1, 31, 31, 1]
+        input_mask_expanded = attention_mask.unsqueeze(-1).expand(model_output.size())
         return torch.sum(model_output * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
         # token_embeddings = model_output[0]  # First element of model_output contains all token embeddings
         # input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()

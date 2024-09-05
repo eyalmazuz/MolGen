@@ -5,6 +5,7 @@ from tqdm import tqdm
 import torch
 
 from molgen.models.dt_gpt import sample
+from molgen.utils.plot_utils import save_plot
 
 
 class Trainer:
@@ -84,10 +85,10 @@ class Trainer:
                     # report progress
                     pbar.set_description(f"epoch {epoch_num + 1} of {epochs} | iter {it}: train loss {loss.item():.5f}. lr {lr:e}")
 
-            print(f"\nMean Epoch Loss: {float(np.mean(losses))}")
-            if not is_train:
-                test_loss = float(np.mean(losses))
-                return test_loss
+            # if not is_train:
+            test_loss = float(np.mean(losses))
+            print(f"\nMean Epoch Loss: {test_loss:.4f}")
+            return test_loss
 
         # best_loss = float('inf')
 
@@ -95,9 +96,11 @@ class Trainer:
 
         self.tokens = 0  # counter used for learning rate decay
         epochs = config["max_steps"] // len(self.train_dataset)
+        epoch_losses = []
         for epoch in range(epochs):
 
-            run_epoch('train', epoch_num=epoch)
+            epoch_loss = run_epoch('train', epoch_num=epoch)
+            epoch_losses.append(epoch_loss)
             # if self.test_dataset is not None:
             #     test_loss = run_epoch('test')
 
@@ -114,6 +117,9 @@ class Trainer:
                 # TODO: return should be based on the reward function, for now put 1 for a scaled reward
                 eval_return = self.get_returns(1)
 
+        [print(f"{ep_loss:.5f}") for ep_loss in epoch_losses]  # Debug print
+        save_plot({"Loss_per_Epoch": epoch_losses})
+
     def get_returns(self, ret):
         self.model.train(False)
 
@@ -121,13 +127,13 @@ class Trainer:
         done = True
         for i in range(10):
             terminated = False
-            state = torch.tensor([self.bos_token_id], dtype=torch.int64)
-            state = state.to(self.device).unsqueeze(0).unsqueeze(0)
+            init_state = torch.tensor([self.bos_token_id], dtype=torch.int64)
+            init_state = init_state.to(self.device).unsqueeze(0).unsqueeze(0)
             rtgs = [ret]
             # first state is from env, first rtg is target return, and first timestep is 0
             sampled_action = sample(
                 model=self.model,
-                x=state,
+                x=init_state,
                 steps=1,
                 temperature=1.0,
                 sample=True,
@@ -137,7 +143,7 @@ class Trainer:
             )
 
             j = 0
-            all_states = state
+            all_states = init_state
             actions = []
             while True:
                 if done:
