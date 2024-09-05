@@ -82,8 +82,9 @@ class Trainer:
                         lr = config["learning_rate"]
 
                     # report progress
-                    pbar.set_description(f"epoch {epoch + 1} iter {it}: train loss {loss.item():.5f}. lr {lr:e}")
+                    pbar.set_description(f"epoch {epoch_num + 1} of {epochs} | iter {it}: train loss {loss.item():.5f}. lr {lr:e}")
 
+            print(f"\nMean Epoch Loss: {float(np.mean(losses))}")
             if not is_train:
                 test_loss = float(np.mean(losses))
                 return test_loss
@@ -119,7 +120,6 @@ class Trainer:
         T_rewards, T_Qs = [], []
         done = True
         for i in range(10):
-            # TODO: need to define initial state correctly? i.e. shape of block size
             state = torch.tensor([self.bos_token_id], dtype=torch.int64)
             state = state.to(self.device).unsqueeze(0).unsqueeze(0)
             rtgs = [ret]
@@ -142,7 +142,7 @@ class Trainer:
                 if done:
                     state, reward_sum, done = ([self.bos_token_id], 0, False)
                 action = sampled_action.cpu().numpy()[0, -1]
-                actions += [sampled_action]
+                actions += [action]
                 state.append(action)
                 reward = self.reward_func(
                     self.train_dataset.dataset.tokenizer.decode(state, skip_special_tokens=True)
@@ -155,9 +155,10 @@ class Trainer:
                     T_rewards.append(reward_sum)
                     break
 
-                state = torch.tensor(state, device=self.device).unsqueeze(0).unsqueeze(0)
-                all_states = torch.nn.functional.pad(all_states, (0, state.shape[-1] - 1), value=self.pad_token_id)
-                all_states = torch.cat([all_states, state], dim=1)
+                tensor_state = torch.tensor(state, device=self.device).unsqueeze(0).unsqueeze(0)
+                pad_size = tensor_state.shape[-1] - all_states.shape[-1]
+                all_states = torch.nn.functional.pad(all_states, (0, pad_size), value=self.pad_token_id)
+                all_states = torch.cat([all_states, tensor_state], dim=1)
 
                 rtgs += [rtgs[-1]]  # - reward]  # TODO: Check this
                 # all_states has all previous states and rtgs has all previous rtgs (will be cut to block_size in utils.sample)

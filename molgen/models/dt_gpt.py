@@ -236,7 +236,7 @@ class DtGPT(nn.Module):
 
     @staticmethod
     def mean_pooling(model_output, attention_mask):
-        input_mask_expanded = attention_mask.unsqueeze(-1).expand(model_output.size())
+        input_mask_expanded = attention_mask.unsqueeze(-1).expand(model_output.size())  # TODO: Debug RuntimeError: The expanded size of the tensor (30) must match the existing size (31) at non-singleton dimension 1.  Target sizes: [1, 30, 31, 768].  Tensor sizes: [1, 31, 31, 1]
         return torch.sum(model_output * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
         # token_embeddings = model_output[0]  # First element of model_output contains all token embeddings
         # input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
@@ -266,7 +266,7 @@ class DtGPT(nn.Module):
 
         if actions is not None and self.model_type == 'reward_conditioned':
             rtg_embeddings = self.ret_emb(rtgs.unsqueeze(-1))  # (batch, block_size, n_embd)
-            action_embeddings = self.action_embeddings(actions)  # (batch, block_size, n_embd)  # TODO: Debug this for generation where actions shape is (batch = 1, block_size - 1, n_embd)
+            action_embeddings = self.action_embeddings(actions)  # (batch, block_size, n_embd)
 
             token_embeddings = torch.zeros(
                 (batch_size, block_size * 3 - int(targets is None), self.config.n_embd), dtype=torch.float32,
@@ -299,17 +299,8 @@ class DtGPT(nn.Module):
             0, block_size, dtype=torch.long, device=states.device
         ).repeat_interleave(n_blocks).unsqueeze(0)
         pos_emb = self.pos_emb(pos)
-        # all_global_pos_emb = torch.repeat_interleave(
-        #     self.global_pos_emb, batch_size, dim=0
-        # )  # batch_size, traj_length, n_embd
-        #
-        # position_embeddings = torch.gather(
-        #     all_global_pos_emb,
-        #     1,
-        #     torch.repeat_interleave(timesteps, self.config.n_embd, dim=-1)
-        # ) + self.pos_emb[:, : token_embeddings.shape[1], :]
 
-        x = self.drop(token_embeddings + pos_emb)
+        x = self.drop(token_embeddings + pos_emb[:, :token_embeddings.shape[1], :])
         x = self.blocks(x)
         x = self.ln_f(x)
         logits = self.head(x)
