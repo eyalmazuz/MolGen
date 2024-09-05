@@ -120,6 +120,7 @@ class Trainer:
         T_rewards, T_Qs = [], []
         done = True
         for i in range(10):
+            terminated = False
             state = torch.tensor([self.bos_token_id], dtype=torch.int64)
             state = state.to(self.device).unsqueeze(0).unsqueeze(0)
             rtgs = [ret]
@@ -151,7 +152,11 @@ class Trainer:
                 reward_sum = reward
                 j += 1
 
-                if done:
+                # if molecule length exceeds block_size and [EOS] token wasn't generated terminate generation
+                if len(state) >= self.model.block_size // 3 and not done:
+                    terminated = True
+
+                if done or terminated:
                     T_rewards.append(reward_sum)
                     break
 
