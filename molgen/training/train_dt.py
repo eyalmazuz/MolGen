@@ -10,7 +10,7 @@ from molgen.utils.plot_utils import save_plot
 
 class Trainer:
 
-    def __init__(self, model, train_dataset, test_dataset, reward_func, config):
+    def __init__(self, model, train_dataset, test_dataset, reward_func, config, wandb_run=None):
         self.model = model
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
@@ -20,6 +20,7 @@ class Trainer:
         self.eos_token_id = train_dataset.dataset.tokenizer.eos_token_id
         self.pad_token_id = train_dataset.dataset.tokenizer.pad_token_id
         self.ignore_token_id = train_dataset.collate_fn.ignore_index
+        self.wandb_run = wandb_run
 
         # take over whatever gpus are on the system
         self.device = torch.device(config["device"])
@@ -60,7 +61,7 @@ class Trainer:
 
                     # backprop and update the parameters
                     model.zero_grad()
-                    loss.backward()     # TODO: scaler.scale(loss).backward()
+                    loss.backward()     # TODO: scaler.scale(loss).backward() - only for mix precision training
                     torch.nn.utils.clip_grad_norm_(model.parameters(), config.get("grad_clip", 1.0))
                     optimizer.step()
 
@@ -199,7 +200,8 @@ def run_dt_training(
         scaler,
         reward_func,
         train_config,
-        test_dataloader=None
+        test_dataloader=None,
+        wandb_run=None,
 ):
-    trainer = Trainer(model, train_dataloader, test_dataloader, reward_func, train_config)
+    trainer = Trainer(model, train_dataloader, test_dataloader, reward_func, train_config, wandb_run)
     trainer.train(optimizer)

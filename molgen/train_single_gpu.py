@@ -1,4 +1,6 @@
 import tomllib
+import wandb
+from datetime import datetime
 
 import torch
 from torch.utils.data import DataLoader
@@ -12,6 +14,7 @@ from molgen.tokenizers.tokenizer_factory import get_tokenizer
 from molgen.training.train import run_training
 from molgen.training.train_dt import run_dt_training
 from molgen.utils.train_utils import setup_torch, setup_mixed_precision
+from molgen.utils.plot_utils import log_metrics_to_wandb
 from molgen.rewards.reward_factory import get_rewards
 
 
@@ -63,11 +66,21 @@ def single_gpu_training(args) -> None:
                                            train_config["learning_rate"],
                                            train_config["betas"],
                                            train_config["device"])
+    wandb_run = None
+    # wandb_run = log_metrics_to_wandb(
+    #     wandb_key=args.wandb_key,
+    #     project_name=args.wandb_proj,
+    #     project_entity=args.wandb_entity,
+    #     training_config=train_config,
+    #     run_name=f'{str(datetime.now().strftime("%m_%d_%H_%M_%S"))}'
+    # )
 
     if train_config["compile"]:
         model = torch.compile(model)
 
     if model_type == ModelType.DT:
-        run_dt_training(model, dataloader, optimizer, ctx, scaler, kwargs["reward_func"], train_config)
+        run_dt_training(model, dataloader, optimizer, ctx, scaler, kwargs["reward_func"], train_config, wandb_run=wandb_run)
     else:
         run_training(model, dataloader, optimizer, ctx, scaler, train_config)
+
+    wandb.finish()
