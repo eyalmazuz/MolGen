@@ -13,10 +13,10 @@ def get_pretrain_args() -> argparse.Namespace:
     parser.add_argument("--config_path", type=str, required=True, help="Path to the connfig containing training and model params")
 
     # Wandb parameters to log results
+    parser.add_argument('--wandb_key', type=str, help='wandb api key for user login', default=None)
     parser.add_argument('--wandb_proj', type=str, default='DecisionMol',
                         help='name of wandb project to upload results')
-    parser.add_argument('--wandb_key', type=str, help='wandb api key for user login')
-    parser.add_argument('--wandb_entity', type=str, default='"bgu-sise"',
+    parser.add_argument('--wandb_entity', type=str, default='bgu-sise',
                         help='wandb entity associated with the project')
 
     return parser.parse_args()

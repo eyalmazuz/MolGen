@@ -40,7 +40,7 @@ class Trainer:
             model.train(is_train)
             loader = self.train_dataset if is_train else self.test_dataset
 
-            losses = []
+            total_loss = 0
             pbar = tqdm(enumerate(loader), total=len(loader)) if is_train else enumerate(loader)
             for it, batch in pbar:
                 batch = {k: v.pin_memory().to(self.device, non_blocking=True) for k, v in batch.items()}
@@ -55,7 +55,7 @@ class Trainer:
                     logits, loss = model(states=x, actions=y, targets=y, rtgs=r, attention_mask=a)
                     # logits, loss = model(x, y, y, r, t)
                     loss = loss.mean()  # collapse all losses if they are scattered on multiple gpus
-                    losses.append(loss.item())   # TODO: consider removing .item if aggregating
+                    total_loss += loss
 
                 if is_train:
 
@@ -87,9 +87,11 @@ class Trainer:
                     pbar.set_description(f"epoch {epoch_num + 1} of {epochs} | iter {it}: train loss {loss.item():.5f}. lr {lr:e}")
 
             # if not is_train:
-            test_loss = float(np.mean(losses))
-            print(f"\nMean Epoch Loss: {test_loss:.4f}")
-            return test_loss
+            episode_loss = total_loss.item() / len(loader)
+            print(f"\nMean Epoch Loss: {episode_loss:.4f}")
+            if self.wandb_run:
+                self.wandb_run.log({'training_loss': episode_loss, 'epoch': epoch})
+            return episode_loss
 
         # best_loss = float('inf')
 

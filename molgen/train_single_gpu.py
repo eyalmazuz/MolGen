@@ -1,3 +1,4 @@
+import os
 import tomllib
 import wandb
 from datetime import datetime
@@ -58,22 +59,21 @@ def single_gpu_training(args) -> None:
                             # num_workers=train_config["num_workers"]
                             )
 
-    # if model_config.get("max_timestep", 0) > 0:
-    #     model_config["max_timestep"] = max(batch_sampler.lengths)
-    # model = get_model(model_type, model_config).to(train_config["device"])
-
     optimizer = model.configure_optimizers(train_config["weight_decay"],
                                            train_config["learning_rate"],
                                            train_config["betas"],
                                            train_config["device"])
-    wandb_run = None
-    # wandb_run = log_metrics_to_wandb(
-    #     wandb_key=args.wandb_key,
-    #     project_name=args.wandb_proj,
-    #     project_entity=args.wandb_entity,
-    #     training_config=train_config,
-    #     run_name=f'{str(datetime.now().strftime("%m_%d_%H_%M_%S"))}'
-    # )
+    if args.wandb_key is None:
+        wandb_run = None
+    else:
+        wandb_run = log_metrics_to_wandb(
+            wandb_key=args.wandb_key,
+            project_name=args.wandb_proj,
+            project_entity=args.wandb_entity,
+            training_config=train_config,
+            run_name=f"{os.path.basename(args.data_path).split('.')[0]}_"
+                     f"{str(datetime.now().strftime('%m_%d_%H_%M_%S'))}"
+        )
 
     if train_config["compile"]:
         model = torch.compile(model)
