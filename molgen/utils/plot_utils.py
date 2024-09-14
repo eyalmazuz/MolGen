@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import wandb
 import matplotlib.pyplot as plt
@@ -7,13 +7,15 @@ import matplotlib.pyplot as plt
 
 def save_plot(
         data: Dict[str, List[float]],
-        path="/mobileye/VAL_ARCH/org/MolGen/plots"
+        path: Optional[str] = None
 ):
     """
     Generate a matplotlib plot of the data and save the graph to path
     :param data: Dictionary of data to plot
     :param path: Path to save the plot
     """
+    if path is None:
+        path = os.path.join(os.getcwd(), "plots")
     for title, plt_data in data.items():
         plt.plot(range(len(plt_data)), plt_data)
 

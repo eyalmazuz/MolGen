@@ -23,10 +23,13 @@ class Trainer:
         self.wandb_run = wandb_run
 
         # take over whatever gpus are on the system
-        self.device = torch.device(config["device"])
-        # if torch.cuda.is_available():
-            # self.device = torch.cuda.current_device()
-            # self.model = torch.nn.DataParallel(self.model).to(self.device)
+        if config["device"] == "cuda" and torch.cuda.is_available():
+            self.device = torch.cuda.current_device()
+            self.model = torch.nn.DataParallel(self.model).to(self.device)
+        elif config["device"] == "cuda":
+            raise Exception("No GPU found!")
+        else:
+            self.device = torch.device(config["device"])
 
     def save_checkpoint(self):
         raw_model = self.model.module if hasattr(self.model, "module") else self.model
