@@ -1,3 +1,4 @@
+import gc
 import math
 import numpy as np
 from tqdm import tqdm
@@ -118,9 +119,9 @@ class Trainer:
             #     self.save_checkpoint()
 
             # -- pass in target returns
-            if self.model.model_type == 'naive':
+            if self.model.module.model_type == 'naive':
                 eval_return = self.get_returns(0)
-            elif self.model.model_type == 'reward_conditioned':
+            elif self.model.module.model_type == 'reward_conditioned':
                 # TODO: return should be based on the reward function, for now put 1 for a scaled reward
                 eval_return = self.get_returns(1)
 
@@ -167,7 +168,7 @@ class Trainer:
                 j += 1
 
                 # if molecule length exceeds block_size and [EOS] token wasn't generated terminate generation
-                if len(state) >= self.model.block_size // 3 and not done:
+                if len(state) >= self.model.module.block_size // 3 and not done:
                     terminated = True
 
                 if done or terminated:

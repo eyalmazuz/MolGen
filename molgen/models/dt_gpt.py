@@ -144,17 +144,17 @@ class DtGPT(nn.Module):
         self.model_type = config.model_type
 
         # input embedding stem
-        self.tok_emb = nn.Embedding(config.vocab_size, config.n_embd)
+        self.tok_emb = nn.Embedding(config.vocab_size, config.n_embd, dtype=torch.float32)
         # self.pos_emb = nn.Parameter(torch.zeros(1, config.block_size, config.n_embd))
-        self.pos_emb = nn.Embedding(config.block_size, config.n_embd)
+        self.pos_emb = nn.Embedding(config.block_size, config.n_embd, dtype=torch.float32)
         # self.global_pos_emb = nn.Parameter(torch.zeros(1, config.max_timestep + 1, config.n_embd))
         self.drop = nn.Dropout(config.embd_pdrop)
 
         # transformer
         self.blocks = nn.Sequential(*[DecoderOnlyBlock(config) for _ in range(config.n_layer)])
         # decoder head
-        self.ln_f = nn.LayerNorm(config.n_embd)
-        self.head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        self.ln_f = nn.LayerNorm(config.n_embd, dtype=torch.float32)
+        self.head = nn.Linear(config.n_embd, config.vocab_size, bias=False, dtype=torch.float32)
 
         self.block_size = config.block_size
         self.apply(self._init_weights)
@@ -163,7 +163,7 @@ class DtGPT(nn.Module):
 
         self.state_embedding = self.tok_emb
         # self.state_encoder = nn.Linear(config.block_size // 3 * config.n_embd, config.n_embd)
-        self.ret_emb = nn.Sequential(nn.Linear(1, config.n_embd), nn.Tanh())
+        self.ret_emb = nn.Sequential(nn.Linear(1, config.n_embd, dtype=torch.float32), nn.Tanh())
 
         self.action_embeddings = self.tok_emb   # Actions are simply SMILES tokens to add to the state
         nn.init.normal_(self.action_embeddings.weight, mean=0.0, std=0.02)
@@ -346,7 +346,7 @@ def sample(model, x, steps, temperature=1.0, sample=False, top_k=None, actions=N
     has quadratic complexity unlike an RNN that is only linear, and has a finite context window
     of block_size, unlike an RNN that has an infinite context window.
     """
-    block_size = model.get_block_size()
+    block_size = model.module.get_block_size()
     model.eval()
     for k in range(steps):
         # x_cond = x if x.size(1) <= block_size else x[:, -block_size:] # crop context if needed
