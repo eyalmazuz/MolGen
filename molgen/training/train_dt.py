@@ -23,10 +23,9 @@ class Trainer:
         self.wandb_run = wandb_run
 
         # take over whatever gpus are on the system
-        self.device = torch.device(config["device"])
-        # if torch.cuda.is_available():
-            # self.device = torch.cuda.current_device()
-            # self.model = torch.nn.DataParallel(self.model).to(self.device)
+        if torch.cuda.is_available():
+            self.device = torch.cuda.current_device()
+            self.model = torch.nn.DataParallel(self.model).to(self.device)
 
     def save_checkpoint(self):
         raw_model = self.model.module if hasattr(self.model, "module") else self.model
@@ -120,8 +119,9 @@ class Trainer:
                 # TODO: return should be based on the reward function, for now put 1 for a scaled reward
                 eval_return = self.get_returns(1)
 
-        [print(f"{ep_loss:.5f}") for ep_loss in epoch_losses]  # Debug print
-        save_plot({"Loss_per_Epoch": epoch_losses})
+        if self.wandb_run is None:
+            [print(f"{ep_loss:.5f}") for ep_loss in epoch_losses]  # Debug print
+            save_plot({"Loss_per_Epoch": epoch_losses})
 
     def get_returns(self, ret):
         self.model.train(False)
