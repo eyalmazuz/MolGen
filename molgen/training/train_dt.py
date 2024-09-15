@@ -85,11 +85,16 @@ class Trainer:
                     # report progress
                     pbar.set_description(f"epoch {epoch_num + 1} of {epochs} | iter {it}: train loss {loss.item():.5f}. lr {lr:e}")
 
+                    del batch
+                    torch.cuda.empty_cache()
+                    gc.collect()
+
             # if not is_train:
             episode_loss = total_loss.item() / len(loader)
             print(f"\nMean Epoch Loss: {episode_loss:.4f}")
             if self.wandb_run:
                 self.wandb_run.log({'training_loss': episode_loss, 'epoch': epoch})
+
             return episode_loss
 
         # best_loss = float('inf')
