@@ -23,13 +23,9 @@ class Trainer:
         self.wandb_run = wandb_run
 
         # take over whatever gpus are on the system
-        if config["device"] == "cuda" and torch.cuda.is_available():
+        if torch.cuda.is_available():
             self.device = torch.cuda.current_device()
             self.model = torch.nn.DataParallel(self.model).to(self.device)
-        elif config["device"] == "cuda":
-            raise Exception("No GPU found!")
-        else:
-            self.device = torch.device(config["device"])
 
     def save_checkpoint(self):
         raw_model = self.model.module if hasattr(self.model, "module") else self.model
@@ -89,11 +85,16 @@ class Trainer:
                     # report progress
                     pbar.set_description(f"epoch {epoch_num + 1} of {epochs} | iter {it}: train loss {loss.item():.5f}. lr {lr:e}")
 
+                    del batch
+                    torch.cuda.empty_cache()
+                    gc.collect()
+
             # if not is_train:
             episode_loss = total_loss.item() / len(loader)
             print(f"\nMean Epoch Loss: {episode_loss:.4f}")
             if self.wandb_run:
                 self.wandb_run.log({'training_loss': episode_loss, 'epoch': epoch})
+
             return episode_loss
 
         # best_loss = float('inf')
@@ -123,8 +124,9 @@ class Trainer:
                 # TODO: return should be based on the reward function, for now put 1 for a scaled reward
                 eval_return = self.get_returns(1)
 
-        [print(f"{ep_loss:.5f}") for ep_loss in epoch_losses]  # Debug print
-        save_plot({"Loss_per_Epoch": epoch_losses})
+        if self.wandb_run is None:
+            [print(f"{ep_loss:.5f}") for ep_loss in epoch_losses]  # Debug print
+            save_plot({"Loss_per_Epoch": epoch_losses})
 
     def get_returns(self, ret):
         self.model.train(False)
