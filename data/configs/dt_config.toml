@@ -1,8 +1,8 @@
 [train_config]
-batch_size = 8
+batch_size = 1
 gradient_accumulation_steps = 30
-learning_rate = 6e-4
-max_steps = 600000
+learning_rate = 1e-3
+max_steps = 6000000
 weight_decay = 1e-1
 betas = [0.9, 0.95]
 grad_clip = 1.0
@@ -16,7 +16,7 @@ device = "cuda"
 seed = 42
 
 [model_config]
-vocab_size = 32768
+vocab_size = 32771
 block_size = 90
 n_embd = 768
 n_head = 12

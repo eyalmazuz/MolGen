@@ -1,3 +1,4 @@
+import gc
 import math
 import numpy as np
 from tqdm import tqdm
@@ -10,7 +11,7 @@ from molgen.utils.plot_utils import save_plot
 
 class Trainer:
 
-    def __init__(self, model, train_dataset, test_dataset, reward_func, config):
+    def __init__(self, model, train_dataset, test_dataset, reward_func, config, wandb_run=None):
         self.model = model
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
@@ -20,12 +21,12 @@ class Trainer:
         self.eos_token_id = train_dataset.dataset.tokenizer.eos_token_id
         self.pad_token_id = train_dataset.dataset.tokenizer.pad_token_id
         self.ignore_token_id = train_dataset.collate_fn.ignore_index
+        self.wandb_run = wandb_run
 
         # take over whatever gpus are on the system
-        self.device = torch.device(config["device"])
-        # if torch.cuda.is_available():
-            # self.device = torch.cuda.current_device()
-            # self.model = torch.nn.DataParallel(self.model).to(self.device)
+        if torch.cuda.is_available():
+            self.device = torch.cuda.current_device()
+            self.model = torch.nn.DataParallel(self.model).to(self.device)
 
     def save_checkpoint(self):
         raw_model = self.model.module if hasattr(self.model, "module") else self.model
@@ -39,7 +40,7 @@ class Trainer:
             model.train(is_train)
             loader = self.train_dataset if is_train else self.test_dataset
 
-            losses = []
+            total_loss = 0
             pbar = tqdm(enumerate(loader), total=len(loader)) if is_train else enumerate(loader)
             for it, batch in pbar:
                 batch = {k: v.pin_memory().to(self.device, non_blocking=True) for k, v in batch.items()}
@@ -54,13 +55,13 @@ class Trainer:
                     logits, loss = model(states=x, actions=y, targets=y, rtgs=r, attention_mask=a)
                     # logits, loss = model(x, y, y, r, t)
                     loss = loss.mean()  # collapse all losses if they are scattered on multiple gpus
-                    losses.append(loss.item())   # TODO: consider removing .item if aggregating
+                    total_loss += loss
 
                 if is_train:
 
                     # backprop and update the parameters
                     model.zero_grad()
-                    loss.backward()     # TODO: scaler.scale(loss).backward()
+                    loss.backward()     # TODO: scaler.scale(loss).backward() - only for mix precision training
                     torch.nn.utils.clip_grad_norm_(model.parameters(), config.get("grad_clip", 1.0))
                     optimizer.step()
 
@@ -85,10 +86,17 @@ class Trainer:
                     # report progress
                     pbar.set_description(f"epoch {epoch_num + 1} of {epochs} | iter {it}: train loss {loss.item():.5f}. lr {lr:e}")
 
+                    del batch
+                    torch.cuda.empty_cache()
+                    gc.collect()
+
             # if not is_train:
-            test_loss = float(np.mean(losses))
-            print(f"\nMean Epoch Loss: {test_loss:.4f}")
-            return test_loss
+            episode_loss = total_loss.item() / len(loader)
+            print(f"\nMean Epoch Loss: {episode_loss:.4f}")
+            if self.wandb_run:
+                self.wandb_run.log({'training_loss': episode_loss, 'epoch': epoch})
+
+            return episode_loss
 
         # best_loss = float('inf')
 
@@ -111,14 +119,15 @@ class Trainer:
             #     self.save_checkpoint()
 
             # -- pass in target returns
-            if self.model.model_type == 'naive':
+            if self.model.module.model_type == 'naive':
                 eval_return = self.get_returns(0)
-            elif self.model.model_type == 'reward_conditioned':
+            elif self.model.module.model_type == 'reward_conditioned':
                 # TODO: return should be based on the reward function, for now put 1 for a scaled reward
                 eval_return = self.get_returns(1)
 
-        [print(f"{ep_loss:.5f}") for ep_loss in epoch_losses]  # Debug print
-        save_plot({"Loss_per_Epoch": epoch_losses})
+        if self.wandb_run is None:
+            [print(f"{ep_loss:.5f}") for ep_loss in epoch_losses]  # Debug print
+            save_plot({"Loss_per_Epoch": epoch_losses})
 
     def get_returns(self, ret):
         self.model.train(False)
@@ -159,7 +168,7 @@ class Trainer:
                 j += 1
 
                 # if molecule length exceeds block_size and [EOS] token wasn't generated terminate generation
-                if len(state) >= self.model.block_size // 3 and not done:
+                if len(state) >= self.model.module.block_size // 3 and not done:
                     terminated = True
 
                 if done or terminated:
@@ -199,7 +208,8 @@ def run_dt_training(
         scaler,
         reward_func,
         train_config,
-        test_dataloader=None
+        test_dataloader=None,
+        wandb_run=None,
 ):
-    trainer = Trainer(model, train_dataloader, test_dataloader, reward_func, train_config)
+    trainer = Trainer(model, train_dataloader, test_dataloader, reward_func, train_config, wandb_run)
     trainer.train(optimizer)
