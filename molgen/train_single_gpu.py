@@ -63,6 +63,11 @@ def single_gpu_training(args) -> None:
                                            train_config["learning_rate"],
                                            train_config["betas"],
                                            train_config["device"])
+
+    if not os.path.exists(args.checkpoint_dir):
+        os.makedirs(args.checkpoint_dir)
+    train_config["ckpt_path"] = args.checkpoint_dir
+
     if args.wandb_key is None:
         wandb_run = None
     else:
