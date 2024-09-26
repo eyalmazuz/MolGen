@@ -21,6 +21,8 @@ from molgen.models.dt_gpt import sample
 from molgen.models.model_factory import get_model
 from molgen.models.model_options import ModelType
 from molgen.rewards.reward_factory import get_rewards
+from molgen.datasets.dataset_options import DatasetType
+from molgen.datasets.dataset_factory import get_dataset
 from molgen.tokenizers.tokenizer_factory import get_tokenizer
 from molgen.utils.mol_utils import convert_to_molecules, filter_invalid_molecules
 from molgen.utils.metrics import calc_qed, calc_sas, calc_diversity, calc_novelty, calc_valid_molecules
@@ -46,7 +48,7 @@ def load_model(model_config, args):
     checkpoint = torch.load(args.checkpoint, map_location=args.device)
     model.load_state_dict(checkpoint)
 
-    return model
+    return model, model_type
 
 
 def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1, ret: float = 1.0):
@@ -60,11 +62,12 @@ def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1
     Returns:
         list: List of generated molecules.
     """
+    print("Generating molecules...")
     model.eval()  # Set the model to evaluation mode
 
     gen_smiles = []
     done = True
-    for i in range(args.k):
+    for _ in tqdm(range(args.k)):
         terminated = False
         init_state = torch.tensor([tokenizer.bos_token_id], dtype=torch.int64)
         init_state = init_state.to(args.device).unsqueeze(0).unsqueeze(0)
@@ -121,11 +124,13 @@ def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1
                 sample=True,
                 actions=torch.tensor(actions, dtype=torch.long).to(args.device).unsqueeze(0),
                 rtgs=torch.tensor(rtgs, dtype=torch.float32).to(args.device).unsqueeze(0),
-                attention=torch.tensor(np.tril(np.ones(all_states.shape[1:])), dtype=torch.long).to(args.device).unsqueeze(0)
+                attention=torch.tensor(np.tril(np.ones(all_states.shape[1:])), dtype=torch.long).to(
+                    args.device).unsqueeze(0)
                 # timesteps=(min(j, self.config.max_timestep) * torch.ones((1, 1, 1), dtype=torch.int64).to(self.device)))
             )
 
     return gen_smiles
+
 
 def fail_safe(func: Callable[[Chem.rdchem.Mol], float], mol: Chem.rdchem.Mol) -> float:
     # return func(mol)
@@ -384,7 +389,7 @@ def get_stats(generated_smiles: List[str],
 
     if train_set is not None:
         print('Calculating novelty')
-        generated_novelty_score = calc_novelty(train_set.molecules, generated_smiles)
+        generated_novelty_score = calc_novelty(train_set.dataset, generated_smiles)
         stats['novelty'] = generated_novelty_score
 
     print('Calculating percentage of valid mols')
@@ -425,13 +430,17 @@ def get_stats(generated_smiles: List[str],
 def main():
     parser = argparse.ArgumentParser(description="Generate molecules using a pre-trained model.")
     parser.add_argument('--checkpoint', type=str, required=True, help='Path to the pre-trained model checkpoint file.')
+    parser.add_argument("--data_path", type=str, required=True, help="Path to the training data")
     parser.add_argument('--k', type=int, default=100, help='Number of molecules to generate.')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu',
                         help="Device to run the model on, 'cpu' or 'cuda'.")
 
     parser.add_argument("--tokenizer_path", type=str, required=True, help="Path to the tokenizer used for training")
-    parser.add_argument("--model_type", type=str, required=True, choices=["GPT", "DT"], help="Type of model to use for training")
-    parser.add_argument("--config_path", type=str, required=True, help="Path to the connfig containing training and model params")
+    parser.add_argument("--model_type", type=str, required=True, choices=["GPT", "DT"],
+                        help="Type of model to use for training")
+    parser.add_argument("--dataset_type", type=str, required=True, choices=["SMILES", "DT_SMILES"], help="Type of dataset to use for training")
+    parser.add_argument("--config_path", type=str, required=True,
+                        help="Path to the connfig containing training and model params")
 
     args = parser.parse_args()
 
@@ -441,16 +450,35 @@ def main():
     model_config = config["model_config"]
 
     # Load the model
-    model = load_model(model_config=model_config, args=args)
+    model, model_type = load_model(model_config=model_config, args=args)
 
     tokenizer = get_tokenizer(args.tokenizer_path)
     reward_func = get_rewards(config["reward"])
+
+    # Get train dataset for novelty calculation
+    dataset_type = DatasetType.from_str(args.dataset_type)
+    kwargs = {
+        "dataset_path": args.data_path,
+        "tokenizer": tokenizer,
+    }
+
+    if model_type == ModelType.DT:
+        kwargs.update({"reward_func": reward_func})
+
+    dataset = get_dataset(dataset_type,
+                          model_type,
+                          **kwargs)
 
     # Generate 'k' molecules
     molecules = generate_molecules(model, tokenizer, reward_func, args)
 
     # Evaluate the generated molecules
-    get_stats(molecules, folder_name="zinc_bpe_75_results")
+    res_folder = '_'.join([
+        os.path.split(os.path.split(args.checkpoint)[0])[1],
+        os.path.split(args.checkpoint)[1].split('.pth')[0],
+        "results"
+    ])
+    get_stats(molecules, train_set=dataset, folder_name=res_folder)
 
 
 if __name__ == "__main__":
