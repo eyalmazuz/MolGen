@@ -131,12 +131,12 @@ class Trainer:
             [print(f"{ep_loss:.5f}") for ep_loss in epoch_losses]  # Debug print
             save_plot({"Loss_per_Epoch": epoch_losses})
 
-    def get_returns(self, ret):
+    def get_returns(self, ret, k: int = 10, temperature: float = 1.0):
         self.model.train(False)
 
         T_rewards, T_Qs = [], []
         done = True
-        for i in range(10):
+        for i in range(k):
             terminated = False
             init_state = torch.tensor([self.bos_token_id], dtype=torch.int64)
             init_state = init_state.to(self.device).unsqueeze(0).unsqueeze(0)
@@ -146,7 +146,7 @@ class Trainer:
                 model=self.model,
                 x=init_state,
                 steps=1,
-                temperature=1.0,
+                temperature=temperature,
                 sample=True,
                 actions=None,
                 rtgs=torch.tensor(rtgs, dtype=torch.float32).to(self.device).unsqueeze(0).unsqueeze(-1),
@@ -189,7 +189,7 @@ class Trainer:
                     model=self.model,
                     x=all_states,
                     steps=1,
-                    temperature=1.0,
+                    temperature=temperature,
                     sample=True,
                     actions=torch.tensor(actions, dtype=torch.long).to(self.device).unsqueeze(0),
                     rtgs=torch.tensor(rtgs, dtype=torch.float32).to(self.device).unsqueeze(0),
