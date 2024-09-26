@@ -121,9 +121,10 @@ class Trainer:
                 self.save_checkpoint(ckpt_name=ckpt_name)
 
             # -- pass in target returns
-            if self.model.module.model_type == 'naive':
+            model_type = self.model.module.model_type if hasattr(self.model, "module") else self.model.model_type
+            if model_type == 'naive':
                 eval_return = self.get_returns(0)
-            elif self.model.module.model_type == 'reward_conditioned':
+            elif model_type == 'reward_conditioned':
                 # TODO: return should be based on the reward function, for now put 1 for a scaled reward
                 eval_return = self.get_returns(1)
 

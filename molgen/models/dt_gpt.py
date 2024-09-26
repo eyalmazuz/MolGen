@@ -346,7 +346,10 @@ def sample(model, x, steps, temperature=1.0, sample=False, top_k=None, actions=N
     has quadratic complexity unlike an RNN that is only linear, and has a finite context window
     of block_size, unlike an RNN that has an infinite context window.
     """
-    block_size = model.module.get_block_size()
+    try:
+        block_size = model.module.get_block_size()
+    except AttributeError:
+        block_size = model.get_block_size()
     model.eval()
     for k in range(steps):
         # x_cond = x if x.size(1) <= block_size else x[:, -block_size:] # crop context if needed
