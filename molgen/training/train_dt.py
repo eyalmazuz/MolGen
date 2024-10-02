@@ -1,3 +1,4 @@
+import os
 import gc
 import math
 import numpy as np
@@ -28,9 +29,9 @@ class Trainer:
             self.device = torch.cuda.current_device()
             self.model = torch.nn.DataParallel(self.model).to(self.device)
 
-    def save_checkpoint(self):
+    def save_checkpoint(self, ckpt_name="best.pth"):
         raw_model = self.model.module if hasattr(self.model, "module") else self.model
-        torch.save(raw_model.state_dict(), self.config.get("ckpt_path", "."))
+        torch.save(raw_model.state_dict(), os.path.join(self.config.get("ckpt_path", "."), ckpt_name))
 
     def train(self, optimizer):
         model, config = self.model, self.config
@@ -98,30 +99,32 @@ class Trainer:
 
             return episode_loss
 
-        # best_loss = float('inf')
-
+        best_loss = float('inf')
         best_return = -float('inf')
 
         self.tokens = 0  # counter used for learning rate decay
         epochs = config["max_steps"] // len(self.train_dataset)
         epoch_losses = []
+        test_loss = best_loss
         for epoch in range(epochs):
 
             epoch_loss = run_epoch('train', epoch_num=epoch)
             epoch_losses.append(epoch_loss)
-            # if self.test_dataset is not None:
-            #     test_loss = run_epoch('test')
+            if self.test_dataset is not None:
+                test_loss = run_epoch('test')
 
-            # # supports early stopping based on the test loss, or just save always if no test set is provided
-            # good_model = self.test_dataset is None or test_loss < best_loss
-            # if self.config.ckpt_path is not None and good_model:
-            #     best_loss = test_loss
-            #     self.save_checkpoint()
+            # supports early stopping based on the test loss, or save every X epochs if no test set
+            good_model = (self.test_dataset is None and (epoch % 5 == 0)) or test_loss < best_loss
+            if self.config.get("ckpt_path") is not None and good_model:
+                ckpt_name = f"epoch_{epoch}.pth" if self.test_dataset is None else f"best.pth"
+                best_loss = test_loss
+                self.save_checkpoint(ckpt_name=ckpt_name)
 
             # -- pass in target returns
-            if self.model.module.model_type == 'naive':
+            model_type = self.model.module.model_type if hasattr(self.model, "module") else self.model.model_type
+            if model_type == 'naive':
                 eval_return = self.get_returns(0)
-            elif self.model.module.model_type == 'reward_conditioned':
+            elif model_type == 'reward_conditioned':
                 # TODO: return should be based on the reward function, for now put 1 for a scaled reward
                 eval_return = self.get_returns(1)
 
@@ -129,12 +132,12 @@ class Trainer:
             [print(f"{ep_loss:.5f}") for ep_loss in epoch_losses]  # Debug print
             save_plot({"Loss_per_Epoch": epoch_losses})
 
-    def get_returns(self, ret):
+    def get_returns(self, ret, k: int = 10, temperature: float = 1.0):
         self.model.train(False)
 
         T_rewards, T_Qs = [], []
         done = True
-        for i in range(10):
+        for i in range(k):
             terminated = False
             init_state = torch.tensor([self.bos_token_id], dtype=torch.int64)
             init_state = init_state.to(self.device).unsqueeze(0).unsqueeze(0)
@@ -144,7 +147,7 @@ class Trainer:
                 model=self.model,
                 x=init_state,
                 steps=1,
-                temperature=1.0,
+                temperature=temperature,
                 sample=True,
                 actions=None,
                 rtgs=torch.tensor(rtgs, dtype=torch.float32).to(self.device).unsqueeze(0).unsqueeze(-1),
@@ -187,7 +190,7 @@ class Trainer:
                     model=self.model,
                     x=all_states,
                     steps=1,
-                    temperature=1.0,
+                    temperature=temperature,
                     sample=True,
                     actions=torch.tensor(actions, dtype=torch.long).to(self.device).unsqueeze(0),
                     rtgs=torch.tensor(rtgs, dtype=torch.float32).to(self.device).unsqueeze(0),

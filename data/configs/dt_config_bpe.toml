@@ -1,14 +1,14 @@
 [train_config]
-batch_size = 1
+batch_size = 128
 gradient_accumulation_steps = 30
 learning_rate = 1e-3
-max_steps = 6000000
+max_steps = 100000
 weight_decay = 1e-1
 betas = [0.9, 0.95]
 grad_clip = 1.0
 decay_lr = true
 warmup_steps = 2000
-lr_decay_steps = 600000
+lr_decay_steps = 100000
 min_lr = 6e-5
 dtype = "bfloat16"
 compile = true
@@ -17,7 +17,7 @@ seed = 42
 
 [model_config]
 vocab_size = 32771
-block_size = 90
+block_size = 100
 n_embd = 768
 n_head = 12
 n_layer = 12

@@ -69,7 +69,9 @@ class PadCollate:
         self.max_length = max_length
 
     def __call__(self, batches: List[Dict[str, List[int | List[int]]]]) -> Dict[str, torch.tensor]:
-        max_length = max(len(item["input_ids"]) for item in batches) if self.max_length is None else self.max_length
+        max_length = max(len(item["input_ids"]) for item in batches)
+        if self.max_length is not None:
+            self.max_length = max_length = max(self.max_length, max_length)
 
         batch_input_ids = []
         batch_attention_mask = []

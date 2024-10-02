@@ -1,7 +1,8 @@
 name: molgen
 channels:
   - conda-forge
-  - conda-nvidia
+  - nvidia
+  - pytorch
   - defaults
 dependencies:
   - python<3.12
@@ -16,6 +17,8 @@ dependencies:
   - dacite
   - networkx
   - rdkit
+  - matplotlib
+  - seaborn
   - wandb
   - tqdm
   - pip:

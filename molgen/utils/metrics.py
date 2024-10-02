@@ -5,10 +5,13 @@ from typing import List, Union
 from rdkit import Chem
 from rdkit.Chem import QED, Crippen
 from rdkit import RDConfig
+
 sys.path.append(os.path.join(RDConfig.RDContribDir, 'SA_Score'))
 import sascorer
 from rdkit import RDLogger
+
 RDLogger.DisableLog('rdApp.*')
+
 
 def calc_novelty(train_set: Union[str, List[str]], generated_molecules: List[str]) -> float:
     """
@@ -29,13 +32,14 @@ def calc_novelty(train_set: Union[str, List[str]], generated_molecules: List[str
 
     Returns:
         The novelty score of the generated set.
-        novlty score ranges between 0 and 1.
-    """ 
+        novelty score ranges between 0 and 1.
+    """
     new_molecules = set(generated_molecules) - set(train_set)
     new_molecules = len(new_molecules)
 
     novelty_score = new_molecules / len(generated_molecules)
     return novelty_score
+
 
 def calc_diversity(gen_molecules: List[str]) -> float:
     """
@@ -53,8 +57,9 @@ def calc_diversity(gen_molecules: List[str]) -> float:
     Returns:
         The diversity score of the generated set.
         diversity score ranges between 0 and 1.
-    """ 
+    """
     return len(set(gen_molecules)) / len(gen_molecules)
+
 
 def calc_logp(mol: Chem.rdchem.Mol) -> float:
     """
@@ -72,6 +77,7 @@ def calc_logp(mol: Chem.rdchem.Mol) -> float:
 
     return log_p
 
+
 def calc_qed(mol: Chem.rdchem.Mol) -> float:
     """
     Calculates the quantitative estimation of drug-likeness of a given molecule.
@@ -87,6 +93,7 @@ def calc_qed(mol: Chem.rdchem.Mol) -> float:
     qed = QED.qed(mol)
 
     return qed
+
 
 def calc_sas(mol: Chem.rdchem.Mol) -> float:
     """
@@ -109,6 +116,7 @@ def calc_sas(mol: Chem.rdchem.Mol) -> float:
         return sascore
     except Exception:
         return None
+
 
 def calc_valid_molecules(molecules: List[str]) -> float:
     valid_molecules = [mol for mol in molecules if Chem.MolFromSmiles(mol) is not None]

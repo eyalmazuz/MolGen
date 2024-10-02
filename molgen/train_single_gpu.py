@@ -34,6 +34,7 @@ def single_gpu_training(args) -> None:
 
     model = get_model(model_type, model_config).to(train_config["device"])
     tokenizer = get_tokenizer(args.tokenizer_path)
+    train_config["tokenizer"] = os.path.basename(args.tokenizer_path)
 
     kwargs = {
         "dataset_path": args.data_path,
@@ -63,6 +64,7 @@ def single_gpu_training(args) -> None:
                                            train_config["learning_rate"],
                                            train_config["betas"],
                                            train_config["device"])
+
     if args.wandb_key is None:
         wandb_run = None
     else:
@@ -74,6 +76,10 @@ def single_gpu_training(args) -> None:
             run_name=f"{os.path.basename(args.data_path).split('.')[0]}_"
                      f"{str(datetime.now().strftime('%m_%d_%H_%M_%S'))}"
         )
+
+    if not os.path.exists(args.checkpoint_dir):
+        os.makedirs(args.checkpoint_dir)
+    train_config["ckpt_path"] = args.checkpoint_dir
 
     if train_config["compile"]:
         model = torch.compile(model)
