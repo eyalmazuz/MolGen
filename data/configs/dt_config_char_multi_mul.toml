@@ -28,6 +28,13 @@ model_type = "reward_conditioned"
 max_timestep = 0
 
 [reward]
+agg = "mul"
 
 [[reward.functions]]
 type = "QED"
+
+[[reward.functions]]
+type = "PlogP"
+scale.name = "minmax"
+scale.min_value = -1.0
+scale.max_value = 5.07272
