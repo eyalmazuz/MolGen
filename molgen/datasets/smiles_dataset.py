@@ -14,7 +14,9 @@ from molgen.rewards.reward import AbstractReward
 class PreTrainGPTSmilesDataset(Dataset):
     def __init__(self,
                  dataset_path: str,
-                 tokenizer: AbstractTokenizer) -> None:
+                 tokenizer: AbstractTokenizer,
+                 string_type: str = "SMILES") -> None:
+        self.string_type = string_type
         self.dataset = self.load_smiles(dataset_path)
         self.tokenizer = tokenizer
 
@@ -52,8 +54,9 @@ class PreTrainGPTSmilesDataset(Dataset):
             with open(dataset_path, "r") as f:
                 smiles = [s.strip() for s in f.readlines()]
 
-        print("Converting SMILES to Canonical SMILES")
-        smiles = [Chem.MolToSmiles(Chem.MolFromSmiles(s)) for s in tqdm(smiles) if Chem.MolFromSmiles is not None]
+        if self.string_type == "SMILES":
+            print("Converting SMILES to Canonical SMILES")
+            smiles = [Chem.MolToSmiles(Chem.MolFromSmiles(s)) for s in tqdm(smiles) if Chem.MolFromSmiles is not None]
 
         return smiles
 
@@ -62,8 +65,9 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
     def __init__(self,
                  dataset_path: str,
                  tokenizer: AbstractTokenizer,
-                 reward_func: AbstractReward) -> None:
-        super().__init__(dataset_path, tokenizer)
+                 reward_func: AbstractReward,
+                 string_type: str = "SMILES") -> None:
+        super().__init__(dataset_path, tokenizer, string_type)
         self.reward_func = reward_func
 
     def __getitem__(self, idx: int) -> Dict[str, List[str]]:
@@ -71,7 +75,7 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
         base_item = super().__getitem__(idx)
         reward_to_go = self.reward_func(smiles)
         trajectory_len = len(base_item["input_ids"])
-        states = [base_item["input_ids"][:i + 1] for i in range(trajectory_len)]
+        states = [base_item["input_ids"][:i + 1] for i in range(trajectory_len)]    # TODO: try only using the final state
 
         return {
             "rtg": [reward_to_go] * trajectory_len,     # trajectory rtg - (block, 1)

@@ -22,7 +22,12 @@ def get_gpt_dataset(dataset_type: DatasetType, **kwargs) -> Dataset:
     match dataset_type:
         case DatasetType.SMILES:
             dataset = PreTrainGPTSmilesDataset(**kwargs)
+        case DatasetType.SELFIES:
+            kwargs["string_type"] = "SELFIES"
+            dataset = PreTrainGPTSmilesDataset(**kwargs)
         case DatasetType.DT_SMILES:
             dataset = PreTrainDecisionGPTSmilesDataset(**kwargs)
-
+        case DatasetType.DT_SELFIES:
+            kwargs["string_type"] = "SELFIES"
+            dataset = PreTrainDecisionGPTSmilesDataset(**kwargs)
     return dataset
