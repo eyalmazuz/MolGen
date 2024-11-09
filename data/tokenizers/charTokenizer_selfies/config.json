@@ -1,0 +1,1 @@
+{"type": "CharTokenizer", "kwargs": {"bos_token": "[BOS]", "eos_token": "[EOS]", "pad_token": "[nop]", "sep_token": ",", "special_tokens": {"[BOS]": 107, "[EOS]": 108, "[nop]": 109, ",": 110, "[UNK]": 111}}}

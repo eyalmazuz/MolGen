@@ -16,6 +16,7 @@ def train_tokenizer(args: argparse.Namespace):
 
     elif args.type == "BPE":
         build_bpe_tokenizer(args.data_path,
+                            args.string_type,
                             args.save_path,
                             args.vocab_size,
                             args.bos_token,
