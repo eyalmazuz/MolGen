@@ -1,11 +1,12 @@
 import copy
 import os
-from typing import Dict, List
+from typing import Dict, List, Literal
 
 from rdkit import Chem
 import torch
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
+import selfies as sf
 
 from molgen.tokenizers.tokenizer import AbstractTokenizer
 from molgen.rewards.reward import AbstractReward
@@ -15,7 +16,7 @@ class PreTrainGPTSmilesDataset(Dataset):
     def __init__(self,
                  dataset_path: str,
                  tokenizer: AbstractTokenizer,
-                 string_type: str = "SMILES") -> None:
+                 string_type: Literal["SMILES", "SELFIES"] = "SMILES") -> None:
         self.string_type = string_type
         self.dataset = self.load_smiles(dataset_path)
         self.tokenizer = tokenizer
@@ -25,7 +26,11 @@ class PreTrainGPTSmilesDataset(Dataset):
 
     def __getitem__(self, idx: int) -> Dict[str, List[str]]:
         smiles = self.dataset[idx]
-        example = self.tokenizer.encode(smiles)[0]
+        if self.string_type == "SMILES":
+            example = self.tokenizer.encode(smiles)[0]
+        elif self.string_type == "SELFIES":
+            example = self.tokenizer.encode_selfies(smiles)[0]
+
         example = [self.tokenizer.bos_token_id] + example + [self.tokenizer.eos_token_id]
         example = torch.tensor(example, dtype=torch.int64)
 
@@ -66,20 +71,27 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
                  dataset_path: str,
                  tokenizer: AbstractTokenizer,
                  reward_func: AbstractReward,
-                 string_type: str = "SMILES") -> None:
+                 string_type: Literal["SMILES", "SELFIES"] = "SMILES") -> None:
         super().__init__(dataset_path, tokenizer, string_type)
         self.reward_func = reward_func
 
     def __getitem__(self, idx: int) -> Dict[str, List[str]]:
-        smiles = self.dataset[idx]
         base_item = super().__getitem__(idx)
-        reward_to_go = self.reward_func(smiles)
         trajectory_len = len(base_item["input_ids"])
-        states = [base_item["input_ids"][:i + 1] for i in range(trajectory_len)]    # TODO: try only using the final state
+        states = [base_item["input_ids"][:i + 1] for i in range(trajectory_len)]
+
+        smiles = self.dataset[idx]
+        if self.string_type == "SMILES":
+            reward_to_go = self.reward_func(smiles)
+            reward_to_go = [reward_to_go] * trajectory_len
+        if self.string_type == "SELFIES":
+            state_selfies = self.tokenizer.decode(states, skip_special_tokens=True)
+            reward_to_go = self.reward_func([sf.decoder(s) for s in state_selfies])[::-1]
 
         return {
-            "rtg": [reward_to_go] * trajectory_len,     # trajectory rtg - (block, 1)
+            "rtg": reward_to_go,                        # trajectory rtg - (block, 1)
             "input_ids": states,                        # states - (block, state_len)
             "labels": base_item["labels"],              # actions - (block, 1)
-            "attention_mask": base_item["attention_mask"]
+            "attention_mask": base_item["attention_mask"],
+            "length": trajectory_len
         }

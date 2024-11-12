@@ -12,6 +12,10 @@ class AbstractTokenizer(ABC):
     def encode(self, texts: str | list[str], return_tensors: bool) -> TokenizedData:
         pass
 
+    @abstractmethod
+    def encode_selfies(self, texts: str | list[str], return_tensors: bool) -> TokenizedData:
+        pass
+
 
     @abstractmethod
     def decode(self, encodings: TokenizedData, skip_special_tokens: bool) -> list[str]:
