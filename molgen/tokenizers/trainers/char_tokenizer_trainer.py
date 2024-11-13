@@ -2,8 +2,11 @@ import json
 import os
 from typing import Any, Dict, List, Optional, Set
 
+import selfies as sf
+
 
 def build_char_tokenizer(data_paths: List[str],
+                         string_type: str,
                          save_path: str,
                          bos_token: Optional[str]=None,
                          eos_token: Optional[str]=None,
@@ -18,8 +21,12 @@ def build_char_tokenizer(data_paths: List[str],
 
         with open(path, "r") as fd:
             texts = [line.strip() for line in fd.readlines()]
-            for text in texts:
-                unique_tokens |= set(text)
+            if string_type == "SMILES":
+                for text in texts:
+                    unique_tokens |= set(text)
+
+            elif string_type == "SELFIES":
+                unique_tokens = sf.get_alphabet_from_selfies(texts)
 
     tokens_to_ids = {token: i for i, token in enumerate(unique_tokens)}
 

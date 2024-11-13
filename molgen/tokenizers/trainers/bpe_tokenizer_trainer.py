@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from molgen.tokenizers.tokenizers_utils import get_stats, merge, render_token
 
 def build_bpe_tokenizer(data_paths: List[str],
+                        string_type: str,
                         save_path: str,
                         vocab_size: int,
                         bos_token: Optional[str]=None,
