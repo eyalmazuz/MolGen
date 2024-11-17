@@ -17,7 +17,7 @@ seed = 42
 
 [model_config]
 vocab_size = 111
-block_size = 240
+block_size = 300
 n_embd = 768
 n_head = 12
 n_layer = 12
