@@ -75,6 +75,7 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
                  string_type: Literal["SMILES", "SELFIES"] = "SMILES") -> None:
         super().__init__(dataset_path, tokenizer, string_type)
         self.reward_func = reward_func
+        self.reward_memory = {}
 
     def __getitem__(self, idx: int) -> Dict[str, List[str]]:
         base_item = super().__getitem__(idx)
@@ -87,7 +88,11 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
             reward_to_go = [reward_to_go] * trajectory_len
         if self.string_type == "SELFIES":
             state_selfies = self.tokenizer.decode(states, skip_special_tokens=True)
-            reward_to_go = self.reward_func([sf.decoder(s) for s in state_selfies])
+            reward_to_go = [
+                self.reward_memory.setdefault(s, self.reward_func(sf.decoder(s)))
+                if (r := self.reward_memory.get(s)) is None else r
+                for s in state_selfies
+            ]
             reward_to_go[0] = 0
             reward_to_go = np.subtract(reward_to_go[-1], reward_to_go).tolist()
 
