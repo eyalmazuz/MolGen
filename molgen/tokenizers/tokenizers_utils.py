@@ -1,8 +1,7 @@
-from typing import Dict, List, Tuple
 import unicodedata
 
 
-def get_stats(ids: List[int], counts=None) -> Dict[Tuple[int, int], int]:
+def get_stats(ids: list[int], counts=None) -> dict[tuple[int, int], int]:
     """
     Given a list of integers, return a dictionary of counts of consecutive pairs
     Example: [1, 2, 3, 1, 2] -> {(1, 2): 2, (2, 3): 1, (3, 1): 1}
@@ -14,7 +13,7 @@ def get_stats(ids: List[int], counts=None) -> Dict[Tuple[int, int], int]:
     return counts
 
 
-def merge(ids: List[int], pair: Tuple[int, int], idx: int) -> List[int]:
+def merge(ids: list[int], pair: tuple[int, int], idx: int) -> list[int]:
     """
     In the list of integers (ids), replace all consecutive occurrences
     of pair with the new integer token idx

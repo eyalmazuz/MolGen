@@ -1,16 +1,16 @@
 import json
 import os
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 
-def build_char_tokenizer(data_paths: List[str],
+def build_char_tokenizer(data_paths: list[str],
                          save_path: str,
-                         bos_token: Optional[str]=None,
-                         eos_token: Optional[str]=None,
-                         pad_token: Optional[str]=None,
-                         sep_token: Optional[str]=None,
-                         extra_special_tokens: Optional[List[str]]=None) -> None:
-    unique_tokens: Set[str] = set()
+                         bos_token: str | None=None,
+                         eos_token: str | None=None,
+                         pad_token: str | None=None,
+                         sep_token: str | None=None,
+                         extra_special_tokens: list[str] | None=None) -> None:
+    unique_tokens: set[str] = set()
 
     for path in data_paths:
         if not os.path.exists(path):
@@ -27,7 +27,7 @@ def build_char_tokenizer(data_paths: List[str],
         os.makedirs(save_path, exist_ok=True)
 
     with open(f"{save_path}/config.json", "w") as fd:
-        config: Dict[str, Any] = {"type": "CharTokenizer", "kwargs": {}}
+        config: dict[str, Any] = {"type": "CharTokenizer", "kwargs": {}}
 
         config["kwargs"]["bos_token"] = bos_token
         config["kwargs"]["eos_token"] = eos_token

@@ -6,18 +6,19 @@ Under the MIT license
 
 import json
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from molgen.tokenizers.tokenizers_utils import get_stats, merge, render_token
 
-def build_bpe_tokenizer(data_paths: List[str],
+
+def build_bpe_tokenizer(data_paths: list[str],
                         save_path: str,
                         vocab_size: int,
-                        bos_token: Optional[str]=None,
-                        eos_token: Optional[str]=None,
-                        pad_token: Optional[str]=None,
-                        sep_token: Optional[str]=None,
-                        extra_special_tokens: Optional[List[str]]=None,
+                        bos_token: str | None=None,
+                        eos_token: str | None=None,
+                        pad_token: str | None=None,
+                        sep_token: str | None=None,
+                        extra_special_tokens: list[str] | None=None,
                         verbose: bool=False) -> None:
     texts = []
     for path in data_paths:
@@ -38,7 +39,7 @@ def build_bpe_tokenizer(data_paths: List[str],
     vocab = {idx: bytes([idx]) for idx in range(256)} # idx -> bytes
     for i in range(num_merges):
         # count up the number of times every consecutive pair appears
-        stats: Dict[Tuple[int, int], int] = {}
+        stats: dict[tuple[int, int], int] = {}
         for chunk_ids in ids:
             get_stats(chunk_ids, stats)
         # find the pair with the highest count
@@ -59,7 +60,7 @@ def build_bpe_tokenizer(data_paths: List[str],
         os.makedirs(save_path, exist_ok=True)
 
     with open(f"{save_path}/config.json", "w") as fd:
-        config: Dict[str, Any] = {"type": "BPETokenizer", "kwargs": {}}
+        config: dict[str, Any] = {"type": "BPETokenizer", "kwargs": {}}
         # config["kwargs"]["vocab_size"] = vocab_size # It's probably not needed but might be changed in the future
         config["kwargs"]["bos_token"] = bos_token
         config["kwargs"]["eos_token"] = eos_token
