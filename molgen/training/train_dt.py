@@ -5,6 +5,7 @@ import numpy as np
 from tqdm import tqdm
 
 import torch
+import selfies as sf
 
 from molgen.models.dt_gpt import sample
 from molgen.utils.plot_utils import save_plot
@@ -163,9 +164,10 @@ class Trainer:
                 action = sampled_action.cpu().numpy()[0, -1]
                 actions += [action]
                 state.append(action)
-                reward = self.reward_func(
-                    self.train_dataset.dataset.tokenizer.decode(state, skip_special_tokens=True)
-                )[0]
+                sequence = self.train_dataset.dataset.tokenizer.decode(state, skip_special_tokens=True)[0]
+                if self.train_dataset.dataset.string_type == "SELFIES":
+                    sequence = sf.decoder(sequence)
+                reward = self.reward_func(sequence)
                 done = action == self.eos_token_id  # mol is complete when [EOS] token is generated
                 reward_sum = reward
                 j += 1
@@ -183,9 +185,9 @@ class Trainer:
                 all_states = torch.nn.functional.pad(all_states, (0, pad_size), value=self.pad_token_id)
                 all_states = torch.cat([all_states, tensor_state], dim=1)
 
-                rtgs += [rtgs[-1]]  # - reward]  # TODO: Check this
+                rtgs += [rtgs[-1] - reward]
                 # all_states has all previous states and rtgs has all previous rtgs (will be cut to block_size in utils.sample)
-                # timestep is just current timestep # TODO: check the tensor(actions) to verify its correct
+                # timestep is just current timestep
                 sampled_action = sample(
                     model=self.model,
                     x=all_states,
@@ -197,7 +199,7 @@ class Trainer:
                     attention=torch.tensor(np.tril(np.ones(all_states.shape[1:])), dtype=torch.long).to(self.device).unsqueeze(0)
                     # timesteps=(min(j, self.config.max_timestep) * torch.ones((1, 1, 1), dtype=torch.int64).to(self.device)))
                 )
-        eval_return = sum(T_rewards) / 10.  # TODO: Verify
+        eval_return = sum(T_rewards) / 10.
         print("target return: %d, eval return: %d" % (ret, eval_return))
         self.model.train(True)
         return eval_return

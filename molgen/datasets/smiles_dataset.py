@@ -6,6 +6,7 @@ from rdkit import Chem
 import torch
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
+import numpy as np
 import selfies as sf
 
 from molgen.tokenizers.tokenizer import AbstractTokenizer
@@ -86,7 +87,9 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
             reward_to_go = [reward_to_go] * trajectory_len
         if self.string_type == "SELFIES":
             state_selfies = self.tokenizer.decode(states, skip_special_tokens=True)
-            reward_to_go = self.reward_func([sf.decoder(s) for s in state_selfies])[::-1]
+            reward_to_go = self.reward_func([sf.decoder(s) for s in state_selfies])
+            reward_to_go[0] = 0
+            reward_to_go = np.subtract(reward_to_go[-1], reward_to_go).tolist()
 
         return {
             "rtg": reward_to_go,                        # trajectory rtg - (block, 1)
