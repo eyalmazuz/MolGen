@@ -1,6 +1,7 @@
 import argparse
 
-from molgen.train_tokenizer import train_tokenizer
+from molgen.tokenizers.trainers.bpe_tokenizer_trainer import build_bpe_tokenizer
+from molgen.tokenizers.trainers.char_tokenizer_trainer import build_char_tokenizer
 
 
 def get_tokenizer_args() -> argparse.Namespace:
@@ -16,8 +17,33 @@ def get_tokenizer_args() -> argparse.Namespace:
     parser.add_argument("--eos_token", type=str, help="eos token to add to the tokenizer")
     parser.add_argument("--extra_special_tokens", type=str, nargs="+", help="special tokens to add to the tokenizer")
 
-
     return parser.parse_args()
+
+
+def train_tokenizer(args: argparse.Namespace):
+    match args.type.lower():
+        case "char":
+            build_char_tokenizer(args.data_path,
+                                args.save_path,
+                                args.bos_token,
+                                args.eos_token,
+                                args.pad_token,
+                                args.sep_token,
+                                args.extra_special_tokens)
+
+        case "bpe":
+            build_bpe_tokenizer(args.data_path,
+                                args.save_path,
+                                args.vocab_size,
+                                args.bos_token,
+                                args.eos_token,
+                                args.pad_token,
+                                args.sep_token,
+                                args.extra_special_tokens,
+                                verbose=True)
+
+        case _:
+            raise ValueError(f"tokenizer type {args.type} is not Supported")
 
 
 if __name__ == "__main__":
