@@ -1,5 +1,5 @@
-from contextlib import nullcontext
 import os
+from contextlib import nullcontext
 
 import torch
 
@@ -12,7 +12,7 @@ def setup_torch(seed: int=0, device: str="cuda") -> None:
     torch.backends.cudnn.allow_tf32 = True
 
     if device == "cuda" and is_distributed_run():
-        ddp_local_rank = int(os.environ["LOCAL_RANK"])
+        ddp_local_rank = int(os.environ.get("LOCAL_RANK", "0"))
         device = f"cuda:{ddp_local_rank}"
         torch.cuda.set_device(device)
 
@@ -24,6 +24,6 @@ def setup_mixed_precision(device: str, dtype: str):
 
     ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
     ctx = nullcontext() if device == "cpu" else torch.amp.autocast(device_type="cuda", dtype=ptdtype)
-    scaler = torch.cuda.amp.GradScaler(enabled=(dtype=="float16"))
+    scaler = torch.cuda.amp.GradScaler(enabled=(dtype == "float16"))
 
     return ctx, scaler

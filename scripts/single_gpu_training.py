@@ -1,5 +1,6 @@
-import tomllib
+import argparse
 
+import tomllib
 import torch
 from torch.utils.data import DataLoader
 
@@ -9,11 +10,25 @@ from molgen.datasets.dataset_utils import LengthBatchSampler, PadCollate
 from molgen.models.model_factory import get_model
 from molgen.models.model_options import ModelType
 from molgen.tokenizers.tokenizer_factory import get_tokenizer
-from molgen.training.train import run_training
-from molgen.utils.train_utils import setup_torch, setup_mixed_precision
+from molgen.training.train import pretrain_model
+from molgen.utils.train_utils import setup_mixed_precision, setup_torch
 
 
-def single_gpu_training(args) -> None:
+def get_pretrain_args() -> argparse.Namespace:
+
+    parser: argparse.ArgumentParser = argparse.ArgumentParser(allow_abbrev=False)
+
+    parser.add_argument("--data-path", type=str, required=True, help="Path to the training data")
+    parser.add_argument("--tokenizer-path", type=str, required=True, help="Path to the tokenizer used for training")
+    parser.add_argument("--save-path", type=str, required=True, help="Path to save the model")
+    parser.add_argument("--model-type", type=str, required=True, options=["GPT"], help="Type of model to use for training")  # noqa: E501
+    parser.add_argument("--dataset-type", type=str, required=True, options=["SMILES"], help="Type of dataset to use for training")  # noqa: E501
+    parser.add_argument("--config-path", type=str, required=True, help="Path to the connfig containing training and model params")  # noqa: E501
+
+    return parser.parse_args()
+
+
+def run_training(args: argparse.Namespace) -> None:
     with open(args.config_path, "rb") as fd:
         config = tomllib.load(fd)
 
@@ -38,6 +53,8 @@ def single_gpu_training(args) -> None:
     dataloader = DataLoader(dataset,
                             batch_sampler=batch_sampler,
                             collate_fn=collate_fn,
+                            num_workers=train_config["num_workers"],
+                            shuffle=True,
                             pin_memory=True)
 
     optimizer = model.configure_optimizers(train_config["weight_decay"],
@@ -48,4 +65,8 @@ def single_gpu_training(args) -> None:
     if train_config["compile"]:
         model = torch.compile(model)
 
-    run_training(model, dataloader, optimizer, ctx, scaler, train_config)
+    pretrain_model(model, dataloader, optimizer, ctx, scaler, train_config)
+
+if __name__ == "__main__":
+    args = get_pretrain_args()
+    run_training(args)

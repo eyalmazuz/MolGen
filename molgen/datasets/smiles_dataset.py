@@ -1,9 +1,8 @@
 import copy
 import os
-from typing import Dict, List
 
-from rdkit import Chem
 import torch
+from rdkit import Chem
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 
@@ -22,7 +21,7 @@ class PreTrainGPTSmilesDataset(Dataset):
         return len(self.dataset)
 
 
-    def __getitem__ (self, idx: int) -> Dict[str, List[str]]:
+    def __getitem__ (self, idx: int) -> dict[str, list[str]]:
         smiles = self.dataset[idx]
         example = self.tokenizer.encode(smiles)
         example = [self.tokenizer.bos_token_id] + example + [self.tokenizer.eos_token_id]
@@ -38,7 +37,7 @@ class PreTrainGPTSmilesDataset(Dataset):
         }
 
 
-    def load_smiles(self, dataset_path: str) -> List[str]:
+    def load_smiles(self, dataset_path: str) -> list[str]:
         if not os.path.exists(dataset_path):
             raise ValueError("Invalid path")
 

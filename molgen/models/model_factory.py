@@ -1,18 +1,17 @@
-from typing import Any, Dict, Type, Union
+from typing import Any
 
 from dacite import from_dict
 from torch.nn import Module
 
-from molgen.models.model_options import ModelType
-from molgen.models.gpt import GPT, GPTConfig
 from molgen.models.bert import Bert, BertConfig
+from molgen.models.gpt import GPT, GPTConfig
+from molgen.models.model_options import ModelType
 from molgen.models.transformer import Transformer, TransformerConfig
 
+config_type = type[GPTConfig] | type[BertConfig] | type[TransformerConfig]
 
-config_type = Union[Type[GPTConfig], Type[BertConfig], Type[TransformerConfig]]
 
-
-def get_model(model_type: ModelType, model_config: Dict[str, Any]) -> Module:
+def get_model(model_type: ModelType, model_config: dict[str, Any]) -> Module:
     config_cls: config_type
     model_cls: Module
 

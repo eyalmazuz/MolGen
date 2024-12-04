@@ -3,7 +3,7 @@ import torch
 from molgen.utils.utils import is_distributed_run
 
 
-def run_training(model, dataloader, optimizer, ctx, scaler, training_args) -> None:
+def pretrain_model(model, dataloader, optimizer, ctx, scaler, training_args) -> None:
     epochs = training_args["max_steps"] // len(dataloader)
     for step in range(epochs):
         acc_steps = 0

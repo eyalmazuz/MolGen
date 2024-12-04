@@ -9,15 +9,16 @@ class ModelType(Enum):
 
     @staticmethod
     def from_str(label: str) -> "ModelType":
-        if label.upper() == "GPT":
-            type_ = ModelType.GPT
-        elif label.upper() == "BERT":
-            type_ = ModelType.BERT
-        elif label.upper() == "TRANSFORMER":
-            type_ = ModelType.TRANSFORMER
-        elif label.upper() == "RNN":
-            type_ = ModelType.RNN
-        else:
-            raise ValueError(f"Invalid type: {label}")
+        match label.upper():
+            case "GPT":
+                type_ = ModelType.GPT
+            case "BERT":
+                type_ = ModelType.BERT
+            case "TRANSFORMER":
+                type_ = ModelType.TRANSFORMER
+            case "RNN":
+                type_ = ModelType.RNN
+            case _:
+                raise ValueError(f"Invalid type: {label}")
 
         return type_

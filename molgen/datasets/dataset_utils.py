@@ -1,11 +1,9 @@
-from typing import Dict, List
 import random
 
 import numpy as np
-from tqdm import tqdm
-
 import torch
 from torch.utils.data import BatchSampler, Dataset
+from tqdm import tqdm
 
 
 class ConcatDataset(Dataset):
@@ -52,8 +50,7 @@ class LengthBatchSampler(BatchSampler):
         if self.shuffle:
             random.shuffle(batches)
 
-        for b in batches:
-            yield b
+        yield from batches
 
     def __len__(self):
         if self.drop_last:
@@ -62,13 +59,13 @@ class LengthBatchSampler(BatchSampler):
             return len(self.lengths) // self.batch_size + (len(self.lengths) % self.batch_size > 0)
 
 
-class PadCollate():
+class PadCollate:
     def __init__(self, pad_token_id: int, ignore_index: int=-100) -> None:
         self.pad_token_id = pad_token_id
         self.ignore_index = ignore_index
 
 
-    def __call__(self, batches: List[Dict[str, List[int]]]) -> Dict[str, torch.tensor]:
+    def __call__(self, batches: list[dict[str, list[int]]]) -> dict[str, torch.tensor]:
         max_length = max(len(item["input_ids"]) for item in batches)
 
         batch_input_ids = []

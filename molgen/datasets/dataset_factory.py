@@ -2,7 +2,6 @@ from torch.utils.data import Dataset
 
 from molgen.datasets.dataset_options import DatasetType
 from molgen.datasets.smiles_datset import PreTrainGPTSmilesDataset
-
 from molgen.models.model_options import ModelType
 
 
