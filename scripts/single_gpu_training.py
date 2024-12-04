@@ -35,13 +35,15 @@ def run_training(args: argparse.Namespace) -> None:
     train_config = config["train_config"]
     model_config = config["model_config"]
 
-    setup_torch(train_config["seed"], train_config["device"])
+    print("Setting up torch")
+    device = setup_torch(train_config["seed"], train_config["device"])
     ctx, scaler = setup_mixed_precision(train_config["device"], train_config["dtype"])
 
+    print(f"Building model {args.model_type} and Dataset {args.dataset_type}")
     model_type = ModelType.from_str(args.model_type)
     dataset_type = DatasetType.from_str(args.dataset_type)
 
-    model = get_model(model_type, model_config)
+    model = get_model(model_type, model_config).to(device)
     tokenizer = get_tokenizer(args.tokenizer_path)
     dataset = get_dataset(dataset_type,
                           model_type,
@@ -54,17 +56,20 @@ def run_training(args: argparse.Namespace) -> None:
                             batch_sampler=batch_sampler,
                             collate_fn=collate_fn,
                             num_workers=train_config["num_workers"],
-                            shuffle=True,
                             pin_memory=True)
 
+    print("Creating Optimizer")
     optimizer = model.configure_optimizers(train_config["weight_decay"],
                                            train_config["learning_rate"],
                                            train_config["betas"],
-                                           train_config["device"])
+                                           device)
 
     if train_config["compile"]:
+        print("Compiling model")
         model = torch.compile(model) # type: ignore
 
+    print("Start training")
+    model.train()  # Set the model to training mode
     pretrain_model(model, dataloader, optimizer, ctx, scaler, train_config)
 
 if __name__ == "__main__":

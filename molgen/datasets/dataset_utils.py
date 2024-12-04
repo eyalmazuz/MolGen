@@ -35,7 +35,7 @@ class ConcatDataset(Dataset):
 
 class LengthBatchSampler(BatchSampler):
     def __init__(self, dataset, batch_size: int, drop_last: bool, shuffle: bool=True) -> None:
-        self.lengths = [len(d) for d in dataset]
+        self.lengths = [len(d['input_ids']) for d in dataset]
         self.batch_size = batch_size
         self.drop_last = drop_last
         self.shuffle = shuffle

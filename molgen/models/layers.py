@@ -34,6 +34,7 @@ class CausalSelfAttention(nn.Module):
         # regularization
         self.attn_dropout = nn.Dropout(config.attn_pdrop)
         self.resid_dropout = nn.Dropout(config.resid_pdrop)
+        self.dropout = config.attn_pdrop
         # causal mask to ensure that attention is only applied to the left in the input sequence
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
@@ -67,6 +68,7 @@ class CausalSelfAttention(nn.Module):
             att = F.softmax(att, dim=-1)
             att = self.attn_dropout(att)
             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))

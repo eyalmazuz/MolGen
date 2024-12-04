@@ -54,6 +54,6 @@ class PreTrainGPTSmilesDataset(Dataset):
                 smiles = [s.strip() for s in f.readlines()]
 
         print("Converting SMILES to Canonical SMILES")
-        smiles = [Chem.MolToSmiles(Chem.MolFromSmiles(s)) for s in tqdm(smiles) if Chem.MolFromSmiles is not None]
+        smiles = [Chem.MolToSmiles(Chem.MolFromSmiles(s)) for s in tqdm(smiles) if Chem.MolFromSmiles(s) is not None]
 
         return smiles
