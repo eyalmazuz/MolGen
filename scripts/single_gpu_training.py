@@ -21,8 +21,8 @@ def get_pretrain_args() -> argparse.Namespace:
     parser.add_argument("--data-path", type=str, required=True, help="Path to the training data")
     parser.add_argument("--tokenizer-path", type=str, required=True, help="Path to the tokenizer used for training")
     parser.add_argument("--save-path", type=str, required=True, help="Path to save the model")
-    parser.add_argument("--model-type", type=str, required=True, options=["GPT"], help="Type of model to use for training")  # noqa: E501
-    parser.add_argument("--dataset-type", type=str, required=True, options=["SMILES"], help="Type of dataset to use for training")  # noqa: E501
+    parser.add_argument("--model-type", type=str, required=True, choices=["GPT"], help="Type of model to use for training")  # noqa: E501
+    parser.add_argument("--dataset-type", type=str, required=True, choices=["SMILES"], help="Type of dataset to use for training")  # noqa: E501
     parser.add_argument("--config-path", type=str, required=True, help="Path to the connfig containing training and model params")  # noqa: E501
 
     return parser.parse_args()
@@ -45,7 +45,7 @@ def run_training(args: argparse.Namespace) -> None:
     tokenizer = get_tokenizer(args.tokenizer_path)
     dataset = get_dataset(dataset_type,
                           model_type,
-                          dataset_path=args.dataset_path,
+                          dataset_path=args.data_path,
                           tokenizer=tokenizer)
 
     batch_sampler = LengthBatchSampler(dataset, train_config["batch_size"], drop_last=False)
@@ -63,7 +63,7 @@ def run_training(args: argparse.Namespace) -> None:
                                            train_config["device"])
 
     if train_config["compile"]:
-        model = torch.compile(model)
+        model = torch.compile(model) # type: ignore
 
     pretrain_model(model, dataloader, optimizer, ctx, scaler, train_config)
 

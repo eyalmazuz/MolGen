@@ -1,12 +1,12 @@
 import random
 
-from rdkit import RDLogger
 import torch
-from tqdm import trange, tqdm
+from rdkit import DisableLog
+from tqdm import tqdm, trange
 
 from .evaluate import generate_smiles, generate_smiles_scaffolds, get_stats
 
-RDLogger.DisableLog('rdApp.*')
+DisableLog('rdApp.*')
 
 
 def policy_gradients(model,
@@ -55,7 +55,12 @@ def policy_gradients(model,
                                                         return_smiles=False)
             else:
                 batch_tokens = generate_smiles(model=model, tokenizer=tokenizer,
-                                    temprature=kwargs['temprature'], size=batch_size, batch_size=batch_size // 2, max_len=max_len, device=device, return_smiles=False)
+                                    temprature=kwargs['temprature'],
+                                    size=batch_size,
+                                    batch_size=batch_size // 2,
+                                    max_len=max_len,
+                                    device=device,
+                                    return_smiles=False)
 
                 len_scaffold = len(scaffold_tokens) - 1 if use_scaffold else 0
                 batch_smiles = [tokenizer.decode(tokens[len_scaffold+1:-1]) for tokens in batch_tokens]
@@ -66,7 +71,12 @@ def policy_gradients(model,
             batch_rewards = []
             for _ in trange(batch_size // 50):
                 batched_tokens = generate_smiles(model=model, tokenizer=tokenizer,
-                                    temprature=kwargs['temprature'], size=50, batch_size=1, max_len=max_len, device=device, return_smiles=False)
+                                    temprature=kwargs['temprature'],
+                                    size=50,
+                                    batch_size=1,
+                                    max_len=max_len,
+                                    device=device,
+                                    return_smiles=False)
 
                 len_scaffold = len(scaffold_tokens) - 1 if use_scaffold else 0
                 smiles = [tokenizer.decode(tokens[len_scaffold+1:-1]) for tokens in batched_tokens]

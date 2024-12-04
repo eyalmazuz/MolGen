@@ -5,14 +5,14 @@ https://github.com/karpathy/minGPT/
 from dataclasses import dataclass
 
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
-from molgen.models.layers import EncoderBlock, DecoderBlock
+from molgen.models.layers import DecoderBlock, EncoderBlock
 
 
 @dataclass(init=True)
-class TransformerConfig():
+class TransformerConfig:
     vocab_size: int = 32768
     block_size: int = 512
     n_embd: int = 768
@@ -25,7 +25,7 @@ class TransformerConfig():
 
 class Transformer(nn.Module):
     def __init__(self, config: TransformerConfig) -> None:
-        super(Transformer, self).__init__()
+        super().__init__()
 
         self.block_size = config.block_size
 
@@ -77,7 +77,7 @@ class Transformer(nn.Module):
     def enc(self, idx, mask=None):
         device = idx.device
         b, t = idx.size()
-        assert t <= self.block_size, f"Cannot forward encoder sequence of length {t}, block size is only {self.block_size}"
+        assert t <= self.block_size, f"Cannot forward encoder sequence of length {t}, block size is {self.block_size}"
         pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0) # shape (1, t)
 
         # forward the Enocder model itself
@@ -94,7 +94,7 @@ class Transformer(nn.Module):
     def dec(self, idx, enc_h, enc_mask=None):
         device = idx.device
         b, t = idx.size()
-        assert t <= self.block_size, f"Cannot forward decoder sequence of length {t}, block size is only {self.block_size}"
+        assert t <= self.block_size, f"Cannot forward decoder sequence of length {t}, block size is {self.block_size}"
         pos = torch.arange(0, t, dtype=torch.long, device=device).unsqueeze(0) # shape (1, t)
 
        # forward the Decoder model itself

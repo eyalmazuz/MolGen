@@ -1,16 +1,17 @@
 import os
 import sys
-from typing import List, Union
 
-from rdkit import Chem
-from rdkit.Chem import QED, Crippen
-from rdkit import RDConfig
+from rdkit import Chem, RDConfig
+from rdkit.Chem import QED
+from rdkit.Chem.Crippen import MolLogP  # type: ignore
+
 sys.path.append(os.path.join(RDConfig.RDContribDir, 'SA_Score'))
 import sascorer
-from rdkit import RDLogger
-RDLogger.DisableLog('rdApp.*')
+from rdkit import DisableLog
 
-def calc_novelty(train_set: Union[str, List[str]], generated_molecules: List[str]) -> float:
+DisableLog('rdApp.*')
+
+def calc_novelty(train_set: str | list[str], generated_molecules: list[str]) -> float:
     """
     Calculates the novelty score of the generated molecule list.
     the novelty score is the ratio between the amount of molecules that aren't in the train set
@@ -30,14 +31,14 @@ def calc_novelty(train_set: Union[str, List[str]], generated_molecules: List[str
     Returns:
         The novelty score of the generated set.
         novlty score ranges between 0 and 1.
-    """ 
+    """
     new_molecules = set(generated_molecules) - set(train_set)
-    new_molecules = len(new_molecules)
+    new_molecules_len = len(new_molecules)
 
-    novelty_score = new_molecules / len(generated_molecules)
+    novelty_score = new_molecules_len / len(generated_molecules)
     return novelty_score
 
-def calc_diversity(gen_molecules: List[str]) -> float:
+def calc_diversity(gen_molecules: list[str]) -> float:
     """
     Calculates the diversity of the generate molecule list.
     The diversity is the number of unique molecules in the generated list.
@@ -53,7 +54,7 @@ def calc_diversity(gen_molecules: List[str]) -> float:
     Returns:
         The diversity score of the generated set.
         diversity score ranges between 0 and 1.
-    """ 
+    """
     return len(set(gen_molecules)) / len(gen_molecules)
 
 def calc_logp(mol: Chem.rdchem.Mol) -> float:
@@ -68,7 +69,7 @@ def calc_logp(mol: Chem.rdchem.Mol) -> float:
         the molecule log p which is his the log ratio between
         water solubility and octanol solubility.
     """
-    log_p = Crippen.MolLogP(mol)
+    log_p = MolLogP(mol)
 
     return log_p
 
@@ -88,11 +89,11 @@ def calc_qed(mol: Chem.rdchem.Mol) -> float:
 
     return qed
 
-def calc_sas(mol: Chem.rdchem.Mol) -> float:
+def calc_sas(mol: Chem.rdchem.Mol) -> float | None:
     """
     Calculates the Synthetic Accessiblity Score (SAS) of a drug-like molecule
     based on the molecular compelxity and fragment contribution.
-    
+
     code taken from: https://github.com/rdkit/rdkit/blob/master/Contrib/SA_Score/sascorer.py
 
     Args:
@@ -110,7 +111,7 @@ def calc_sas(mol: Chem.rdchem.Mol) -> float:
     except Exception:
         return None
 
-def calc_valid_molecules(molecules: List[str]) -> float:
+def calc_valid_molecules(molecules: list[str]) -> float:
     valid_molecules = [mol for mol in molecules if Chem.MolFromSmiles(mol) is not None]
 
     return len(valid_molecules) / len(molecules)

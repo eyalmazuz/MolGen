@@ -13,7 +13,7 @@ config_type = type[GPTConfig] | type[BertConfig] | type[TransformerConfig]
 
 def get_model(model_type: ModelType, model_config: dict[str, Any]) -> Module:
     config_cls: config_type
-    model_cls: Module
+    model_cls: type[Module]
 
     match model_type:
         case ModelType.GPT:

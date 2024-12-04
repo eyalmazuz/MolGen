@@ -28,13 +28,6 @@ class BPETokenizer(AbstractTokenizer):
         for (p0, p1), idx in self.merges.items():
             self.vocab[idx] = self.vocab[p0] + self.vocab[p1]
 
-        if pad_token is None and eos_token is not None:
-            print("pad token is not defined will default to eos token if available")
-
-        if sep_token is None and eos_token is not None:
-            print("sep token is not defined will default to eos token if available")
-
-
     def __len__(self) -> int:
         return len(self.vocab) + len(self.special_tokens)
 

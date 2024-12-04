@@ -24,14 +24,6 @@ class CharTokenizer(AbstractTokenizer):
         self.tokens_to_ids = token2id
         self.ids_to_tokens = {id_: token for token, id_ in self.tokens_to_ids.items()}
 
-        if pad_token is None and eos_token is not None:
-            print("pad token is not defined will default to eos token if available")
-
-        if sep_token is None and eos_token is not None:
-            print("sep token is not defined will default to eos token if available")
-
-
-
     def __len__(self) -> int:
         return len(self.tokens_to_ids)
 
@@ -68,7 +60,7 @@ class CharTokenizer(AbstractTokenizer):
 
 
     def decode(self, encodings: TokenizedData, skip_special_tokens: bool=False) -> list[str]:
-        if isinstance(encodings[0], int):
+        if isinstance(encodings[0], int) and isinstance(encodings, list):
             encodings = [encodings]
 
         if isinstance(encodings, torch.Tensor):

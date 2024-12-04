@@ -5,6 +5,7 @@ import pytest
 
 from molgen.tokenizers.tokenizer_factory import get_tokenizer
 
+
 @pytest.fixture
 def tempdir():
     tempdir = tempfile.TemporaryDirectory()
@@ -36,7 +37,7 @@ def char_tokenizer(tempdir, token_to_id, char_config):
 
 def test_valid_char_tokenizer(tempdir, char_tokenizer, token_to_id):
     tokenizer = get_tokenizer(tempdir.name)
-    
+
     assert tokenizer.tokens_to_ids == token_to_id
 
 
@@ -48,4 +49,3 @@ def test_invalid_path():
 def test_no_config(tempdir):
     with pytest.raises(ValueError):
         _ = get_tokenizer(tempdir.name)
-

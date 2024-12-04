@@ -33,7 +33,7 @@ class AbstractTokenizer(ABC):
             print("sep token is not defined will default to eos token if available")
 
     @abstractmethod
-    def encode(self, texts: str | list[str], return_tensors: bool) -> TokenizedData:
+    def encode(self, texts: str | list[str], return_tensors: bool=False) -> TokenizedData:
         pass
 
 

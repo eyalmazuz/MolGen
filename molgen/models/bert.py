@@ -4,16 +4,15 @@ https://github.com/karpathy/minGPT/
 """
 from dataclasses import dataclass
 
-import numpy as np
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
 
 from molgen.models.layers import EncoderBlock
 
 
 @dataclass(init=True)
-class BertConfig():
+class BertConfig:
     vocab_size: int = 32768
     block_size: int = 512
     n_embd: int = 768
@@ -26,10 +25,10 @@ class BertConfig():
 
 class Bert(nn.Module):
     def __init__(self, config: BertConfig) -> None:
-        super(Bert, self).__init__()
+        super().__init__()
 
         self.block_size = config.block_size
-         
+
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(config.vocab_size, config.n_embd),
             wpe = nn.Embedding(config.block_size, config.n_embd),

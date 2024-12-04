@@ -2,18 +2,18 @@
 Code based on andrej karpathy minGPT code with a little bit of modifications
 https://github.com/karpathy/minGPT/
 """
-from dataclasses import dataclass
 import inspect
+from dataclasses import dataclass
 
 import torch
+import torch.nn.functional as F  # noqa: N812
 from torch import nn
-import torch.nn.functional as F
 
 from molgen.models.layers import DecoderOnlyBlock
 
 
 @dataclass(init=True)
-class GPTConfig():
+class GPTConfig:
     vocab_size: int = 32768
     block_size: int = 512
     n_embd: int = 768
@@ -26,7 +26,7 @@ class GPTConfig():
 
 class GPT(nn.Module):
     def __init__(self, config: GPTConfig) -> None:
-        super(GPT, self).__init__()
+        super().__init__()
 
         self.block_size = config.block_size
 

@@ -6,7 +6,7 @@ from rdkit import Chem
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 
-from molgen.tokeniszers.tokenizer import AbstractTokenizer
+from molgen.tokenizers.tokenizer import AbstractTokenizer
 
 
 class PreTrainGPTSmilesDataset(Dataset):
@@ -22,9 +22,9 @@ class PreTrainGPTSmilesDataset(Dataset):
 
 
     def __getitem__ (self, idx: int) -> dict[str, list[str]]:
-        smiles = self.dataset[idx]
-        example = self.tokenizer.encode(smiles)
-        example = [self.tokenizer.bos_token_id] + example + [self.tokenizer.eos_token_id]
+        smiles: str = self.dataset[idx]
+        encoding = self.tokenizer.encode(smiles, return_tensors=False)
+        example: list[int] | torch.Tensor = [self.tokenizer.bos_token_id] + encoding[0] + [self.tokenizer.eos_token_id]
         example = torch.tensor(example, dtype=torch.int64)
 
         labels = copy.deepcopy(example)

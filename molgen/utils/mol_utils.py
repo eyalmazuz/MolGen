@@ -1,10 +1,10 @@
-from typing import List, Set
-
-from rdkit import Chem
+from rdkit import Chem, DisableLog
 from rdkit.Chem.Scaffolds import MurckoScaffold
-from rdkit import RDLogger
-RDLogger.DisableLog('rdApp.*')
 from tqdm import tqdm
+
+DisableLog('rdApp.*')
+
+
 
 def get_molecule_scaffold(smiles: str) -> str:
     """
@@ -14,7 +14,7 @@ def get_molecule_scaffold(smiles: str) -> str:
 
     return scaffold
 
-def convert_to_scaffolds(mols: List[str]) -> Set[str]:
+def convert_to_scaffolds(mols: list[str]) -> set[str]:
     """
     Returns all the scaffolds that are present in the list of molecules.
     """
@@ -25,7 +25,7 @@ def convert_to_scaffolds(mols: List[str]) -> Set[str]:
 
     return scaffolds
 
-def convert_to_molecules(smiles_list: List[str]) -> List[Chem.rdchem.Mol]:
+def convert_to_molecules(smiles_list: list[str]) -> list[Chem.rdchem.Mol]:
     """
     Convert List of SMILES strings to rdkit Mol object.
     """
@@ -34,11 +34,11 @@ def convert_to_molecules(smiles_list: List[str]) -> List[Chem.rdchem.Mol]:
     return mols
 
 
-def filter_invalid_molecules(mols: List[Chem.rdchem.Mol]) -> List[Chem.rdchem.Mol]:
+def filter_invalid_molecules(mols: list[Chem.rdchem.Mol]) -> list[Chem.rdchem.Mol]:
     """
     Filters all the invalid SMILES from the list, and invalid SMIELS is a SMILES that couldn't convert to
     a molecule using rdkit's MolFromSmiles method and the result returned was None.
     """
-    mols = list(filter(lambda x: x != None, mols))
+    mols = list(filter(lambda x: x is not None, mols))
 
     return mols

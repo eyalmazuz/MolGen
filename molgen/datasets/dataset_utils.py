@@ -65,7 +65,7 @@ class PadCollate:
         self.ignore_index = ignore_index
 
 
-    def __call__(self, batches: list[dict[str, list[int]]]) -> dict[str, torch.tensor]:
+    def __call__(self, batches: list[dict[str, list[int]]]) -> dict[str, torch.Tensor]:
         max_length = max(len(item["input_ids"]) for item in batches)
 
         batch_input_ids = []
