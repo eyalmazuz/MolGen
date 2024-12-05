@@ -9,28 +9,29 @@ from molgen.tokenizers.tokenizer import AbstractTokenizer, TokenizedData
 
 
 class CharTokenizer(AbstractTokenizer):
-    def __init__(self,
-                 token2id: dict[str, int],
-                 bos_token: str | None=None,
-                 eos_token: str | None=None,
-                 pad_token: str | None=None,
-                 sep_token: str | None=None,
-                 special_tokens: dict[str, int] | None=None) -> None:
-        super().__init__(bos_token=bos_token,
-                        eos_token=eos_token,
-                        pad_token=pad_token,
-                        sep_token=sep_token,
-                        special_tokens=special_tokens)
+    def __init__(
+        self,
+        token2id: dict[str, int],
+        bos_token: str | None = None,
+        eos_token: str | None = None,
+        pad_token: str | None = None,
+        sep_token: str | None = None,
+        special_tokens: dict[str, int] | None = None,
+    ) -> None:
+        super().__init__(
+            bos_token=bos_token,
+            eos_token=eos_token,
+            pad_token=pad_token,
+            sep_token=sep_token,
+            special_tokens=special_tokens,
+        )
         self.tokens_to_ids = token2id
         self.ids_to_tokens = {id_: token for token, id_ in self.tokens_to_ids.items()}
 
     def __len__(self) -> int:
         return len(self.tokens_to_ids)
 
-
-    def encode(self,
-               texts: str | list[str],
-               return_tensors: bool=False) -> TokenizedData:
+    def encode(self, texts: str | list[str], return_tensors: bool = False) -> TokenizedData:
         if isinstance(texts, str):
             texts = [texts]
 
@@ -58,8 +59,7 @@ class CharTokenizer(AbstractTokenizer):
 
         return encodings
 
-
-    def decode(self, encodings: TokenizedData, skip_special_tokens: bool=False) -> list[str]:
+    def decode(self, encodings: TokenizedData, skip_special_tokens: bool = False) -> list[str]:
         if isinstance(encodings[0], int) and isinstance(encodings, list):
             encodings = [encodings]
 
@@ -82,7 +82,6 @@ class CharTokenizer(AbstractTokenizer):
             texts.append(text)
 
         return texts
-
 
     @classmethod
     def load_pretrained(cls: type["CharTokenizer"], path: str, **kwargs: Any) -> "CharTokenizer":

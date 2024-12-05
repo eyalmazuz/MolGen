@@ -21,8 +21,7 @@ def token_to_id():
 
 @pytest.fixture
 def char_config():
-    config = {"type": "CharTokenizer",
-              "kwargs": {"special_tokens": None}}
+    config = {"type": "CharTokenizer", "kwargs": {"special_tokens": None}}
     return config
 
 

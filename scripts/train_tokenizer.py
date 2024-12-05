@@ -23,24 +23,28 @@ def get_tokenizer_args() -> argparse.Namespace:
 def train_tokenizer(args: argparse.Namespace):
     match args.type.lower():
         case "char":
-            build_char_tokenizer(args.data_path,
-                                args.save_path,
-                                args.bos_token,
-                                args.eos_token,
-                                args.pad_token,
-                                args.sep_token,
-                                args.extra_special_tokens)
+            build_char_tokenizer(
+                args.data_path,
+                args.save_path,
+                args.bos_token,
+                args.eos_token,
+                args.pad_token,
+                args.sep_token,
+                args.extra_special_tokens,
+            )
 
         case "bpe":
-            build_bpe_tokenizer(args.data_path,
-                                args.save_path,
-                                args.vocab_size,
-                                args.bos_token,
-                                args.eos_token,
-                                args.pad_token,
-                                args.sep_token,
-                                args.extra_special_tokens,
-                                verbose=True)
+            build_bpe_tokenizer(
+                args.data_path,
+                args.save_path,
+                args.vocab_size,
+                args.bos_token,
+                args.eos_token,
+                args.pad_token,
+                args.sep_token,
+                args.extra_special_tokens,
+                verbose=True,
+            )
 
         case _:
             raise ValueError(f"tokenizer type {args.type} is not Supported")

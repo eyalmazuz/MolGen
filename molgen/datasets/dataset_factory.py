@@ -9,7 +9,8 @@ from molgen.datasets.smiles_dataset import PreTrainGPTSmilesDataset
 from molgen.models.model_options import ModelType
 
 
-def get_dataset(dataset_type: DatasetType, model_type: ModelType, dataset_path, tokenizer, **kwargs
+def get_dataset(
+    dataset_type: DatasetType, model_type: ModelType, dataset_path, tokenizer, **kwargs
 ) -> tuple[Dataset, Dataset]:
     match model_type:
         case ModelType.GPT:
@@ -30,12 +31,14 @@ def get_gpt_dataset(dataset_type: DatasetType, dataset_path, tokenizer, **kwargs
 
     return train_dataset, val_dataset
 
-def get_train_test_split(smiles: list[str], test_size:float) -> tuple[list[str], list[str]]:
+
+def get_train_test_split(smiles: list[str], test_size: float) -> tuple[list[str], list[str]]:
     data_size = len(smiles)
-    train_smiles = smiles[int(data_size * test_size):]
-    val_smiles = smiles[:int(data_size * test_size)]
+    train_smiles = smiles[int(data_size * test_size) :]
+    val_smiles = smiles[: int(data_size * test_size)]
 
     return train_smiles, val_smiles
+
 
 def load_smiles(dataset_path: str) -> list[str]:
     if not os.path.exists(dataset_path):

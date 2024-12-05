@@ -9,18 +9,22 @@ from molgen.tokenizers.tokenizers_utils import get_stats, merge
 
 
 class BPETokenizer(AbstractTokenizer):
-    def __init__(self,
-                 merges: dict[tuple[int, int], int],
-                 bos_token: str | None=None,
-                 eos_token: str | None=None,
-                 pad_token: str | None=None,
-                 sep_token: str | None=None,
-                 special_tokens: dict[str, int] | None=None) -> None:
-        super().__init__(bos_token=bos_token,
-                eos_token=eos_token,
-                pad_token=pad_token,
-                sep_token=sep_token,
-                special_tokens=special_tokens)
+    def __init__(
+        self,
+        merges: dict[tuple[int, int], int],
+        bos_token: str | None = None,
+        eos_token: str | None = None,
+        pad_token: str | None = None,
+        sep_token: str | None = None,
+        special_tokens: dict[str, int] | None = None,
+    ) -> None:
+        super().__init__(
+            bos_token=bos_token,
+            eos_token=eos_token,
+            pad_token=pad_token,
+            sep_token=sep_token,
+            special_tokens=special_tokens,
+        )
         self.merges = merges
 
         # build the vocab back from the merges
@@ -31,11 +35,7 @@ class BPETokenizer(AbstractTokenizer):
     def __len__(self) -> int:
         return len(self.vocab) + len(self.special_tokens)
 
-
-    def encode(self,
-               texts: str | list[str],
-               return_tensors: bool=False) -> TokenizedData:
-
+    def encode(self, texts: str | list[str], return_tensors: bool = False) -> TokenizedData:
         if isinstance(texts, str):
             texts = [texts]
 
@@ -64,7 +64,6 @@ class BPETokenizer(AbstractTokenizer):
 
         return encodings
 
-
     def __encode_chunk(self, text_bytes: bytes) -> list[int]:
         # return the token ids
         # let's begin. first, convert all bytes to integers in range 0..255
@@ -78,14 +77,13 @@ class BPETokenizer(AbstractTokenizer):
             # just the first pair in the list, arbitrarily
             # we can detect this terminating case by a membership check
             if pair not in self.merges:
-                break # nothing else can be merged anymore
+                break  # nothing else can be merged anymore
             # otherwise let's merge the best pair (lowest merge index)
             idx = self.merges[pair]
             ids = merge(ids, pair, idx)
         return ids
 
-
-    def decode(self, encodings: TokenizedData, skip_special_tokens: bool=False) -> list[str]:
+    def decode(self, encodings: TokenizedData, skip_special_tokens: bool = False) -> list[str]:
         if isinstance(encodings[0], int):
             encodings = [encodings]
 
@@ -110,7 +108,6 @@ class BPETokenizer(AbstractTokenizer):
             texts.append(text)
 
         return texts
-
 
     @classmethod
     def load_pretrained(cls: type["BPETokenizer"], path: str, **kwargs: Any) -> "BPETokenizer":

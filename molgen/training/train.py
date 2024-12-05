@@ -8,7 +8,7 @@ from molgen.utils.utils import is_distributed_run
 def pretrain_model(model, train_dataloader, val_dataloader, optimizer, ctx, scaler, training_args) -> None:
     epochs = training_args["max_steps"] // len(train_dataloader)
     ema_loss = 0.0  # Initialize EMA loss
-    alpha = 0.1      # Smoothing factor for EMA; adjust as needed
+    alpha = 0.1  # Smoothing factor for EMA; adjust as needed
     best_val_loss = torch.tensor(1e9)
     for epoch in range(epochs):
         model.train()
@@ -21,7 +21,7 @@ def pretrain_model(model, train_dataloader, val_dataloader, optimizer, ctx, scal
 
             # Handle distributed training if applicable
             if is_distributed_run():
-                model.require_backward_grad_sync = (step == training_args["gradient_accumulation_steps"])
+                model.require_backward_grad_sync = step == training_args["gradient_accumulation_steps"]
 
             with ctx:
                 logits, loss = model(batch["input_ids"], targets=batch["labels"])
@@ -63,11 +63,11 @@ def pretrain_model(model, train_dataloader, val_dataloader, optimizer, ctx, scal
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 checkpoint = {
-                    'model': model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'model_args': model.config,
-                    'epoch': epoch,
-                    'best_val_loss': best_val_loss,
+                    "model": model.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "model_args": model.config,
+                    "epoch": epoch,
+                    "best_val_loss": best_val_loss,
                 }
                 print(f"saving checkpoint to {training_args['checkpoint_dir']}")
-                torch.save(checkpoint, os.path.join(training_args["checkpoint_dir"], 'ckpt.pt'))
+                torch.save(checkpoint, os.path.join(training_args["checkpoint_dir"], "ckpt.pt"))

@@ -1,8 +1,9 @@
 import random
+from typing import Any
 
 import numpy as np
 import torch
-from torch.utils.data import BatchSampler, Dataset
+from torch.utils.data import BatchSampler, DataLoader, Dataset
 from tqdm import tqdm
 
 
@@ -17,14 +18,14 @@ class ConcatDataset(Dataset):
             "input_ids": [],
             "attention_mask": [],
             "labels": [],
-            }
+        }
 
         for sample in tqdm(self.dataset, desc="Preprocessing dataset", dynamic_ncols=True):
-            buffer = {k: v + sample[k] for k,v in buffer.items()}
+            buffer = {k: v + sample[k] for k, v in buffer.items()}
 
             while len(next(iter(buffer.values()))) > self.chunk_size:
-                self.samples.append({k: v[:self.chunk_size] for k,v in buffer.items()})
-                buffer = {k: v[self.chunk_size:] for k,v in buffer.items()}
+                self.samples.append({k: v[: self.chunk_size] for k, v in buffer.items()})
+                buffer = {k: v[self.chunk_size :] for k, v in buffer.items()}
 
     def __getitem__(self, idx):
         return self.samples[idx]
@@ -34,8 +35,8 @@ class ConcatDataset(Dataset):
 
 
 class LengthBatchSampler(BatchSampler):
-    def __init__(self, dataset, batch_size: int, drop_last: bool, shuffle: bool=True) -> None:
-        self.lengths = [len(d['input_ids']) for d in dataset]
+    def __init__(self, dataset, batch_size: int, drop_last: bool, shuffle: bool = True) -> None:
+        self.lengths = [len(d["input_ids"]) for d in dataset]
         self.batch_size = batch_size
         self.drop_last = drop_last
         self.shuffle = shuffle
@@ -43,9 +44,9 @@ class LengthBatchSampler(BatchSampler):
     def __iter__(self):
         ids = np.argsort(self.lengths)
         if self.drop_last:
-            ids = ids[:len(ids) // self.batch_size * self.batch_size]
+            ids = ids[: len(ids) // self.batch_size * self.batch_size]
 
-        batches = [ids[i:i+self.batch_size] for i in range(0, len(ids), self.batch_size)]
+        batches = [ids[i : i + self.batch_size] for i in range(0, len(ids), self.batch_size)]
 
         if self.shuffle:
             random.shuffle(batches)
@@ -60,10 +61,9 @@ class LengthBatchSampler(BatchSampler):
 
 
 class PadCollate:
-    def __init__(self, pad_token_id: int, ignore_index: int=-100) -> None:
+    def __init__(self, pad_token_id: int, ignore_index: int = -100) -> None:
         self.pad_token_id = pad_token_id
         self.ignore_index = ignore_index
-
 
     def __call__(self, batches: list[dict[str, list[int]]]) -> dict[str, torch.Tensor]:
         max_length = max(len(item["input_ids"]) for item in batches)
@@ -87,7 +87,32 @@ class PadCollate:
             batch_labels.append(labels)
 
         return {
-                "input_ids": torch.tensor(batch_input_ids, dtype=torch.int64),
-                "attention_mask": torch.tensor(batch_attention_mask, dtype=torch.int64),
-                "labels": torch.tensor(batch_labels, dtype=torch.int64)
+            "input_ids": torch.tensor(batch_input_ids, dtype=torch.int64),
+            "attention_mask": torch.tensor(batch_attention_mask, dtype=torch.int64),
+            "labels": torch.tensor(batch_labels, dtype=torch.int64),
         }
+
+
+def prepare_data_for_training(
+    train_dataset: Dataset, val_dataset: Dataset, pad_token_id: int, train_config: dict[str, Any]
+) -> tuple[DataLoader, DataLoader]:
+    train_sampler = LengthBatchSampler(train_dataset, train_config["batch_size"], drop_last=False)
+    val_sampler = LengthBatchSampler(val_dataset, train_config["batch_size"], drop_last=False)
+    collate_fn = PadCollate(pad_token_id)
+    train_dataloader = DataLoader(
+        train_dataset,
+        batch_sampler=train_sampler,
+        collate_fn=collate_fn,
+        num_workers=train_config["num_workers"],
+        pin_memory=True,
+    )
+
+    val_dataloader = DataLoader(
+        val_dataset,
+        batch_sampler=val_sampler,
+        collate_fn=collate_fn,
+        num_workers=train_config["num_workers"],
+        pin_memory=True,
+    )
+
+    return train_dataloader, val_dataloader

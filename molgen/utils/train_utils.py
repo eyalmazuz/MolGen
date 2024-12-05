@@ -1,12 +1,11 @@
 import os
-from contextlib import nullcontext
 
 import torch
 
 from molgen.utils.utils import is_distributed_run
 
 
-def setup_torch(seed: int=0, device: str="cuda") -> str:
+def setup_torch(seed: int = 0, device: str = "cuda") -> str:
     torch.manual_seed(seed)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
@@ -24,8 +23,8 @@ def setup_mixed_precision(device: str, dtype: str):
         print("bfloat16 is not supported on this GPU type, reverting to float16")
         dtype = "float16"
 
-    ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
-    ctx = nullcontext() if device == "cpu" else torch.amp.autocast(device_type=device, dtype=ptdtype)
+    ptdtype = {"float32": torch.float32, "bfloat16": torch.bfloat16, "float16": torch.float16}[dtype]
+    ctx = torch.amp.autocast(device_type=device, dtype=ptdtype)
     scaler = torch.amp.GradScaler(device, enabled=(dtype == "float16"))
     print(f"Running using {device=} {ptdtype=}")
 

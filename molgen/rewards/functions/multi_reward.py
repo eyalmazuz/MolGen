@@ -6,7 +6,7 @@ from molgen.rewards.reward_utils import agg_to_op
 
 # TODO: Find a way to fix typing in this class
 class MultiReward(AbstractReward):
-    def __init__(self, rewards: list[AbstractReward], agg_type: str="add", name: str | None=None) -> None:
+    def __init__(self, rewards: list[AbstractReward], agg_type: str = "add", name: str | None = None) -> None:
         super().__init__(name=name, scale=None)
         self.rewards = rewards
         self.op = agg_to_op(agg_type)
@@ -35,7 +35,6 @@ class MultiReward(AbstractReward):
             else:
                 return smiles_rewards  # type: ignore
 
-
     @AbstractReward.eval.setter  # type: ignore
     def eval(self, val: bool) -> None:
         if not isinstance(val, bool):
@@ -44,7 +43,7 @@ class MultiReward(AbstractReward):
         for reward in self.rewards:
             if hasattr(reward, "_eval"):
                 reward.eval = val
-        AbstractReward.eval.fset(self, val) # type: ignore
+        AbstractReward.eval.fset(self, val)  # type: ignore
 
     def get_reward(self, name: str) -> AbstractReward:
         for reward in self.rewards:

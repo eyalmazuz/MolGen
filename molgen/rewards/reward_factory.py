@@ -5,9 +5,9 @@ from molgen.rewards.functions.rdkit_rewards import PenalizedLogPReward, QEDRewar
 from molgen.rewards.reward import AbstractReward
 
 name_to_reward: dict[str, type[AbstractReward]] = {
-        "QED": QEDReward,
-        "PlogP": PenalizedLogPReward,
-        }
+    "QED": QEDReward,
+    "PlogP": PenalizedLogPReward,
+}
 
 
 def get_rewards(rewards_dict: dict[str, Any]) -> AbstractReward:

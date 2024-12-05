@@ -4,8 +4,9 @@ from molgen.rewards.reward_factory import get_rewards
 
 
 def test_get_single_reward_empty_dict():
-    rewards_dict = {"functions":[
-        {"type": "QED"},
+    rewards_dict = {
+        "functions": [
+            {"type": "QED"},
         ]
     }
 
@@ -18,8 +19,9 @@ def test_get_single_reward_empty_dict():
 
 
 def test_get_single_reward_scale_in_dict():
-    rewards_dict = {"functions":[
-        {"type": "QED", "scale": "mult"},
+    rewards_dict = {
+        "functions": [
+            {"type": "QED", "scale": "mult"},
         ]
     }
 
@@ -32,10 +34,14 @@ def test_get_single_reward_scale_in_dict():
 
 
 def test_get_multiple_rewards_empty_list():
-    rewards_dict = {"agg": "mul", "functions":[
-        {"type": "QED",},
-        {"type": "PlogP"},
-        ]
+    rewards_dict = {
+        "agg": "mul",
+        "functions": [
+            {
+                "type": "QED",
+            },
+            {"type": "PlogP"},
+        ],
     }
     reward = get_rewards(rewards_dict)
     assert isinstance(reward, MultiReward)

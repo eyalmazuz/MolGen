@@ -9,9 +9,7 @@ from molgen.rewards.reward import AbstractReward, RewardScale
 
 
 class QEDReward(AbstractReward):
-    def __init__(self,
-                 name: str | None=None,
-                 scale: RewardScale=None) -> None:
+    def __init__(self, name: str | None = None, scale: RewardScale = None) -> None:
         super().__init__(name=name, scale=scale)
 
     def __call__(self, smiles: str | list[str]) -> float | list[float]:
@@ -35,10 +33,9 @@ class QEDReward(AbstractReward):
 
             return rewards
 
+
 class PenalizedLogPReward(AbstractReward):
-    def __init__(self,
-                 name: str | None=None,
-                 scale: RewardScale=None) -> None:
+    def __init__(self, name: str | None = None, scale: RewardScale = None) -> None:
         super().__init__(name=name, scale=scale)
 
     def __call__(self, smiles: str | list[str]) -> float | list[float]:
@@ -66,22 +63,22 @@ class PenalizedLogPReward(AbstractReward):
 
     @staticmethod
     def num_long_cycles(mol: Mol) -> int:
-      """Calculate the number of long cycles.
+        """Calculate the number of long cycles.
 
-      Args:
-        mol: Molecule. A molecule.
+        Args:
+          mol: Molecule. A molecule.
 
-      Returns:
-        negative cycle length.
-      """
-      cycle_list = nx.cycle_basis(nx.Graph(Chem.rdmolops.GetAdjacencyMatrix(mol)))
-      cycle_length = 0 if not cycle_list else max([len(j) for j in cycle_list])
-      cycle_length = 0 if cycle_length <= 6 else cycle_length - 6
-      return cycle_length
+        Returns:
+          negative cycle length.
+        """
+        cycle_list = nx.cycle_basis(nx.Graph(Chem.rdmolops.GetAdjacencyMatrix(mol)))
+        cycle_length = 0 if not cycle_list else max([len(j) for j in cycle_list])
+        cycle_length = 0 if cycle_length <= 6 else cycle_length - 6
+        return cycle_length
 
     @staticmethod
     def penalized_logp(molecule: Mol) -> float:
-      log_p = MolLogP(molecule)
-      sas_score = sascorer.calculateScore(molecule)
-      cycle_score = PenalizedLogPReward.num_long_cycles(molecule)
-      return log_p - sas_score - cycle_score
+        log_p = MolLogP(molecule)
+        sas_score = sascorer.calculateScore(molecule)
+        cycle_score = PenalizedLogPReward.num_long_cycles(molecule)
+        return log_p - sas_score - cycle_score

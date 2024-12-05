@@ -1,14 +1,5 @@
-from enum import Enum, auto
+from enum import StrEnum, auto
 
 
-class DatasetType(Enum):
+class DatasetType(StrEnum):
     SMILES = auto()
-
-    @staticmethod
-    def from_str(label: str) -> "DatasetType":
-        if label.upper() == "SMILES":
-            type_ = DatasetType.SMILES
-        else:
-            raise ValueError(f"Invalid type: {label}")
-
-        return type_

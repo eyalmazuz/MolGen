@@ -2,8 +2,7 @@ from rdkit import Chem, DisableLog
 from rdkit.Chem.Scaffolds import MurckoScaffold
 from tqdm import tqdm
 
-DisableLog('rdApp.*')
-
+DisableLog("rdApp.*")
 
 
 def get_molecule_scaffold(smiles: str) -> str:
@@ -13,6 +12,7 @@ def get_molecule_scaffold(smiles: str) -> str:
     scaffold = MurckoScaffold.MurckoScaffoldSmiles(smiles)
 
     return scaffold
+
 
 def convert_to_scaffolds(mols: list[str]) -> set[str]:
     """
@@ -24,6 +24,7 @@ def convert_to_scaffolds(mols: list[str]) -> set[str]:
         scaffolds.add(scaffold)
 
     return scaffolds
+
 
 def convert_to_molecules(smiles_list: list[str]) -> list[Chem.rdchem.Mol]:
     """

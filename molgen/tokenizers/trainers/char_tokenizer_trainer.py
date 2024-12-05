@@ -3,13 +3,15 @@ import os
 from typing import Any
 
 
-def build_char_tokenizer(data_paths: list[str],
-                         save_path: str,
-                         bos_token: str | None=None,
-                         eos_token: str | None=None,
-                         pad_token: str | None=None,
-                         sep_token: str | None=None,
-                         extra_special_tokens: list[str] | None=None) -> None:
+def build_char_tokenizer(
+    data_paths: list[str],
+    save_path: str,
+    bos_token: str | None = None,
+    eos_token: str | None = None,
+    pad_token: str | None = None,
+    sep_token: str | None = None,
+    extra_special_tokens: list[str] | None = None,
+) -> None:
     unique_tokens: set[str] = set()
 
     for path in data_paths:

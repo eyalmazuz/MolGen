@@ -6,11 +6,9 @@ from molgen.rewards import reward_scales
 
 RewardScale = str | dict[str, Any] | None
 
+
 class AbstractReward(ABC):
-    def __init__(self,
-                 name: str | None=None,
-                 scale: RewardScale=None,
-                 eval_: bool=False) -> None:
+    def __init__(self, name: str | None = None, scale: RewardScale = None, eval_: bool = False) -> None:
         self.name = name
         self._eval = eval_
         self.scale: partial[Any] | None
@@ -32,7 +30,6 @@ class AbstractReward(ABC):
             self.scale = partial(func, **kwargs)
         else:
             self.scale = None
-
 
     @abstractmethod
     def __call__(self, smiles: str | list[str]) -> float | list[float]:
