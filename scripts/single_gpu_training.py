@@ -45,15 +45,22 @@ def run_training(args: argparse.Namespace) -> None:
 
     model = get_model(model_type, model_config).to(device)
     tokenizer = get_tokenizer(args.tokenizer_path)
-    dataset = get_dataset(dataset_type,
+    train_dataset, val_dataset = get_dataset(dataset_type,
                           model_type,
                           dataset_path=args.data_path,
                           tokenizer=tokenizer)
 
-    batch_sampler = LengthBatchSampler(dataset, train_config["batch_size"], drop_last=False)
+    train_sampler = LengthBatchSampler(train_dataset, train_config["batch_size"], drop_last=False)
+    val_sampler = LengthBatchSampler(val_dataset, train_config["batch_size"], drop_last=False)
     collate_fn = PadCollate(tokenizer.pad_token_id)
-    dataloader = DataLoader(dataset,
-                            batch_sampler=batch_sampler,
+    train_dataloader = DataLoader(train_dataset,
+                            batch_sampler=train_sampler,
+                            collate_fn=collate_fn,
+                            num_workers=train_config["num_workers"],
+                            pin_memory=True)
+
+    val_dataloader = DataLoader(val_dataset,
+                            batch_sampler=val_sampler,
                             collate_fn=collate_fn,
                             num_workers=train_config["num_workers"],
                             pin_memory=True)
@@ -70,7 +77,7 @@ def run_training(args: argparse.Namespace) -> None:
 
     print("Start training")
     model.train()  # Set the model to training mode
-    pretrain_model(model, dataloader, optimizer, ctx, scaler, train_config)
+    pretrain_model(model, train_dataloader, val_dataloader, optimizer, ctx, scaler, train_config)
 
 if __name__ == "__main__":
     args = get_pretrain_args()

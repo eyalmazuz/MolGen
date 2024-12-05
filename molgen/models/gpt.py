@@ -28,6 +28,7 @@ class GPT(nn.Module):
     def __init__(self, config: GPTConfig) -> None:
         super().__init__()
 
+        self.config = config
         self.block_size = config.block_size
 
         self.transformer = nn.ModuleDict(dict(
