@@ -1,7 +1,9 @@
 import argparse
+import os
 
 import tomllib
 import torch
+from torch.distributed import destroy_process_group, init_process_group
 
 from molgen.datasets.dataset_factory import get_dataset
 from molgen.datasets.dataset_utils import prepare_data_for_training
@@ -9,6 +11,7 @@ from molgen.models.model_factory import get_model
 from molgen.tokenizers.tokenizer_factory import get_tokenizer
 from molgen.training.train import pretrain_model
 from molgen.utils.train_utils import setup_mixed_precision, setup_torch
+from molgen.utils.utils import get_world_size, is_distributed_run, is_master_process
 
 
 def get_pretrain_args() -> argparse.Namespace:
@@ -37,6 +40,11 @@ def run_training(args: argparse.Namespace) -> None:
     train_config = config["train_config"]
     model_config = config["model_config"]
 
+    if is_distributed_run():
+        init_process_group(backend="nccl")
+        ddp_world_size = get_world_size()
+        train_config["gradient_accumulation_steps"] //= ddp_world_size
+
     print("Setting up torch")
     device = setup_torch(train_config["seed"], train_config["device"])
     ctx, scaler = setup_mixed_precision(train_config["device"], train_config["dtype"])
@@ -62,8 +70,36 @@ def run_training(args: argparse.Namespace) -> None:
         print("Compiling model")
         model = torch.compile(model)  # type: ignore
 
+    if train_config["wandb_log"] and is_master_process():
+        import wandb
+
+        wandb.init(
+            project=os.environ.get("WANDB_PROJECT", None),
+            entity=os.environ.get("WANDB_ENTITY", None),
+            name=f"{args.model_type}_{args.dataset_type}",
+            config=config,
+        )
+
     print("Start training")
-    pretrain_model(model, train_dataloader, val_dataloader, optimizer, ctx, scaler, train_config)
+    pretrain_model(
+        model,
+        train_dataloader,
+        val_dataloader,
+        optimizer,
+        ctx,
+        scaler,
+        train_config["checkpoint_dir"],
+        train_config["max_steps"],
+        train_config["grad_clip"],
+        train_config["gardient_accumulation_steps"],
+        train_config["eval_every"],
+        train_config["log_every"],
+        train_config["wandb_log"],
+        device,
+    )
+
+    if is_distributed_run():
+        destroy_process_group()
 
 
 if __name__ == "__main__":

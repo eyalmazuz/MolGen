@@ -21,10 +21,8 @@ class PreTrainGPTSmilesDataset(Dataset):
         example = torch.tensor(example, dtype=torch.int64)
 
         labels = copy.deepcopy(example)
-        attention_mask = torch.ones_like(example)
 
         return {
             "input_ids": example.tolist()[:-1],
             "labels": labels.tolist()[1:],
-            "attention_mask": attention_mask.tolist()[:-1],
         }

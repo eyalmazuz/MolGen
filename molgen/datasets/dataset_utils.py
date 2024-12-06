@@ -1,10 +1,13 @@
 import random
+from itertools import islice
 from typing import Any
 
 import numpy as np
 import torch
 from torch.utils.data import BatchSampler, DataLoader, Dataset
 from tqdm import tqdm
+
+from molgen.utils.utils import get_rank, get_world_size, is_distributed_run
 
 
 class ConcatDataset(Dataset):
@@ -60,6 +63,23 @@ class LengthBatchSampler(BatchSampler):
             return len(self.lengths) // self.batch_size + (len(self.lengths) % self.batch_size > 0)
 
 
+class DistributedLengthBatchSampler(torch.utils.data.BatchSampler):
+    def __init__(
+        self, data_source, batch_size: int, num_replicas: int, rank: int, shuffle: bool = True, seed: int = 0
+    ) -> None:
+        random.seed(seed)
+        self.batch_sampler = LengthBatchSampler(data_source, batch_size=batch_size, drop_last=True, shuffle=shuffle)
+        self.num_replicas = num_replicas
+        self.rank = rank
+
+    def __iter__(self):
+        max_length = len(self.batch_sampler) // self.num_replicas * self.num_replicas
+        return islice(self.batch_sampler, self.rank, max_length, self.num_replicas)
+
+    def __len__(self):
+        return len(self.batch_sampler) // self.num_replicas
+
+
 class PadCollate:
     def __init__(self, pad_token_id: int, ignore_index: int = -100) -> None:
         self.pad_token_id = pad_token_id
@@ -96,8 +116,21 @@ class PadCollate:
 def prepare_data_for_training(
     train_dataset: Dataset, val_dataset: Dataset, pad_token_id: int, train_config: dict[str, Any]
 ) -> tuple[DataLoader, DataLoader]:
-    train_sampler = LengthBatchSampler(train_dataset, train_config["batch_size"], drop_last=False)
-    val_sampler = LengthBatchSampler(val_dataset, train_config["batch_size"], drop_last=False)
+    train_sampler: LengthBatchSampler | DistributedLengthBatchSampler
+    val_sampler: LengthBatchSampler | DistributedLengthBatchSampler
+    if is_distributed_run():
+        world_size = get_world_size()
+        rank = get_rank()
+        seed = 42 + is_distributed_run() * get_rank()
+        train_sampler = DistributedLengthBatchSampler(
+            train_dataset, train_config["batch_size"], world_size, rank, seed=seed
+        )
+        val_sampler = DistributedLengthBatchSampler(
+            val_dataset, train_config["batch_size"], world_size, rank, seed=seed
+        )
+    else:
+        train_sampler = LengthBatchSampler(train_dataset, train_config["batch_size"], drop_last=False)
+        val_sampler = LengthBatchSampler(val_dataset, train_config["batch_size"], drop_last=False)
     collate_fn = PadCollate(pad_token_id)
     train_dataloader = DataLoader(
         train_dataset,

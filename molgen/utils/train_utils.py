@@ -1,17 +1,15 @@
-import os
-
 import torch
 
-from molgen.utils.utils import is_distributed_run
+from molgen.utils.utils import get_local_rank, get_rank, is_distributed_run
 
 
 def setup_torch(seed: int = 0, device: str = "cuda") -> str:
-    torch.manual_seed(seed)
+    torch.manual_seed(42 + is_distributed_run() * get_rank())
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
 
     if device == "cuda" and is_distributed_run():
-        ddp_local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+        ddp_local_rank = get_local_rank()
         device = f"cuda:{ddp_local_rank}"
         torch.cuda.set_device(device)
 
