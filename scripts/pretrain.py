@@ -73,7 +73,7 @@ def run_training(args: argparse.Namespace) -> None:
     if train_config["wandb_log"] and is_master_process():
         import wandb
 
-        wandb.init(
+        wandb.init(  # type: ignore
             project=os.environ.get("WANDB_PROJECT", None),
             entity=os.environ.get("WANDB_ENTITY", None),
             name=f"{args.model_type}_{args.dataset_type}",
@@ -91,7 +91,7 @@ def run_training(args: argparse.Namespace) -> None:
         train_config["checkpoint_dir"],
         train_config["max_steps"],
         train_config["grad_clip"],
-        train_config["gardient_accumulation_steps"],
+        train_config["gradient_accumulation_steps"],
         train_config["eval_every"],
         train_config["log_every"],
         train_config["wandb_log"],

@@ -78,14 +78,14 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, labels=None):
-        device = idx.device
-        b, t = idx.size()
+    def forward(self, input_ids, labels=None):
+        device = input_ids.device
+        b, t = input_ids.size()
         assert t <= self.config.block_size, f"Cannot forward sequence length {t}, block size {self.config.block_size}"
         pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
 
         # forward the GPT model itself
-        tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
+        tok_emb = self.transformer.wte(input_ids)  # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
         for block in self.transformer.h:
@@ -95,7 +95,7 @@ class GPT(nn.Module):
         if labels is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.view(-1), ignore_index=-1)
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), labels.view(-1), ignore_index=-100)
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(x[:, [-1], :])  # note: using list [-1] to preserve the time dim

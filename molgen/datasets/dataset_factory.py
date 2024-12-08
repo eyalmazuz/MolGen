@@ -12,7 +12,7 @@ from molgen.models.model_options import ModelType
 def get_dataset(
     dataset_type: DatasetType, model_type: ModelType, dataset_path, tokenizer, **kwargs
 ) -> tuple[Dataset, Dataset]:
-    match model_type:
+    match model_type.lower():
         case ModelType.GPT:
             dataset = get_gpt_dataset(dataset_type, dataset_path, tokenizer, **kwargs)
         case _:
@@ -24,7 +24,7 @@ def get_dataset(
 def get_gpt_dataset(dataset_type: DatasetType, dataset_path, tokenizer, **kwargs) -> tuple[Dataset, Dataset]:
     smiles = load_smiles(dataset_path)
     train_smiles, val_smiles = get_train_test_split(smiles, test_size=0.2)
-    match dataset_type:
+    match dataset_type.lower():
         case DatasetType.SMILES:
             train_dataset = PreTrainGPTSmilesDataset(train_smiles, tokenizer, **kwargs)
             val_dataset = PreTrainGPTSmilesDataset(val_smiles, tokenizer, **kwargs)

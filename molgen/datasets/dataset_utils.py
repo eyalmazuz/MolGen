@@ -89,26 +89,21 @@ class PadCollate:
         max_length = max(len(item["input_ids"]) for item in batches)
 
         batch_input_ids = []
-        batch_attention_mask = []
         batch_labels = []
 
         for batch in batches:
             input_ids = batch["input_ids"]
-            attention_mask = batch["attention_mask"]
             labels = batch["labels"]
 
             if len(input_ids) < max_length:
                 input_ids += [self.pad_token_id] * (max_length - len(input_ids))
-                attention_mask += [0] * (max_length - len(attention_mask))
                 labels += [self.ignore_index] * (max_length - len(labels))
 
             batch_input_ids.append(input_ids)
-            batch_attention_mask.append(attention_mask)
             batch_labels.append(labels)
 
         return {
             "input_ids": torch.tensor(batch_input_ids, dtype=torch.int64),
-            "attention_mask": torch.tensor(batch_attention_mask, dtype=torch.int64),
             "labels": torch.tensor(batch_labels, dtype=torch.int64),
         }
 

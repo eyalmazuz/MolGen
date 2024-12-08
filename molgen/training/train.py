@@ -1,8 +1,9 @@
 import os
+from itertools import cycle
 
 import torch
-import wandb
 
+import wandb
 from molgen.utils.utils import is_distributed_run, is_master_process
 
 
@@ -25,17 +26,15 @@ def pretrain_model(
     ema_loss = 0.0  # Initialize EMA loss
     alpha = 0.1  # Smoothing factor for EMA; adjust as needed
     best_val_loss = torch.tensor(1e9)
-    iter_loader = iter(train_dataloader)
+    # Use cycle to create an infinite iterator
+    iter_loader = cycle(train_dataloader)
     for step in range(max_steps):
         for micro_step in range(gard_acc_steps):
             # Handle distributed training if applicable
             if is_distributed_run():
                 model.require_backward_grad_sync = micro_step == (gard_acc_steps - 1)
 
-            try:
-                batch = next(iter_loader)
-            except StopIteration:
-                iter_loader = iter(train_dataloader)
+            batch = next(iter_loader)
             # Move batch to device
             if "cuda" in device:
                 batch = {k: v.pin_memory().to(device, non_blocking=True) for k, v in batch.items()}
@@ -62,7 +61,7 @@ def pretrain_model(
             ema_loss = lossf if ema_loss is None else alpha * lossf + (1 - alpha) * ema_loss
 
             # Print EMA loss
-            print(f"Step {step}: EMA Loss = {ema_loss:.4f}")
+            print(f"Step {step}: EMA loss = {ema_loss:.4f}")
 
         if step % eval_every == 0 and is_master_process():
             model.eval()
@@ -74,13 +73,14 @@ def pretrain_model(
                     batch = {k: v.to(device) for k, v in batch.items()}
 
                 with ctx:
-                    logits, loss = model(batch["input_ids"], targets=batch["labels"])
+                    logits, loss = model(**batch)
                     losses[step] = loss.item()
 
             val_loss = losses.mean()
+            print(f"Step {step}: val loss = {val_loss:.4f}")
             model.train()
             if wandb_log:
-                wandb.log(
+                wandb.log(  # type: ignore
                     {
                         "step": step,
                         "train/loss": ema_loss,
