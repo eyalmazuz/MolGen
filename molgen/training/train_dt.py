@@ -1,5 +1,6 @@
 import os
 import gc
+import re
 import math
 import numpy as np
 from tqdm import tqdm
@@ -24,18 +25,57 @@ class Trainer:
         self.pad_token_id = train_dataset.dataset.tokenizer.pad_token_id
         self.ignore_token_id = train_dataset.collate_fn.ignore_index
         self.wandb_run = wandb_run
+        self.optimizer = None
 
         # take over whatever gpus are on the system
         if torch.cuda.is_available():
             self.device = torch.cuda.current_device()
             self.model = torch.nn.DataParallel(self.model).to(self.device)
 
-    def save_checkpoint(self, ckpt_name="best.pth"):
+    def save_checkpoint(self, epoch):
+        ckpt_name = f"epoch_{epoch}.pth" if self.test_dataset is None else f"best.pth"
         raw_model = self.model.module if hasattr(self.model, "module") else self.model
-        torch.save(raw_model.state_dict(), os.path.join(self.config.get("ckpt_path", "."), ckpt_name))
+        checkpoint = {
+            'epoch': epoch,
+            'model_state_dict': raw_model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'token_counter': self.tokens
+        }
+        torch.save(checkpoint, os.path.join(self.config.get("ckpt_path", "."), ckpt_name))
+
+    def load_checkpoint(self, ckpt_name="latest"):
+        checkpoint_dir = self.config.get("ckpt_path", ".")
+        if ckpt_name == "latest":
+            checkpoint_files = [f for f in os.listdir(checkpoint_dir) if f.startswith("epoch_") and f.endswith(".pth")]
+            if len(checkpoint_files) == 0:
+                print(f"No checkpoints to load, starting training from scratch")
+                epoch, tokens = 0, 0
+                return epoch, tokens
+
+            epoch_numbers = [
+                int(re.search(r"epoch_(\d+)", file).group(1))
+                for file in checkpoint_files
+                if re.search(r"epoch_(\d+)", file)
+            ]
+            ckpt_name =  f"epoch_{max(epoch_numbers)}.pth"
+
+        path = os.path.join(checkpoint_dir, ckpt_name)
+        checkpoint = torch.load(path)
+
+        raw_model = self.model.module if hasattr(self.model, "module") else self.model
+        raw_model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        tokens = checkpoint['token_counter']
+
+        epoch = checkpoint['epoch'] + 1
+        print(f"Checkpoint loaded. Resuming training from epoch {epoch}")
+
+        return epoch, tokens
 
     def train(self, optimizer):
         model, config = self.model, self.config
+        self.optimizer = optimizer
+        epoch_n, token_n = self.load_checkpoint()
 
         def run_epoch(split, epoch_num=0):
             is_train = split == 'train'
@@ -65,7 +105,7 @@ class Trainer:
                     model.zero_grad()
                     loss.backward()     # TODO: scaler.scale(loss).backward() - only for mix precision training
                     torch.nn.utils.clip_grad_norm_(model.parameters(), config.get("grad_clip", 1.0))
-                    optimizer.step()
+                    self.optimizer.step()
 
                     # decay the learning rate based on our progress
                     if config.get("decay_lr", True):
@@ -80,7 +120,7 @@ class Trainer:
                                 max(1, config.get("lr_decay_steps", warmup_tokens * 300) - warmup_tokens))
                             lr_mult = max(0.1, 0.5 * (1.0 + math.cos(math.pi * progress)))
                         lr = config["learning_rate"] * lr_mult
-                        for param_group in optimizer.param_groups:
+                        for param_group in self.optimizer.param_groups:
                             param_group['lr'] = lr
                     else:
                         lr = config["learning_rate"]
@@ -103,11 +143,11 @@ class Trainer:
         best_loss = float('inf')
         best_return = -float('inf')
 
-        self.tokens = 0  # counter used for learning rate decay
+        self.tokens = token_n  # counter used for learning rate decay
         epochs = config["max_steps"] // len(self.train_dataset)
         epoch_losses = []
         test_loss = best_loss
-        for epoch in range(epochs):
+        for epoch in range(epoch_n, epochs):
 
             epoch_loss = run_epoch('train', epoch_num=epoch)
             epoch_losses.append(epoch_loss)
@@ -117,9 +157,8 @@ class Trainer:
             # supports early stopping based on the test loss, or save every X epochs if no test set
             good_model = (self.test_dataset is None and (epoch % 5 == 0)) or test_loss < best_loss
             if self.config.get("ckpt_path") is not None and good_model:
-                ckpt_name = f"epoch_{epoch}.pth" if self.test_dataset is None else f"best.pth"
                 best_loss = test_loss
-                self.save_checkpoint(ckpt_name=ckpt_name)
+                self.save_checkpoint(epoch)
 
             # -- pass in target returns
             model_type = self.model.module.model_type if hasattr(self.model, "module") else self.model.model_type
