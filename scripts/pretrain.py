@@ -21,7 +21,7 @@ def get_pretrain_args() -> argparse.Namespace:
     parser.add_argument("--tokenizer-path", type=str, required=True, help="Path to the tokenizer used for training")
     parser.add_argument("--save-path", type=str, required=True, help="Path to save the model")
     parser.add_argument(
-        "--model-type", type=str, required=True, choices=["GPT"], help="Type of model to use for training"
+        "--model-type", type=str, required=True, choices=["GPT", "LLAMA"], help="Type of model to use for training"
     )
     parser.add_argument(
         "--dataset-type", type=str, required=True, choices=["SMILES"], help="Type of dataset to use for training"
@@ -34,6 +34,10 @@ def get_pretrain_args() -> argparse.Namespace:
 
 
 def run_training(args: argparse.Namespace) -> None:
+    globals_config_keys = [
+        k for k, v in globals().items() if not k.startswith("_") and isinstance(v, int | float | bool | str)
+    ]
+    globals_config = {k: globals()[k] for k in globals_config_keys}  # will be useful for logging
     with open(args.config_path, "rb") as fd:
         config = tomllib.load(fd)
 
@@ -95,7 +99,8 @@ def run_training(args: argparse.Namespace) -> None:
         train_config["eval_every"],
         train_config["log_every"],
         train_config["wandb_log"],
-        device,
+        device=device,
+        globals_config=globals_config,
     )
 
     if is_distributed_run():
