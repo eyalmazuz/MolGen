@@ -14,6 +14,7 @@ def pretrain_model(
     train_dataloader,
     val_dataloader,
     optimizer,
+    scheduler,
     ctx,
     scaler,
     checkpoint_dir: str = "./model/",
@@ -58,6 +59,7 @@ def pretrain_model(
         scaler.step(optimizer)
         scaler.update()
         optimizer.zero_grad(set_to_none=True)
+        scheduler.step()
 
         # Update EMA of loss
         lossf = loss.item() * gradient_accumulation_steps

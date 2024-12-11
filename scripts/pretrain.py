@@ -4,6 +4,7 @@ import os
 import tomllib
 import torch
 from torch.distributed import destroy_process_group, init_process_group
+from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR, SequentialLR
 
 from molgen.datasets.dataset_factory import get_dataset
 from molgen.datasets.dataset_utils import prepare_data_for_training
@@ -69,6 +70,19 @@ def run_training(args: argparse.Namespace) -> None:
     optimizer = model.configure_optimizers(
         train_config["weight_decay"], train_config["learning_rate"], train_config["betas"], device
     )
+    # Suppose warmup_epochs is the number of epochs to warm up
+    warmup_scheduler = LambdaLR(
+        optimizer,
+        lr_lambda=lambda epoch: (epoch + 1) / train_config.get("warmup_steps", 0)
+        if epoch < train_config.get("warmup_steps", 0)
+        else 1.0,
+    )
+    cosine_scheduler = CosineAnnealingLR(
+        optimizer, T_max=train_config.get("max_steps"), eta_min=train_config.get("min_lr", 0)
+    )
+    scheduler = SequentialLR(
+        optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[train_config.get("warmup_steps", 0)]
+    )
 
     if train_config["compile"]:
         print("Compiling model")
@@ -90,6 +104,7 @@ def run_training(args: argparse.Namespace) -> None:
         train_dataloader,
         val_dataloader,
         optimizer,
+        scheduler,
         ctx,
         scaler,
         train_config["checkpoint_dir"],
