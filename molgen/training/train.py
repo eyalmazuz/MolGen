@@ -95,7 +95,7 @@ def pretrain_model(
                         "step": step,
                         "train/loss": ema_loss,
                         "val/loss": val_loss,
-                        # "lr": optimizer.lr,
+                        "lr": scheduler.get_last_lr()[0],
                     },
                     step=step,
                 )
@@ -112,4 +112,6 @@ def pretrain_model(
                         "globals": globals_config,
                     }
                     print(f"saving checkpoint to {checkpoint_dir}")
+                    if not os.path.exists(checkpoint_dir):
+                        os.makedirs(checkpoint_dir, exist_ok=True)
                     torch.save(checkpoint, os.path.join(checkpoint_dir, "ckpt.pt"))
