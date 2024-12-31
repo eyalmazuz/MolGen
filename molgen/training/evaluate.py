@@ -7,6 +7,9 @@ from typing import Callable, Dict, List, Tuple, Union, Optional
 
 import numpy as np
 import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import selfies as sf
 
 import torch
 from torch.utils.data import Dataset
@@ -25,8 +28,9 @@ from molgen.datasets.dataset_options import DatasetType
 from molgen.datasets.dataset_factory import get_dataset
 from molgen.tokenizers.tokenizer_factory import get_tokenizer
 from molgen.utils.mol_utils import convert_to_molecules, filter_invalid_molecules
-from molgen.utils.metrics import calc_qed, calc_sas, calc_diversity, calc_novelty, calc_valid_molecules
+from molgen.utils.metrics import calc_qed, calc_sas, calc_diversity, calc_novelty, calc_valid_molecules, calc_logp
 
+np.random.seed = 0
 
 def load_model(model_config, args):
     """
@@ -47,7 +51,7 @@ def load_model(model_config, args):
     # Load the model weights from the checkpoint
     checkpoint = torch.load(args.checkpoint, map_location=args.device)
     model.load_state_dict(checkpoint)
-
+    print(f'Model loaded to {args.device}')
     return model, model_type
 
 
@@ -238,6 +242,7 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
                     metrics[f'top {i + 1} {name}'] = score[i]
 
             metrics[f'top {i + 1} qed'] = calc_qed(molecule)
+            metrics[f'top {i + 1} plogp'] = calc_logp(molecule)
             metrics[f'top {i + 1} sas'] = calc_sas(molecule)
             metrics[f'top {i + 1} len'] = len(smiles)
 
@@ -255,6 +260,7 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
             if score_name != 'qed':
                 metrics[f'top {i + 1} {score_name}'] = score
             metrics[f'top {i + 1} qed'] = calc_qed(molecule)
+            metrics[f'top {i + 1} plogp'] = calc_logp(molecule)
             metrics[f'top {i + 1} sas'] = calc_sas(molecule)
             metrics[f'top {i + 1} len'] = len(smiles)
 
@@ -292,6 +298,12 @@ def get_stats(generated_smiles: List[str],
                                                               lst=False,
                                                               value_range=(0, 1),
                                                               desc='QED')
+
+    generated_plogp_values, generated_plogp_stats = calc_set_stat(generated_molecules,
+                                                                  calc_logp,
+                                                                  lst=False,
+                                                                  value_range=(-2, 10),
+                                                                  desc='pLogP')
 
     if reward_fn is not None and str(reward_fn) != 'QED':
         print(f'Calculating {reward_fn}')
@@ -376,6 +388,7 @@ def get_stats(generated_smiles: List[str],
     stats = {
         **stats,
         **generated_qed_stats,
+        **generated_plogp_stats,
         **generated_sas_stats,
         **top_k_metrics
     }
@@ -413,8 +426,9 @@ def get_stats(generated_smiles: List[str],
         generated_reward_values = {str(reward_fn): generated_reward_values}
     data = {**{'Smiles': valid_generated_smiles},
             **generated_reward_values,
-            **{"QED": generated_qed_values},
-            **{"SAS": generated_sas_values},
+            **{'QED': generated_qed_values},
+            **{'pLogP': generated_plogp_values},
+            **{'SAS': generated_sas_values},
             }
 
     for k, v in data.items():
@@ -426,11 +440,77 @@ def get_stats(generated_smiles: List[str],
         with open(f'{generated_path}/scaffold.txt', 'w') as f:
             f.write(scaffold)
 
+    return data
+
+
+def generate_density_plots(
+        test_names: List[str],
+        reward_fns: Dict[str, Callable],
+        train_set: Optional[Dataset] = None,
+        results_folder: str = os.path.join(os.getcwd(), "data", "results"),
+        output_folder: str = os.path.join(os.getcwd(), "plots"),
+):
+    """
+    Generate density plots for molecular properties.
+
+    Args:
+        test_names (list): List of folder names to read generated molecules from.
+        reward_fns (dict): Dictionary of reward functions, where keys are property names and values are reward functions.
+        results_folder (str): Path to the results folder containing the test folders.
+        train_set (str): Path to the training data CSV file with SMILES in the first column.
+        output_folder (str): Folder where the generated plots will be saved.
+    """
+    # Create output folder if it doesn't exist
+    os.makedirs(output_folder, exist_ok=True)
+
+    if train_set is not None:
+        # Calculate properties for training data
+        train_molecules = convert_to_molecules(train_set.dataset)
+        training_rewards = {}
+        for prop_name, reward_fn in reward_fns.items():
+            training_rewards[prop_name] = np.array([fail_safe(reward_fn, mol) for mol in tqdm(train_molecules)])
+
+    # Iterate through test folders and calculate properties for generated molecules
+    test_rewards = {prop_name: [] for prop_name in reward_fns.keys()}
+    for test_folder in test_names:
+        test_path = os.path.join(results_folder, test_folder, 'generated_smiles.csv')
+        if os.path.exists(test_path):
+            test_data = pd.read_csv(test_path)
+            generated_smiles = test_data.iloc[:, 0].tolist()
+            generated_molecules = convert_to_molecules(generated_smiles)
+            for prop_name, reward_fn in reward_fns.items():
+                rewards = np.array([fail_safe(reward_fn, mol) for mol in tqdm(generated_molecules)])
+                test_rewards[prop_name].append((test_folder, rewards))
+
+    # Generate density plots for each property
+    for prop_name in reward_fns.keys():
+        plt.figure(figsize=(10, 6))
+
+        if train_set is not None:
+            # Plot training data
+            sns.kdeplot(training_rewards[prop_name], label='Zinc Training Data', linestyle='--', color='black', fill=True, alpha=0.25)
+
+        # Plot test data
+        for test_folder, prop_values in test_rewards[prop_name]:
+            sns.kdeplot(prop_values, label=f'{test_folder}', fill=True, alpha=0.25)
+
+        # Plot settings
+        plt.xlabel(prop_name)
+        plt.ylabel('Density')
+        plt.title(f'Density Plot for {prop_name}')
+        plt.legend(loc='upper left')
+
+        # Save plot
+        output_file = os.path.join(output_folder, f'density_plot_{prop_name}.png')
+        plt.savefig(output_file)
+        plt.close()
+
 
 def main():
     parser = argparse.ArgumentParser(description="Generate molecules using a pre-trained model.")
     parser.add_argument('--checkpoint', type=str, required=True, help='Path to the pre-trained model checkpoint file.')
     parser.add_argument("--data_path", type=str, required=True, help="Path to the training data")
+    parser.add_argument("--results_path", type=str, required=True, help="Path to the results folder")
     parser.add_argument('--k', type=int, default=100, help='Number of molecules to generate.')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu',
                         help="Device to run the model on, 'cpu' or 'cuda'.")
@@ -438,9 +518,12 @@ def main():
     parser.add_argument("--tokenizer_path", type=str, required=True, help="Path to the tokenizer used for training")
     parser.add_argument("--model_type", type=str, required=True, choices=["GPT", "DT"],
                         help="Type of model to use for training")
-    parser.add_argument("--dataset_type", type=str, required=True, choices=["SMILES", "DT_SMILES"], help="Type of dataset to use for training")
+    parser.add_argument("--dataset_type", type=str, required=True, choices=["SMILES", "DT_SMILES", "DT_SELFIES"], help="Type of dataset to use for training")
     parser.add_argument("--config_path", type=str, required=True,
-                        help="Path to the connfig containing training and model params")
+                        help="Path to the config containing training and model params")
+    parser.add_argument("--rtg", type=str, default="1", help="Return-to-go target for generation or list of values")
+    parser.add_argument("--density", action="store_true", help="Generate density plots")
+    parser.add_argument("--stats", action="store_true", help="Generate stats")
 
     args = parser.parse_args()
 
@@ -465,20 +548,83 @@ def main():
     if model_type == ModelType.DT:
         kwargs.update({"reward_func": reward_func})
 
-    dataset = get_dataset(dataset_type,
-                          model_type,
-                          **kwargs)
+    train_dataset = get_dataset(dataset_type,
+                                model_type,
+                                **kwargs)
 
-    # Generate 'k' molecules
-    molecules = generate_molecules(model, tokenizer, reward_func, args)
+    if args.density:
+        tests = ["rtg = 1.00", "rtg = 0.65", "rtg = 0.35"]# os.listdir(args.results_path)
 
-    # Evaluate the generated molecules
-    res_folder = '_'.join([
-        os.path.split(os.path.split(args.checkpoint)[0])[1],
-        os.path.split(args.checkpoint)[1].split('.pth')[0],
-        "results"
-    ])
-    get_stats(molecules, train_set=dataset, folder_name=res_folder)
+        reward_fns = {
+            "QED": calc_qed,
+            "pLogP": calc_logp
+        }
+
+        generate_density_plots(
+            test_names=tests,
+            reward_fns=reward_fns,
+            train_set=train_dataset,
+            results_folder=args.results_path
+        )
+
+    if args.stats:
+        bins, success_rates, validity = [], [], []
+        for rtg in args.rtg.split(','):    # np.linspace(0.1, 1, 10):
+            rtg = float(rtg)
+            print(f"Generating mols RTG conditioned = {rtg:.2f}")
+            # Generate 'k' molecules
+            molecules = generate_molecules(model, tokenizer, reward_func, args, ret=rtg)
+
+            # Evaluate the generated molecules
+            res_folder = '_'.join([
+                os.path.split(args.checkpoint)[-1].split('.pth')[0],
+                f"rtg_{rtg:.2f}"
+            ])
+            if dataset_type == DatasetType.DT_SELFIES:
+                molecules = [sf.decoder(s) for s in tqdm(molecules, desc=f"decoding selfies")]
+            generated_reward_values = get_stats(
+                molecules,
+                train_set=train_dataset,
+                folder_name=os.path.join(args.results_path, res_folder),
+                reward_fn=reward_func
+            )
+            bin_validity = len(generated_reward_values["Smiles"]) / args.k
+            bin_success_rate = (
+                np.sum(
+                    (generated_reward_values[str(reward_func)] >= rtg - 0.05)
+                    & (generated_reward_values[str(reward_func)] <= rtg + 0.05)
+                ) / len(generated_reward_values[str(reward_func)])
+            )
+            bins.append(f"{rtg - 0.05:.2f}-{min(rtg + 0.05, 1.0):.2f}")
+            success_rates.append(bin_success_rate)
+            validity.append(bin_validity)
+
+        plot_data = pd.DataFrame({
+            "rtg_bins": bins,
+            "success_rate": success_rates,
+            "validity": validity
+        })
+
+        plt.figure(figsize=(12, 8))
+        ax = sns.barplot(x='rtg_bins', y='success_rate', data=plot_data)
+
+
+        # Add annotations (validity values) above the bars
+        for i in range(len(plot_data)):
+            ax.text(i, plot_data['success_rate'][i] + 0.02, f"{plot_data['validity'][i]:.2f}",
+                    ha='center', color='black', weight='bold')
+
+        plt.xticks(rotation=45, ha='right')
+
+        # Add labels and title
+        plt.xlabel('Target Bin')
+        plt.ylabel('Success Rate')
+        plt.title('Success Rate per Target Bin with Validity Annotations')
+        # plt.text(3.5, 0.95, 'Note: Numbers above bars are validity ratios',
+        #          ha='right', color='black', fontsize=10)
+        plt.tight_layout()
+
+        plt.savefig(os.path.join(os.getcwd(), "selfies_plots", f"Success Rate per Target Bin with Validity Annotations.png"))
 
 
 if __name__ == "__main__":
