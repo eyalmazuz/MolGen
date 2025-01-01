@@ -9,13 +9,22 @@ from molgen.tokenizers.tokenizers_utils import get_stats, merge
 
 
 class BPETokenizer(AbstractTokenizer):
-    def __init__(self,
-                 merges: dict[tuple[int, int], int],
-                 bos_token: str | None=None,
-                 eos_token: str | None=None,
-                 pad_token: str | None=None,
-                 sep_token: str | None=None,
-                 special_tokens: dict[str, int] | None=None) -> None:
+    def __init__(
+        self,
+        merges: dict[tuple[int, int], int],
+        bos_token: str | None = None,
+        eos_token: str | None = None,
+        pad_token: str | None = None,
+        sep_token: str | None = None,
+        special_tokens: dict[str, int] | None = None,
+    ) -> None:
+        super().__init__(
+            bos_token=bos_token,
+            eos_token=eos_token,
+            pad_token=pad_token,
+            sep_token=sep_token,
+            special_tokens=special_tokens,
+        )
         self.merges = merges
 
         # build the vocab back from the merges
@@ -23,104 +32,10 @@ class BPETokenizer(AbstractTokenizer):
         for (p0, p1), idx in self.merges.items():
             self.vocab[idx] = self.vocab[p0] + self.vocab[p1]
 
-        self.special_tokens = {}
-        self.inverse_special_tokens = {}
-        if special_tokens:
-            self.special_tokens = special_tokens
-            self.inverse_special_tokens = {id_: token for token, id_ in self.special_tokens.items()}
-
-        self.bos_token_  = bos_token
-        self.eos_token_  = eos_token
-        self.pad_token_  = pad_token
-        self.sep_token_  = sep_token
-
-        if pad_token is None and eos_token is not None:
-            print("pad token is not defined will default to eos token if available")
-
-        if sep_token is None and eos_token is not None:
-            print("sep token is not defined will default to eos token if available")
-
-
     def __len__(self) -> int:
         return len(self.vocab) + len(self.special_tokens)
 
-
-    @property
-    def bos_token_id(self) -> int:
-        if self.bos_token_ is not None:
-            return self.special_tokens[self.bos_token_]
-        else:
-            raise ValueError("bos token is not defined")
-
-
-    @property
-    def bos_token(self) -> str:
-        if self.bos_token_ is not None:
-            return self.bos_token_
-        else:
-            raise ValueError("bos token is not defined")
-
-
-    @property
-    def eos_token_id(self) -> int:
-        if self.eos_token_ is not None:
-            return self.special_tokens[self.eos_token_]
-        else:
-            raise ValueError("eos token is not defined")
-
-
-    @property
-    def eos_token(self) -> str:
-        if self.eos_token_ is not None:
-            return self.eos_token_
-        else:
-            raise ValueError("eos token is not defined")
-
-
-    @property
-    def pad_token_id(self) -> int:
-        if self.pad_token_ is not None:
-            return self.special_tokens[self.pad_token_]
-        elif self.pad_token_ is None and self.eos_token_ is not None:
-            return self.special_tokens[self.eos_token_]
-        else:
-            raise ValueError("both pad token and eos token are not defined")
-
-
-    @property
-    def pad_token(self) -> str:
-        if self.pad_token_ is not None:
-            return self.pad_token_
-        elif self.pad_token_ is None and self.eos_token_ is not None:
-            return self.eos_token_
-        else:
-            raise ValueError("both pad token and eos token are not defined")
-
-
-    @property
-    def sep_token_id(self) -> int:
-        if self.sep_token_ is not None:
-            return self.special_tokens[self.sep_token_]
-        elif self.sep_token_ is None and self.eos_token_ is not None:
-            return self.special_tokens[self.eos_token_]
-        else:
-            raise ValueError("both sep token and eos token are not defined")
-
-
-    @property
-    def sep_token(self) -> str:
-        if self.sep_token_ is not None:
-            return self.sep_token_
-        elif self.sep_token_ is None and self.eos_token_ is not None:
-            return self.eos_token_
-        else:
-            raise ValueError("both sep token and eos token are not defined")
-
-
-    def encode(self,
-               texts: str | list[str],
-               return_tensors: bool=False) -> TokenizedData:
-
+    def encode(self, texts: str | list[str], return_tensors: bool = False) -> TokenizedData:
         if isinstance(texts, str):
             texts = [texts]
 
@@ -149,7 +64,6 @@ class BPETokenizer(AbstractTokenizer):
 
         return encodings
 
-
     def __encode_chunk(self, text_bytes: bytes) -> list[int]:
         # return the token ids
         # let's begin. first, convert all bytes to integers in range 0..255
@@ -163,14 +77,13 @@ class BPETokenizer(AbstractTokenizer):
             # just the first pair in the list, arbitrarily
             # we can detect this terminating case by a membership check
             if pair not in self.merges:
-                break # nothing else can be merged anymore
+                break  # nothing else can be merged anymore
             # otherwise let's merge the best pair (lowest merge index)
             idx = self.merges[pair]
             ids = merge(ids, pair, idx)
         return ids
 
-
-    def decode(self, encodings: TokenizedData, skip_special_tokens: bool=False) -> list[str]:
+    def decode(self, encodings: TokenizedData, skip_special_tokens: bool = False) -> list[str]:
         if isinstance(encodings[0], int):
             encodings = [encodings]
 
@@ -195,7 +108,6 @@ class BPETokenizer(AbstractTokenizer):
             texts.append(text)
 
         return texts
-
 
     @classmethod
     def load_pretrained(cls: type["BPETokenizer"], path: str, **kwargs: Any) -> "BPETokenizer":

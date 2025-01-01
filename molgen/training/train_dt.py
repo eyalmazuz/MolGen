@@ -85,7 +85,7 @@ class Trainer:
             total_loss = 0
             pbar = tqdm(enumerate(loader), total=len(loader)) if is_train else enumerate(loader)
             for it, batch in pbar:
-                batch = {k: v.pin_memory().to(self.device, non_blocking=True) for k, v in batch.items()}
+                # batch = {k: v.pin_memory().to(self.device, non_blocking=True) for k, v in batch.items()}
                 # place data on the correct device
                 x = batch["input_ids"]  # states
                 y = batch["labels"]     # actions
