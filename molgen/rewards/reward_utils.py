@@ -1,6 +1,6 @@
-from enum import Enum, auto
 import operator
-from typing import Callable
+from collections.abc import Callable
+from enum import Enum, auto
 
 
 class AggType(Enum):
@@ -26,4 +26,3 @@ def agg_to_op(agg_type: str) -> Callable[[float, float], float]:
         return operator.mul
     else:
         raise ValueError
-

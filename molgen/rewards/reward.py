@@ -1,19 +1,17 @@
 from abc import ABC, abstractmethod
 from functools import partial
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from molgen.rewards import reward_scales
 
-RewardScale = Optional[Union[str, Dict[str, Any]]]
+RewardScale = str | dict[str, Any] | None
+
 
 class AbstractReward(ABC):
-    def __init__(self,
-                 name: Optional[str]=None,
-                 scale: RewardScale=None,
-                 eval_: bool=False) -> None:
+    def __init__(self, name: str | None = None, scale: RewardScale = None, eval_: bool = False) -> None:
         self.name = name
         self._eval = eval_
-        self.scale: Optional[partial[Any]]
+        self.scale: partial[Any] | None
 
         if scale is not None:
             if isinstance(scale, dict):
@@ -24,7 +22,7 @@ class AbstractReward(ABC):
                 kwargs = {}
             else:
                 raise ValueError("Invalid scale config")
-            
+
             if not hasattr(reward_scales, func_name):
                 raise ValueError(f"{func_name} is not defined in reward scales")
 
@@ -33,9 +31,8 @@ class AbstractReward(ABC):
         else:
             self.scale = None
 
-
     @abstractmethod
-    def __call__(self, smiles: Union[str, List[str]]) -> Union[float, List[float]]:
+    def __call__(self, smiles: str | list[str]) -> float | list[float]:
         pass
 
     @property

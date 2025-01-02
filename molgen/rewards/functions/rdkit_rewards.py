@@ -1,25 +1,18 @@
-from typing import List, Optional, Union
-import os
-import sys
 import networkx as nx
 from rdkit import Chem
-from rdkit.Chem.Crippen import MolLogP
-from rdkit.Chem.rdchem import Mol
+from rdkit.Chem.Crippen import MolLogP  # type: ignore
 from rdkit.Chem.QED import qed
-from rdkit.RDConfig import RDContribDir
-sys.path.append(os.path.join(RDContribDir, 'SA_Score'))
-import sascorer
+from rdkit.Chem.rdchem import Mol
+from rdkit.Contrib.SA_Score import sascorer
 
 from molgen.rewards.reward import AbstractReward, RewardScale
 
 
 class QEDReward(AbstractReward):
-    def __init__(self,
-                 name: Optional[str]=None,
-                 scale: RewardScale=None) -> None:
-        super(QEDReward, self).__init__(name=name, scale=scale)
+    def __init__(self, name: str | None = None, scale: RewardScale = None) -> None:
+        super().__init__(name=name, scale=scale)
 
-    def __call__(self, smiles: Union[str, List[str]]) -> Union[float, List[float]]:
+    def __call__(self, smiles: str | list[str]) -> float | list[float]:
         if isinstance(smiles, str):
             mol = Chem.MolFromSmiles(smiles)
             if mol is None:
@@ -28,7 +21,7 @@ class QEDReward(AbstractReward):
                 reward = qed(mol)
                 if self.scale is not None and not self.eval:
                     reward = self.scale(reward)
-                    
+
                 return reward
 
         else:
@@ -38,15 +31,14 @@ class QEDReward(AbstractReward):
             if self.scale is not None and not self.eval:
                 rewards = [self.scale(reward) for reward in rewards]
 
-            return rewards 
+            return rewards
+
 
 class PenalizedLogPReward(AbstractReward):
-    def __init__(self,
-                 name: Optional[str]=None,
-                 scale: RewardScale=None) -> None:
-        super(PenalizedLogPReward, self).__init__(name=name, scale=scale)
-        
-    def __call__(self, smiles: Union[str, List[str]]) -> Union[float, List[float]]:
+    def __init__(self, name: str | None = None, scale: RewardScale = None) -> None:
+        super().__init__(name=name, scale=scale)
+
+    def __call__(self, smiles: str | list[str]) -> float | list[float]:
         if isinstance(smiles, str):
             mol = Chem.MolFromSmiles(smiles)
             if mol is None:
@@ -55,7 +47,7 @@ class PenalizedLogPReward(AbstractReward):
                 reward = PenalizedLogPReward.penalized_logp(mol)
                 if self.scale is not None and not self.eval:
                     reward = self.scale(reward)
-                    
+
                 return reward
 
         else:
@@ -65,36 +57,28 @@ class PenalizedLogPReward(AbstractReward):
             if self.scale is not None and not self.eval:
                 rewards = [self.scale(reward) for reward in plogps]
 
-            return rewards 
+            return rewards
 
         pass
 
-    @staticmethod 
+    @staticmethod
     def num_long_cycles(mol: Mol) -> int:
-      """Calculate the number of long cycles.
+        """Calculate the number of long cycles.
 
-      Args:
-        mol: Molecule. A molecule.
+        Args:
+          mol: Molecule. A molecule.
 
-      Returns:
-        negative cycle length.
-      """
-      cycle_list = nx.cycle_basis(nx.Graph(Chem.rdmolops.GetAdjacencyMatrix(mol)))
-      if not cycle_list:
-        cycle_length = 0
-      else:
-        cycle_length = max([len(j) for j in cycle_list])
-      if cycle_length <= 6:
-        cycle_length = 0
-      else:
-        cycle_length = cycle_length - 6
-      return cycle_length
+        Returns:
+          negative cycle length.
+        """
+        cycle_list = nx.cycle_basis(nx.Graph(Chem.rdmolops.GetAdjacencyMatrix(mol)))
+        cycle_length = 0 if not cycle_list else max([len(j) for j in cycle_list])
+        cycle_length = 0 if cycle_length <= 6 else cycle_length - 6
+        return cycle_length
 
     @staticmethod
     def penalized_logp(molecule: Mol) -> float:
-      log_p = MolLogP(molecule)
-      sas_score = sascorer.calculateScore(molecule)
-      cycle_score = PenalizedLogPReward.num_long_cycles(molecule)
-      return log_p - sas_score - cycle_score
-
-
+        log_p = MolLogP(molecule)
+        sas_score = sascorer.calculateScore(molecule)
+        cycle_score = PenalizedLogPReward.num_long_cycles(molecule)
+        return log_p - sas_score - cycle_score

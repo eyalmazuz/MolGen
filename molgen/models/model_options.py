@@ -1,26 +1,7 @@
-from enum import Enum, auto
+from enum import StrEnum, auto
 
 
-class ModelType(Enum):
+class ModelType(StrEnum):
     GPT = auto()
     DT = auto()
-    BERT = auto()
-    TRANSFORMER = auto()
-    RNN = auto()
-
-    @staticmethod
-    def from_str(label: str) -> "ModelType":
-        if label.upper() == "GPT":
-            type_ = ModelType.GPT
-        elif label.upper() == "DT":
-            type_ = ModelType.DT
-        elif label.upper() == "BERT":
-            type_ = ModelType.BERT
-        elif label.upper() == "TRANSFORMER":
-            type_ = ModelType.TRANSFORMER
-        elif label.upper() == "RNN":
-            type_ = ModelType.RNN
-        else:
-            raise ValueError(f"Invalid type: {label}")
-
-        return type_
+    LLAMA = auto()

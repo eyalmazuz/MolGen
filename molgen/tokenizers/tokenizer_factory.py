@@ -1,9 +1,10 @@
 import json
 import os
 
-from molgen.tokenizers.tokenizer import AbstractTokenizer
-from molgen.tokenizers.char_tokenizer import CharTokenizer
 from molgen.tokenizers.bpe_tokenizer import BPETokenizer
+from molgen.tokenizers.char_tokenizer import CharTokenizer
+from molgen.tokenizers.tokenizer import AbstractTokenizer
+
 
 def get_tokenizer(path: str) -> AbstractTokenizer:
     if not os.path.isdir(path) or not os.path.exists(path):
@@ -16,7 +17,7 @@ def get_tokenizer(path: str) -> AbstractTokenizer:
         config = json.load(fd)
 
     tokenizer_type = config["type"]
-    kwargs = config["kwargs"] if "kwargs" in config else {}
+    kwargs = config.get("kwargs", {})
 
     tokenizer: AbstractTokenizer
     match tokenizer_type:
