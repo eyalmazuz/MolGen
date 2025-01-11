@@ -92,14 +92,15 @@ class PadCollate:
             self.max_length = max_length = max(self.max_length, max_length)
 
         batch_input_ids = []
-        # batch_attention_mask = []
+        batch_attention_mask = []
         batch_labels = []
         batch_rtgs = []
 
         for batch in batches:
             input_ids = batch["input_ids"]
             labels = batch["labels"]
-            rtg = batch.get("rtg", None)
+            attention_mask = batch.get("attention_mask", None)
+            rtg = batch.get("rtgs", None)
 
             if len(input_ids) < max_length:
                 if rtg is None:
@@ -108,28 +109,34 @@ class PadCollate:
                     input_ids += [[self.pad_token_id] * max_length] * (max_length - len(input_ids))
                     rtg += [0] * (max_length - len(rtg))
 
-                # attention_mask += [0] * (max_length - len(attention_mask))
+                if attention_mask is not None:
+                    attention_mask += [0] * (max_length - len(attention_mask))
                 labels += [self.ignore_index] * (max_length - len(labels))
 
             if rtg is not None:
                 input_ids = [state + [self.pad_token_id] * (max_length - len(state)) for state in input_ids]
-                # attention_mask = [
-                #     [0] * max_length if mask == 0 else [1] * (i + 1) + [0] * (max_length - (i + 1))
-                #     for i, mask in enumerate(attention_mask)
-                # ]
+                if attention_mask is not None:
+                    attention_mask = [
+                        [0] * max_length if mask == 0 else [1] * (i + 1) + [0] * (max_length - (i + 1))
+                        for i, mask in enumerate(attention_mask)
+                    ]
                 batch_rtgs.append(rtg)
 
             batch_input_ids.append(input_ids)
-            # batch_attention_mask.append(attention_mask)
             batch_labels.append(labels)
+            if attention_mask is not None:
+                batch_attention_mask.append(attention_mask)
 
         return_dict = {
             "input_ids": torch.tensor(np.array(batch_input_ids), dtype=torch.int64),
-            # "attention_mask": torch.tensor(np.array(batch_attention_mask), dtype=torch.int64),
             "labels": torch.tensor(np.array(batch_labels), dtype=torch.int64)
         }
+        if len(batch_attention_mask) > 0:
+            return_dict["attention_mask"] = torch.tensor(np.array(batch_attention_mask), dtype=torch.int64)
+
         if len(batch_rtgs) > 0:
-            return_dict["rtg"] = torch.tensor(batch_rtgs, dtype=torch.float32)
+            return_dict["rtgs"] = torch.tensor(batch_rtgs, dtype=torch.float32)
+            return_dict["targets"] = return_dict["labels"]
 
         return return_dict
 

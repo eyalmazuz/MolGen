@@ -4,6 +4,7 @@ import re
 import math
 import numpy as np
 from tqdm import tqdm
+from typing import Any
 
 import torch
 import selfies as sf
@@ -94,7 +95,7 @@ class Trainer:
 
                 # forward the model
                 with torch.set_grad_enabled(is_train):
-                    logits, loss = model(states=x, actions=y, targets=y, rtgs=r, attention_mask=a)
+                    logits, loss = model(input_ids=x, labels=y, targets=y, rtgs=r, attention_mask=a)
                     # logits, loss = model(x, y, y, r, t)
                     loss = loss.mean()  # collapse all losses if they are scattered on multiple gpus
                     total_loss += loss
@@ -247,13 +248,22 @@ class Trainer:
 def run_dt_training(
         model,
         train_dataloader,
+        val_dataloader,
         optimizer,
+        scheduler,
         ctx,
         scaler,
         reward_func,
-        train_config,
-        test_dataloader=None,
-        wandb_run=None,
+        checkpoint_dir: str = "./model/",
+        load_checkpoint: bool = False,
+        max_steps: int = 1000000,
+        grad_clip: float = 1.0,
+        gradient_accumulation_steps: int = 1,
+        eval_interval: int = -1,
+        log_interval: int = -1,
+        wandb_log: bool = True,
+        device: str = "cuda",
+        globals_config: dict[str, Any] | None = None,
 ):
-    trainer = Trainer(model, train_dataloader, test_dataloader, reward_func, train_config, wandb_run)
+    trainer = Trainer(model, train_dataloader, val_dataloader, reward_func, train_config, wandb_run)
     trainer.train(optimizer)

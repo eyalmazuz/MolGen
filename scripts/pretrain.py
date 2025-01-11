@@ -9,10 +9,13 @@ from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR, SequentialLR
 from molgen.datasets.dataset_factory import get_dataset
 from molgen.datasets.dataset_utils import prepare_data_for_training
 from molgen.models.model_factory import get_model
+from molgen.models.model_options import ModelType
 from molgen.tokenizers.tokenizer_factory import get_tokenizer
 from molgen.training.train import pretrain_model
+from molgen.training.train_dt import run_dt_training
 from molgen.utils.train_utils import setup_mixed_precision, setup_torch
 from molgen.utils.utils import get_world_size, is_distributed_run, is_master_process
+from molgen.rewards.reward_factory import get_rewards
 
 
 def get_pretrain_args() -> argparse.Namespace:
@@ -22,14 +25,20 @@ def get_pretrain_args() -> argparse.Namespace:
     parser.add_argument("--tokenizer-path", type=str, required=True, help="Path to the tokenizer used for training")
     parser.add_argument("--save-path", type=str, required=True, help="Path to save the model")
     parser.add_argument(
-        "--model-type", type=str, required=True, choices=["GPT", "LLAMA"], help="Type of model to use for training"
+        "--model-type", type=str, required=True, choices=["GPT", "DT", "LLAMA"], help="Type of model to use for training"
     )
     parser.add_argument(
-        "--dataset-type", type=str, required=True, choices=["SMILES"], help="Type of dataset to use for training"
+        "--dataset-type", type=str, required=True, choices=["SMILES", "DT_SMILES", "SELFIES", "DT_SELFIES"], help="Type of dataset to use for training"
     )
     parser.add_argument(
-        "--config-path", type=str, required=True, help="Path to the connfig containing training and model params"
+        "--config-path", type=str, required=True, help="Path to the config containing training and model params"
     )
+
+    # Wandb parameters to log results
+    parser.add_argument('--wandb_key', type=str, help='wandb api key for user login', default=None)
+    parser.add_argument(
+        '--wandb_proj', type=str, default='DecisionMol', help='name of wandb project to upload results')
+    parser.add_argument('--wandb_entity', type=str, default='bgu-sise', help='wandb entity associated with the project')
 
     return parser.parse_args()
 
@@ -54,12 +63,18 @@ def run_training(args: argparse.Namespace) -> None:
     device = setup_torch(train_config["seed"], train_config["device"])
     ctx, scaler = setup_mixed_precision(train_config["device"], train_config["dtype"])
 
+    kwargs = {}
+    if args.model_type.lower() == ModelType.DT:
+        kwargs = {"reward_func": get_rewards(config["reward"])}
+        if isinstance((kwargs["reward_func"]), list):
+            model_config["n_goals"] = len(kwargs["reward_func"])
+
     print(f"Building model {args.model_type} and Dataset {args.dataset_type}")
 
     model = get_model(args.model_type, model_config).to(device)
     tokenizer = get_tokenizer(args.tokenizer_path)
     train_dataset, val_dataset = get_dataset(
-        args.dataset_type, args.model_type, dataset_path=args.data_path, tokenizer=tokenizer
+        args.dataset_type, args.model_type, dataset_path=args.data_path, tokenizer=tokenizer, **kwargs
     )
 
     train_dataloader, val_dataloader = prepare_data_for_training(
@@ -90,15 +105,37 @@ def run_training(args: argparse.Namespace) -> None:
 
     if train_config["wandb_log"] and is_master_process():
         import wandb
-
+        wandb.login(key=args.wandb_key)
         wandb.init(  # type: ignore
-            project=os.environ.get("WANDB_PROJECT", None),
-            entity=os.environ.get("WANDB_ENTITY", None),
+            project=args.wandb_proj,
+            entity=args.wandb_entity,
             name=f"{args.model_type}_{args.dataset_type}",
             config=config,
         )
 
     print("Start training")
+    # if args.model_type == ModelType.DT:
+    #     run_dt_training(
+    #         model,
+    #         train_dataloader,
+    #         val_dataloader,
+    #         optimizer,
+    #         scheduler,
+    #         ctx,
+    #         scaler,
+    #         kwargs["reward_func"],
+    #         args.save_path,
+    #         train_config["load_checkpoint"],
+    #         train_config["max_steps"],
+    #         train_config["grad_clip"],
+    #         train_config["gradient_accumulation_steps"],
+    #         train_config["eval_every"],
+    #         train_config["log_every"],
+    #         train_config["wandb_log"],
+    #         device=device,
+    #         globals_config=globals_config,
+    #     )
+    # else:
     pretrain_model(
         model,
         train_dataloader,
@@ -107,7 +144,8 @@ def run_training(args: argparse.Namespace) -> None:
         scheduler,
         ctx,
         scaler,
-        train_config["checkpoint_dir"],
+        args.save_path,
+        train_config["load_checkpoint"],
         train_config["max_steps"],
         train_config["grad_clip"],
         train_config["gradient_accumulation_steps"],

@@ -12,18 +12,22 @@ lr_decay_steps = 100000
 min_lr = 6e-5
 dtype = "bfloat16"
 compile = true
-device = "cpu"
+device = "cuda"
 seed = 42
+wandb_log = false
+num_workers = 1
+load_checkpoint = false
+eval_every = 10
+log_every = 10
 
 [model_config]
 vocab_size = 37
 block_size = 300
+max_seq_len = 100
 n_embd = 768
 n_head = 12
 n_layer = 12
-embd_pdrop = 0.1
-attn_pdrop = 0.1
-resid_pdrop = 0.1
+dropout = 0.1
 model_type = "reward_conditioned"
 max_timestep = 0
 

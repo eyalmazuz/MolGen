@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Union
 
 from molgen.rewards.functions.multi_reward import MultiReward
 from molgen.rewards.functions.rdkit_rewards import PenalizedLogPReward, QEDReward
@@ -10,7 +10,7 @@ name_to_reward: dict[str, type[AbstractReward]] = {
 }
 
 
-def get_rewards(rewards_dict: dict[str, Any]) -> AbstractReward:
+def get_rewards(rewards_dict: dict[str, Any]) -> Union[AbstractReward, list[AbstractReward]]:
     rewards: list[AbstractReward] = []
     for reward_config in rewards_dict["functions"]:
         reward_type = reward_config.pop("type")
@@ -19,6 +19,8 @@ def get_rewards(rewards_dict: dict[str, Any]) -> AbstractReward:
 
     if len(rewards) == 1:
         return rewards[0]
+    elif rewards_dict.get("goal_conditioned", False):
+        return rewards
     else:
         agg: str = rewards_dict.get("agg", "add")
         return MultiReward(rewards, agg_type=agg)

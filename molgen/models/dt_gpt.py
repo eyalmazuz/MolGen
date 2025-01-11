@@ -24,15 +24,16 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+import torch._dynamo
+torch._dynamo.config.suppress_errors = True
 
 logger = logging.getLogger(__name__)
 import random
 import numpy as np
 import inspect
 
-from molgen.models.layers import DecoderOnlyBlock
 torch.set_float32_matmul_precision('high')
-
+CUDA_LAUNCH_BLOCKING=1
 
 class GELU(nn.Module):
     def forward(self, input):
@@ -43,94 +44,99 @@ class GELU(nn.Module):
 class DTGPTConfig:
     vocab_size: int = 32768
     block_size: int = 90
+    max_seq_len: int = 100
     n_embd: int = 768
     n_head: int = 12
     n_layer: int = 12
-    embd_pdrop: float = 0.1
-    attn_pdrop: float = 0.1
-    resid_pdrop: float = 0.1
+    dropout: float = 0.1
     model_type: str = "reward_conditioned"
+    bias: bool = True   # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     # max_timestep = 25
 
 
-# class CausalSelfAttention(nn.Module):
-#     """
-#     A vanilla multi-head masked self-attention layer with a projection at the end.
-#     It is possible to use torch.nn.MultiheadAttention here but I am including an
-#     explicit implementation here to show that there is nothing too scary here.
-#     """
-#
-#     def __init__(self, config):
-#         super().__init__()
-#         assert config.n_embd % config.n_head == 0
-#         # key, query, value projections for all heads
-#         self.key = nn.Linear(config.n_embd, config.n_embd)
-#         self.query = nn.Linear(config.n_embd, config.n_embd)
-#         self.value = nn.Linear(config.n_embd, config.n_embd)
-#         # regularization
-#         self.attn_drop = nn.Dropout(config.attn_pdrop)
-#         self.resid_drop = nn.Dropout(config.resid_pdrop)
-#         # output projection
-#         self.proj = nn.Linear(config.n_embd, config.n_embd)
-#         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
-#         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
-#         if not self.flash:
-#             print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
-#         # causal mask to ensure that attention is only applied to the left in the input sequence
-#         # self.register_buffer("mask", torch.tril(torch.ones(config.block_size, config.block_size))
-#         #                              .view(1, 1, config.block_size, config.block_size))
-#         self.register_buffer("mask", torch.tril(torch.ones(config.block_size + 1, config.block_size + 1))
-#                              .view(1, 1, config.block_size + 1, config.block_size + 1))
-#         self.n_head = config.n_head
-#         self.n_embd = config.n_embd
-#
-#     def forward(self, x, layer_past=None):
-#         B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (n_embd)
-#
-#         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-#         k = self.key(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
-#         q = self.query(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
-#         v = self.value(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
-#
-#         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-#         if self.flash:
-#             # efficient attention using Flash Attention CUDA kernels
-#             y = torch.nn.functional.scaled_dot_product_attention(
-#                 q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True
-#             )
-#         else:
-#             # manual implementation of attention
-#             att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-#             att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-#             att = F.softmax(att, dim=-1)
-#             att = self.attn_dropout(att)
-#             y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
-#         y = y.transpose(1, 2).contiguous().view(B, T, C)  # re-assemble all head outputs side by side
-#
-#         # output projection
-#         y = self.resid_drop(self.proj(y))
-#         return y
-#
-#
-# class Block(nn.Module):
-#     """ an unassuming Transformer block """
-#
-#     def __init__(self, config):
-#         super().__init__()
-#         self.ln1 = nn.LayerNorm(config.n_embd)
-#         self.ln2 = nn.LayerNorm(config.n_embd)
-#         self.attn = CausalSelfAttention(config)
-#         self.mlp = nn.Sequential(
-#             nn.Linear(config.n_embd, 4 * config.n_embd),
-#             GELU(),
-#             nn.Linear(4 * config.n_embd, config.n_embd),
-#             nn.Dropout(config.resid_pdrop),
-#         )
-#
-#     def forward(self, x):
-#         x = x + self.attn(self.ln1(x))
-#         x = x + self.mlp(self.ln2(x))
-#         return x
+class CausalSelfAttention(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        assert config.n_embd % config.n_head == 0
+        # key, query, value projections for all heads, but in a batch
+        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd, bias=config.bias)
+        # output projection
+        self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        # regularization
+        self.attn_dropout = nn.Dropout(config.dropout)
+        self.resid_dropout = nn.Dropout(config.dropout)
+        self.n_head = config.n_head
+        self.n_embd = config.n_embd
+        self.dropout = config.dropout
+        # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
+        self.flash = hasattr(torch.nn.functional, "scaled_dot_product_attention")
+        if not self.flash:
+            print("WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0")
+            # causal mask to ensure that attention is only applied to the left in the input sequence
+            self.register_buffer(
+                "bias",
+                torch.tril(torch.ones(config.block_size, config.block_size)).view(
+                    1, 1, config.block_size, config.block_size
+                ),
+            )
+
+    def forward(self, x):
+        B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (n_embd)
+
+        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
+        q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
+
+        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+        if self.flash:
+            # efficient attention using Flash Attention CUDA kernels
+            y = torch.nn.functional.scaled_dot_product_attention(
+                q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True
+            )
+        else:
+            # manual implementation of attention
+            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
+            att = F.softmax(att, dim=-1)
+            att = self.attn_dropout(att)
+            y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        y = y.transpose(1, 2).contiguous().view(B, T, C)  # re-assemble all head outputs side by side
+
+        # output projection
+        y = self.resid_dropout(self.c_proj(y))
+        return y
+
+
+class MLP(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+        self.gelu = nn.GELU()
+        self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
+        self.dropout = nn.Dropout(config.dropout)
+
+    def forward(self, x):
+        x = self.c_fc(x)
+        x = self.gelu(x)
+        x = self.c_proj(x)
+        x = self.dropout(x)
+        return x
+
+
+class Block(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.ln_1 = nn.LayerNorm(normalized_shape=config.n_embd, bias=config.bias)
+        self.attn = CausalSelfAttention(config)
+        self.ln_2 = nn.LayerNorm(normalized_shape=config.n_embd, bias=config.bias)
+        self.mlp = MLP(config)
+
+    def forward(self, x):
+        x = x + self.attn(self.ln_1(x))
+        x = x + self.mlp(self.ln_2(x))
+        return x
 
 
 class DtGPT(nn.Module):
@@ -138,7 +144,8 @@ class DtGPT(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-
+        assert config.vocab_size is not None
+        assert config.max_seq_len is not None
         self.config = config
 
         self.model_type = config.model_type
@@ -148,16 +155,21 @@ class DtGPT(nn.Module):
         # self.pos_emb = nn.Parameter(torch.zeros(1, config.block_size, config.n_embd))
         self.pos_emb = nn.Embedding(config.block_size, config.n_embd, dtype=torch.float32)
         # self.global_pos_emb = nn.Parameter(torch.zeros(1, config.max_timestep + 1, config.n_embd))
-        self.drop = nn.Dropout(config.embd_pdrop)
+        self.drop = nn.Dropout(config.dropout)
 
         # transformer
-        self.blocks = nn.Sequential(*[DecoderOnlyBlock(config) for _ in range(config.n_layer)])
+        self.blocks = nn.Sequential(*[Block(config) for _ in range(config.n_layer)])
         # decoder head
         self.ln_f = nn.LayerNorm(config.n_embd, dtype=torch.float32)
         self.head = nn.Linear(config.n_embd, config.vocab_size, bias=False, dtype=torch.float32)
 
         self.block_size = config.block_size
         self.apply(self._init_weights)
+        # apply special scaled init to the residual projections, per GPT-2 paper
+        for pn, p in self.named_parameters():
+            if pn.endswith("c_proj.weight"):
+                torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer))
+
 
         logger.info("number of parameters: %e", sum(p.numel() for p in self.parameters()))
 
@@ -238,65 +250,62 @@ class DtGPT(nn.Module):
     def mean_pooling(model_output, attention_mask):
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(model_output.size())
         return torch.sum(model_output * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
-        # token_embeddings = model_output[0]  # First element of model_output contains all token embeddings
-        # input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-        # return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
 
     # state, action, and return
-    def forward(self, states, actions, targets=None, rtgs=None, attention_mask=None):
-        # states: (batch, block_size, state_size)
-        # actions: (batch, block_size, 1)
+    def forward(self, input_ids, labels, targets=None, rtgs=None, attention_mask=None):
+        # input_ids: (batch, block_size, state_size)
+        # labels: (batch, block_size, 1)
         # targets: (batch, block_size, 1)
         # rtgs: (batch, block_size, 1)
         # TODO: figure out if I need pos embedding just for the trajectory,
         #  do I train on the full trajectory each time or just a step in it (sampled from the experience replay)?
         # TODO: timesteps: (batch, 1, 1) - remove all timesteps?
-        # timesteps = torch.arange(0, states.shape[1], dtype=torch.long, device=states.device)
+        # timesteps = torch.arange(0, input_ids.shape[1], dtype=torch.long, device=input_ids.device)
 
-        batch_size = states.shape[0]
-        block_size = states.shape[1]
+        batch_size = input_ids.shape[0]
+        block_size = input_ids.shape[1]
         assert block_size <= self.block_size, \
             f"Cannot forward sequence of length {block_size}, block size is only {self.block_size}"
-        state_embeddings = self.state_embedding(states)  # (batch_size, block_size, state_size, n_embd)
+        state_embeddings = self.state_embedding(input_ids)  # (batch_size, block_size, state_size, n_embd)
         # TODO: replace mean_pooling with a mini-transformer model
         if attention_mask is not None:
             state_embeddings = self.mean_pooling(state_embeddings, attention_mask)  # (batch_size, block_size, n_embd)
         else:
             state_embeddings = state_embeddings.squeeze(-2)  # (1, 1, n_embd)
 
-        if actions is not None and self.model_type == 'reward_conditioned':
+        if labels is not None and self.model_type == 'reward_conditioned':
             rtg_embeddings = self.ret_emb(rtgs.unsqueeze(-1))  # (batch, block_size, n_embd)
-            action_embeddings = self.action_embeddings(actions)  # (batch, block_size, n_embd)
+            action_embeddings = self.action_embeddings(labels)  # (batch, block_size, n_embd)
 
             token_embeddings = torch.zeros(
                 (batch_size, block_size * 3 - int(targets is None), self.config.n_embd), dtype=torch.float32,
                 device=state_embeddings.device)
             token_embeddings[:, ::3, :] = rtg_embeddings
             token_embeddings[:, 1::3, :] = state_embeddings
-            token_embeddings[:, 2::3, :] = action_embeddings[:, -states.shape[1] + int(targets is None):, :]
-        elif actions is None and self.model_type == 'reward_conditioned':  # only happens at very first timestep of evaluation
+            token_embeddings[:, 2::3, :] = action_embeddings[:, -input_ids.shape[1] + int(targets is None):, :]
+        elif labels is None and self.model_type == 'reward_conditioned':  # only happens at very first timestep of evaluation
             rtg_embeddings = self.ret_emb(rtgs.type(torch.float32))
-            token_embeddings = torch.zeros((batch_size, states.shape[1] * 2, self.config.n_embd),
+            token_embeddings = torch.zeros((batch_size, input_ids.shape[1] * 2, self.config.n_embd),
                                            dtype=torch.float32, device=state_embeddings.device)
             token_embeddings[:, ::2, :] = rtg_embeddings  # really just [:,0,:]
             token_embeddings[:, 1::2, :] = state_embeddings  # really just [:,1,:]
-        elif actions is not None and self.model_type == 'naive':
+        elif labels is not None and self.model_type == 'naive':
             action_embeddings = self.action_embeddings(
-                actions.type(torch.long).squeeze(-1))  # (batch, block_size, n_embd)
+                labels.type(torch.long).squeeze(-1))  # (batch, block_size, n_embd)
 
             token_embeddings = torch.zeros(
-                (batch_size, states.shape[1] * 2 - int(targets is None), self.config.n_embd), dtype=torch.float32,
+                (batch_size, input_ids.shape[1] * 2 - int(targets is None), self.config.n_embd), dtype=torch.float32,
                 device=state_embeddings.device)
             token_embeddings[:, ::2, :] = state_embeddings
-            token_embeddings[:, 1::2, :] = action_embeddings[:, -states.shape[1] + int(targets is None):, :]
-        elif actions is None and self.model_type == 'naive':  # only happens at very first timestep of evaluation
+            token_embeddings[:, 1::2, :] = action_embeddings[:, -input_ids.shape[1] + int(targets is None):, :]
+        elif labels is None and self.model_type == 'naive':  # only happens at very first timestep of evaluation
             token_embeddings = state_embeddings
         else:
             raise NotImplementedError()
 
-        n_blocks = 2 if actions is None else 3  # only happens at very first timestep of evaluation
+        n_blocks = 2 if labels is None else 3  # only happens at very first timestep of evaluation
         pos = torch.arange(
-            0, block_size, dtype=torch.long, device=states.device
+            0, block_size, dtype=torch.long, device=input_ids.device
         ).repeat_interleave(n_blocks).unsqueeze(0)
         pos_emb = self.pos_emb(pos)
 
@@ -305,13 +314,13 @@ class DtGPT(nn.Module):
         x = self.ln_f(x)
         logits = self.head(x)
 
-        if actions is not None and self.model_type == 'reward_conditioned':
+        if labels is not None and self.model_type == 'reward_conditioned':
             logits = logits[:, 1::3, :]  # only keep predictions from state_embeddings
-        elif actions is None and self.model_type == 'reward_conditioned':
+        elif labels is None and self.model_type == 'reward_conditioned':
             logits = logits[:, 1:, :]
-        elif actions is not None and self.model_type == 'naive':
+        elif labels is not None and self.model_type == 'naive':
             logits = logits[:, ::2, :]  # only keep predictions from state_embeddings
-        elif actions is None and self.model_type == 'naive':
+        elif labels is None and self.model_type == 'naive':
             logits = logits  # for completeness
         else:
             raise NotImplementedError()
@@ -357,7 +366,7 @@ def sample(model, x, steps, temperature=1.0, sample=False, top_k=None, actions=N
         if actions is not None:
             actions = actions if actions.size(1) <= block_size//3 else actions[:, -block_size//3:] # crop context if needed
         rtgs = rtgs if rtgs.size(1) <= block_size//3 else rtgs[:, -block_size//3:] # crop context if needed
-        logits, _ = model(states=x_cond, actions=actions, targets=None, rtgs=rtgs, attention_mask=attention)
+        logits, _ = model(input_ids=x_cond, labels=actions, targets=None, rtgs=rtgs, attention_mask=attention)
         # pluck the logits at the final step and scale by temperature
         logits = logits[:, -1, :] / temperature
         # optionally crop probabilities to only the top k options

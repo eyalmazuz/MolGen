@@ -18,6 +18,7 @@ def pretrain_model(
     ctx,
     scaler,
     checkpoint_dir: str = "./model/",
+    load_checkpoint: bool = False,
     max_steps: int = 1000000,
     grad_clip: float = 1.0,
     gradient_accumulation_steps: int = 1,
