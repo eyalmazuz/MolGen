@@ -1,4 +1,7 @@
+import os
 import torch
+
+from typing import Optional
 
 from molgen.utils.utils import get_local_rank, get_rank, is_distributed_run
 
@@ -27,3 +30,13 @@ def setup_mixed_precision(device: str, dtype: str):
     print(f"Running using {device=} {ptdtype=}")
 
     return ctx, scaler
+
+
+def get_checkpoint(checkpoint_dir: str = "./model/", ckpt_name: str = "ckpt.pt") -> Optional[dict]:
+    path = os.path.join(checkpoint_dir, ckpt_name)
+    if os.path.exists(path) and os.path.isfile(path):
+        checkpoint = torch.load(path)
+    else:
+        return
+
+    return checkpoint

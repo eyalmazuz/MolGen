@@ -12,7 +12,6 @@ from molgen.models.model_factory import get_model
 from molgen.models.model_options import ModelType
 from molgen.tokenizers.tokenizer_factory import get_tokenizer
 from molgen.training.train import pretrain_model
-from molgen.training.train_dt import run_dt_training
 from molgen.utils.train_utils import setup_mixed_precision, setup_torch
 from molgen.utils.utils import get_world_size, is_distributed_run, is_master_process
 from molgen.rewards.reward_factory import get_rewards
@@ -67,9 +66,9 @@ def run_training(args: argparse.Namespace) -> None:
     kwargs = {}
     if args.model_type.lower() == ModelType.DT:
         model_config["ignore_index"] = tokenizer.pad_token_id
-        kwargs = {"reward_func": get_rewards(config["reward"])}
-        if isinstance((kwargs["reward_func"]), list):
-            model_config["n_goals"] = len(kwargs["reward_func"])
+        reward_func = get_rewards(config["reward"])
+        kwargs = {"reward_func": reward_func}
+        model_config["n_goals"] = len(reward_func) if isinstance(reward_func, list) else 1
 
     print(f"Building model {args.model_type} and Dataset {args.dataset_type}")
 
@@ -115,28 +114,6 @@ def run_training(args: argparse.Namespace) -> None:
         )
 
     print("Start training")
-    # if args.model_type == ModelType.DT:
-    #     run_dt_training(
-    #         model,
-    #         train_dataloader,
-    #         val_dataloader,
-    #         optimizer,
-    #         scheduler,
-    #         ctx,
-    #         scaler,
-    #         kwargs["reward_func"],
-    #         args.save_path,
-    #         train_config["load_checkpoint"],
-    #         train_config["max_steps"],
-    #         train_config["grad_clip"],
-    #         train_config["gradient_accumulation_steps"],
-    #         train_config["eval_every"],
-    #         train_config["log_every"],
-    #         train_config["wandb_log"],
-    #         device=device,
-    #         globals_config=globals_config,
-    #     )
-    # else:
     pretrain_model(
         model,
         train_dataloader,
@@ -145,6 +122,7 @@ def run_training(args: argparse.Namespace) -> None:
         scheduler,
         ctx,
         scaler,
+        kwargs.get("reward_func", None),
         args.save_path,
         train_config["load_checkpoint"],
         train_config["max_steps"],

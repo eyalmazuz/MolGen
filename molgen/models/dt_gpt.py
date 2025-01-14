@@ -20,6 +20,7 @@ GPT model:
 import math
 import logging
 from dataclasses import dataclass
+from typing import Callable
 
 import torch
 import torch.nn as nn
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 import random
 import numpy as np
 import inspect
+import selfies as sf
 
 torch.set_float32_matmul_precision('high')
 CUDA_LAUNCH_BLOCKING = 1
@@ -51,6 +53,7 @@ class DTGPTConfig:
     model_type: str = "reward_conditioned"
     bias: bool = True  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     ignore_index: int = -100
+    n_goals: int = 1
     # max_timestep = 25
 
 
@@ -387,3 +390,79 @@ def sample(model, x, steps, temperature=1.0, sample=False, top_k=None, actions=N
         x = ix
 
     return x
+
+
+def get_returns(ret, model, train_dataset, reward_func: Callable, device, k: int = 10, temperature: float = 1.0):
+    model.train(False)
+    bos_token_id = train_dataset.dataset.tokenizer.bos_token_id
+    eos_token_id = train_dataset.dataset.tokenizer.eos_token_id
+    pad_token_id = train_dataset.dataset.tokenizer.pad_token_id
+
+    T_rewards, T_Qs = [], []
+    done = True
+    for i in range(k):
+        terminated = False
+        init_state = torch.tensor([bos_token_id], dtype=torch.int64)
+        init_state = init_state.to(device).unsqueeze(0).unsqueeze(0)
+        rtgs = [ret]
+        # first state is from env, first rtg is target return, and first timestep is 0
+        sampled_action = sample(
+            model=model,
+            x=init_state,
+            steps=1,
+            temperature=temperature,
+            sample=True,
+            actions=None,
+            rtgs=torch.tensor(rtgs, dtype=torch.float32).to(device).unsqueeze(0).unsqueeze(-1),
+            # timesteps=torch.zeros((1, 1, 1), dtype=torch.int64).to(self.device)
+        )
+
+        j = 0
+        all_states = init_state
+        actions = []
+        while True:
+            if done:
+                state, reward_sum, done = ([bos_token_id], 0, False)
+            action = sampled_action.cpu().numpy()[0, -1]
+            actions += [action]
+            state.append(action)
+            sequence = train_dataset.dataset.tokenizer.decode(state, skip_special_tokens=True)[0]
+            if train_dataset.dataset.string_type == "SELFIES":
+                sequence = sf.decoder(sequence)
+            reward = reward_func(sequence)
+            done = action == eos_token_id  # mol is complete when [EOS] token is generated
+            reward_sum = reward
+            j += 1
+
+            # if molecule length exceeds block_size and [EOS] token wasn't generated terminate generation
+            if len(state) >= model.block_size // 3 and not done:
+                terminated = True
+
+            if done or terminated:
+                T_rewards.append(reward_sum)
+                break
+
+            tensor_state = torch.tensor(state, device=device).unsqueeze(0).unsqueeze(0)
+            pad_size = tensor_state.shape[-1] - all_states.shape[-1]
+            all_states = torch.nn.functional.pad(all_states, (0, pad_size), value=pad_token_id)
+            all_states = torch.cat([all_states, tensor_state], dim=1)
+
+            rtgs += [rtgs[-1] - reward]
+            # all_states has all previous states and rtgs has all previous rtgs (will be cut to block_size in utils.sample)
+            # timestep is just current timestep
+            sampled_action = sample(
+                model=model,
+                x=all_states,
+                steps=1,
+                temperature=temperature,
+                sample=True,
+                actions=torch.tensor(actions, dtype=torch.long).to(device).unsqueeze(0),
+                rtgs=torch.tensor(rtgs, dtype=torch.float32).to(device).unsqueeze(0),
+                attention=torch.tensor(np.tril(np.ones(all_states.shape[1:])), dtype=torch.long).to(device).unsqueeze(0)
+                # timesteps=(min(j, self.config.max_timestep) * torch.ones((1, 1, 1), dtype=torch.int64).to(self.device)))
+            )
+
+    eval_return = sum(T_rewards) / 10.
+    print("target return: %d, eval return: %d" % (ret, eval_return))
+    model.train(True)
+    return eval_return
