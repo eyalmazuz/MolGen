@@ -38,6 +38,7 @@ def get_pretrain_args() -> argparse.Namespace:
     parser.add_argument(
         '--wandb-proj', type=str, default='DecisionMol', help='name of wandb project to upload results')
     parser.add_argument('--wandb-entity', type=str, default='bgu-sise', help='wandb entity associated with the project')
+    parser.add_argument('--wandb-name', type=str, help='wandb run name', default=None)
 
     return parser.parse_args()
 
@@ -109,7 +110,7 @@ def run_training(args: argparse.Namespace) -> None:
         wandb.init(  # type: ignore
             project=args.wandb_proj,
             entity=args.wandb_entity,
-            name=f"{args.model_type}_{args.dataset_type}",
+            name=args.wandb_name if args.wandb_name is not None else f"{args.model_type}_{args.dataset_type}",
             config=config,
         )
 
