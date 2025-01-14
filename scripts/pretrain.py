@@ -34,10 +34,10 @@ def get_pretrain_args() -> argparse.Namespace:
     )
 
     # Wandb parameters to log results
-    parser.add_argument('--wandb_key', type=str, help='wandb api key for user login', default=None)
+    parser.add_argument('--wandb-key', type=str, help='wandb api key for user login', default=None)
     parser.add_argument(
-        '--wandb_proj', type=str, default='DecisionMol', help='name of wandb project to upload results')
-    parser.add_argument('--wandb_entity', type=str, default='bgu-sise', help='wandb entity associated with the project')
+        '--wandb-proj', type=str, default='DecisionMol', help='name of wandb project to upload results')
+    parser.add_argument('--wandb-entity', type=str, default='bgu-sise', help='wandb entity associated with the project')
 
     return parser.parse_args()
 
