@@ -24,8 +24,6 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-import torch._dynamo
-torch._dynamo.config.suppress_errors = True
 
 logger = logging.getLogger(__name__)
 import random
@@ -33,7 +31,8 @@ import numpy as np
 import inspect
 
 torch.set_float32_matmul_precision('high')
-CUDA_LAUNCH_BLOCKING=1
+CUDA_LAUNCH_BLOCKING = 1
+
 
 class GELU(nn.Module):
     def forward(self, input):
@@ -44,13 +43,14 @@ class GELU(nn.Module):
 class DTGPTConfig:
     vocab_size: int = 32768
     block_size: int = 90
-    max_seq_len: int = 100
+    max_seq_len: int = block_size // 3
     n_embd: int = 768
     n_head: int = 12
     n_layer: int = 12
     dropout: float = 0.1
     model_type: str = "reward_conditioned"
-    bias: bool = True   # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    bias: bool = True  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    ignore_index: int = -100
     # max_timestep = 25
 
 
@@ -170,14 +170,13 @@ class DtGPT(nn.Module):
             if pn.endswith("c_proj.weight"):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer))
 
-
         logger.info("number of parameters: %e", sum(p.numel() for p in self.parameters()))
 
         self.state_embedding = self.tok_emb
         # self.state_encoder = nn.Linear(config.block_size // 3 * config.n_embd, config.n_embd)
         self.ret_emb = nn.Sequential(nn.Linear(1, config.n_embd, dtype=torch.float32), nn.Tanh())
 
-        self.action_embeddings = self.tok_emb   # Actions are simply SMILES tokens to add to the state
+        self.action_embeddings = self.tok_emb  # Actions are simply SMILES tokens to add to the state
         nn.init.normal_(self.action_embeddings.weight, mean=0.0, std=0.02)
 
     def get_block_size(self):
@@ -328,7 +327,10 @@ class DtGPT(nn.Module):
         # if we are given some desired targets also calculate the loss
         loss = None
         if targets is not None:
-            loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1))
+            loss = F.cross_entropy(
+                logits.reshape(-1, logits.size(-1)), targets.reshape(-1),
+                ignore_index=self.config.ignore_index
+            )
 
         return logits, loss
 
@@ -362,10 +364,11 @@ def sample(model, x, steps, temperature=1.0, sample=False, top_k=None, actions=N
     model.eval()
     for k in range(steps):
         # x_cond = x if x.size(1) <= block_size else x[:, -block_size:] # crop context if needed
-        x_cond = x if x.size(1) <= block_size//3 else x[:, -block_size//3:] # crop context if needed
+        x_cond = x if x.size(1) <= block_size // 3 else x[:, -block_size // 3:]  # crop context if needed
         if actions is not None:
-            actions = actions if actions.size(1) <= block_size//3 else actions[:, -block_size//3:] # crop context if needed
-        rtgs = rtgs if rtgs.size(1) <= block_size//3 else rtgs[:, -block_size//3:] # crop context if needed
+            actions = actions if actions.size(1) <= block_size // 3 else actions[:,
+                                                                         -block_size // 3:]  # crop context if needed
+        rtgs = rtgs if rtgs.size(1) <= block_size // 3 else rtgs[:, -block_size // 3:]  # crop context if needed
         logits, _ = model(input_ids=x_cond, labels=actions, targets=None, rtgs=rtgs, attention_mask=attention)
         # pluck the logits at the final step and scale by temperature
         logits = logits[:, -1, :] / temperature

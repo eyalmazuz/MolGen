@@ -81,15 +81,12 @@ class DistributedLengthBatchSampler(torch.utils.data.BatchSampler):
 
 
 class PadCollate:
-    def __init__(self, pad_token_id: int, ignore_index: int = -100, max_length=None) -> None:
+    def __init__(self, pad_token_id: int, ignore_index: int = -100) -> None:
         self.pad_token_id = pad_token_id
         self.ignore_index = ignore_index
-        self.max_length = max_length
 
-    def __call__(self, batches: list[dict[str, list[int]]]) -> dict[str, torch.Tensor]:
+    def __call__(self, batches: list[dict[str, list[Any]]]) -> dict[str, torch.Tensor]:
         max_length = max(len(item["input_ids"]) for item in batches)
-        if self.max_length is not None:
-            self.max_length = max_length = max(self.max_length, max_length)
 
         batch_input_ids = []
         batch_attention_mask = []
@@ -159,7 +156,7 @@ def prepare_data_for_training(
     else:
         train_sampler = LengthBatchSampler(train_dataset, train_config["batch_size"], drop_last=False)
         val_sampler = LengthBatchSampler(val_dataset, train_config["batch_size"], drop_last=False)
-    collate_fn = PadCollate(pad_token_id)
+    collate_fn = PadCollate(pad_token_id, ignore_index=pad_token_id)
     train_dataloader = DataLoader(
         train_dataset,
         batch_sampler=train_sampler,

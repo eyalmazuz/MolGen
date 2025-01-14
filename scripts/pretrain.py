@@ -62,9 +62,11 @@ def run_training(args: argparse.Namespace) -> None:
     print("Setting up torch")
     device = setup_torch(train_config["seed"], train_config["device"])
     ctx, scaler = setup_mixed_precision(train_config["device"], train_config["dtype"])
+    tokenizer = get_tokenizer(args.tokenizer_path)
 
     kwargs = {}
     if args.model_type.lower() == ModelType.DT:
+        model_config["ignore_index"] = tokenizer.pad_token_id
         kwargs = {"reward_func": get_rewards(config["reward"])}
         if isinstance((kwargs["reward_func"]), list):
             model_config["n_goals"] = len(kwargs["reward_func"])
@@ -72,7 +74,6 @@ def run_training(args: argparse.Namespace) -> None:
     print(f"Building model {args.model_type} and Dataset {args.dataset_type}")
 
     model = get_model(args.model_type, model_config).to(device)
-    tokenizer = get_tokenizer(args.tokenizer_path)
     train_dataset, val_dataset = get_dataset(
         args.dataset_type, args.model_type, dataset_path=args.data_path, tokenizer=tokenizer, **kwargs
     )
