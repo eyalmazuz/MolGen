@@ -22,5 +22,10 @@ dependencies:
   - wandb
   - tqdm
   - pip:
+    - build
+    - cmake
+    - ninja
+    - wheel
+    - flash-attn --no-build-isolation
     - x_transformers==1.26.2
     - selfies
