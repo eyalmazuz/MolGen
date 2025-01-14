@@ -1,15 +1,15 @@
 [train_config]
-batch_size = 4
+batch_size = 64
 gradient_accumulation_steps = 30
-learning_rate = 1e-3
-max_steps = 100000
+learning_rate = 1e-4
+max_steps = 1000000
 weight_decay = 1e-1
 betas = [0.9, 0.95]
 grad_clip = 1.0
 decay_lr = true
 warmup_steps = 2000
-lr_decay_steps = 100000
-min_lr = 6e-5
+lr_decay_steps = 300000
+min_lr = 1e-5
 dtype = "bfloat16"
 compile = true
 device = "cuda"
