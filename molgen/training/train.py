@@ -47,7 +47,7 @@ def pretrain_model(
             raw_model = model.module if is_distributed_run() else model
             raw_model.load_state_dict(checkpoint['model'])
             optimizer.load_state_dict(checkpoint['optimizer'])
-            scheduler.load_state_dict(checkpoint['lr_scheduler'])
+            scheduler.load_state_dict(checkpoint['scheduler'])
             model.config = checkpoint['model_args']
             init_step = checkpoint['step']
             best_val_loss = checkpoint['best_val_loss']
