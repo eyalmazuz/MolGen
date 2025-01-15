@@ -45,6 +45,10 @@ class Trainer:
         torch.save(checkpoint, os.path.join(self.config.get("ckpt_path", "."), ckpt_name))
 
     def load_checkpoint(self, ckpt_name="latest"):
+        if not self.config.get("load_ckpt"):
+            print(f"Load_Checkpoint set to False! starting training from scratch")
+            return 0, 0
+
         checkpoint_dir = self.config.get("ckpt_path", ".")
         if ckpt_name == "latest":
             checkpoint_files = [f for f in os.listdir(checkpoint_dir) if f.startswith("epoch_") and f.endswith(".pth")]
@@ -58,7 +62,7 @@ class Trainer:
                 for file in checkpoint_files
                 if re.search(r"epoch_(\d+)", file)
             ]
-            ckpt_name =  f"epoch_{max(epoch_numbers)}.pth"
+            ckpt_name = f"epoch_{max(epoch_numbers)}.pth"
 
         path = os.path.join(checkpoint_dir, ckpt_name)
         checkpoint = torch.load(path)
@@ -94,10 +98,11 @@ class Trainer:
                 y = batch["labels"]     # actions
                 r = batch["rtg"]        # rtgs (reward-to-go)
                 a = batch["attention_mask"]
+                g = batch.get("goal", None)
 
                 # forward the model
                 with torch.set_grad_enabled(is_train):
-                    logits, loss = model(input_ids=x, labels=y, targets=y, rtgs=r, attention_mask=a)
+                    logits, loss = model(input_ids=x, labels=y, targets=y, rtgs=r, attention_mask=a, goal=g)
                     # logits, loss = model(x, y, y, r, t)
                     loss = loss.mean()  # collapse all losses if they are scattered on multiple gpus
                     total_loss += loss
@@ -185,6 +190,8 @@ class Trainer:
             init_state = torch.tensor([self.bos_token_id], dtype=torch.int64)
             init_state = init_state.to(self.device).unsqueeze(0).unsqueeze(0)
             rtgs = [ret]
+            goal_idx = np.random.choice(self.model.module.config.n_goals)
+            goal = [goal_idx]
             # first state is from env, first rtg is target return, and first timestep is 0
             sampled_action = sample(
                 model=self.model,
@@ -194,6 +201,7 @@ class Trainer:
                 sample=True,
                 actions=None,
                 rtgs=torch.tensor(rtgs, dtype=torch.float32).to(self.device).unsqueeze(0).unsqueeze(-1),
+                goal=torch.tensor(goal, dtype=torch.int64).to(self.device).unsqueeze(0),
                 # timesteps=torch.zeros((1, 1, 1), dtype=torch.int64).to(self.device)
             )
 
@@ -209,7 +217,7 @@ class Trainer:
                 sequence = self.train_dataset.dataset.tokenizer.decode(state, skip_special_tokens=True)[0]
                 if self.train_dataset.dataset.string_type == "SELFIES":
                     sequence = sf.decoder(sequence)
-                reward = self.reward_func(sequence)
+                reward = self.reward_func[goal_idx](sequence)
                 done = action == self.eos_token_id  # mol is complete when [EOS] token is generated
                 reward_sum = reward
                 j += 1
@@ -228,6 +236,7 @@ class Trainer:
                 all_states = torch.cat([all_states, tensor_state], dim=1)
 
                 rtgs += [rtgs[-1] - reward]
+                goal.append(goal_idx)
                 # all_states has all previous states and rtgs has all previous rtgs (will be cut to block_size in utils.sample)
                 # timestep is just current timestep
                 sampled_action = sample(
@@ -238,7 +247,8 @@ class Trainer:
                     sample=True,
                     actions=torch.tensor(actions, dtype=torch.long).to(self.device).unsqueeze(0),
                     rtgs=torch.tensor(rtgs, dtype=torch.float32).to(self.device).unsqueeze(0),
-                    attention=torch.tensor(np.tril(np.ones(all_states.shape[1:])), dtype=torch.long).to(self.device).unsqueeze(0)
+                    attention=torch.tensor(np.tril(np.ones(all_states.shape[1:])), dtype=torch.long).to(self.device).unsqueeze(0),
+                    goal=torch.tensor(goal, dtype=torch.int64).to(self.device).unsqueeze(0),
                     # timesteps=(min(j, self.config.max_timestep) * torch.ones((1, 1, 1), dtype=torch.int64).to(self.device)))
                 )
         eval_return = sum(T_rewards) / 10.
@@ -250,22 +260,13 @@ class Trainer:
 def run_dt_training(
         model,
         train_dataloader,
-        val_dataloader,
         optimizer,
-        scheduler,
         ctx,
         scaler,
         reward_func,
-        checkpoint_dir: str = "./model/",
-        load_checkpoint: bool = False,
-        max_steps: int = 1000000,
-        grad_clip: float = 1.0,
-        gradient_accumulation_steps: int = 1,
-        eval_interval: int = -1,
-        log_interval: int = -1,
-        wandb_log: bool = True,
-        device: str = "cuda",
-        globals_config: dict[str, Any] | None = None,
+        train_config,
+        test_dataloader=None,
+        wandb_run=None,
 ):
-    trainer = Trainer(model, train_dataloader, val_dataloader, reward_func, train_config, wandb_run)
+    trainer = Trainer(model, train_dataloader, test_dataloader, reward_func, train_config, wandb_run)
     trainer.train(optimizer)

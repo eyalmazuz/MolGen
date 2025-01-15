@@ -158,6 +158,7 @@ class DtGPT(nn.Module):
         # self.pos_emb = nn.Parameter(torch.zeros(1, config.block_size, config.n_embd))
         self.pos_emb = nn.Embedding(config.block_size, config.n_embd, dtype=torch.float32)
         # self.global_pos_emb = nn.Parameter(torch.zeros(1, config.max_timestep + 1, config.n_embd))
+        self.goal_emb = nn.Embedding(config.n_goals, config.n_embd, dtype=torch.float32)
         self.drop = nn.Dropout(config.dropout)
 
         # transformer
@@ -254,15 +255,12 @@ class DtGPT(nn.Module):
         return torch.sum(model_output * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
 
     # state, action, and return
-    def forward(self, input_ids, labels, targets=None, rtgs=None, attention_mask=None):
+    def forward(self, input_ids, labels, targets=None, rtgs=None, attention_mask=None, goal=None):
         # input_ids: (batch, block_size, state_size)
         # labels: (batch, block_size, 1)
         # targets: (batch, block_size, 1)
         # rtgs: (batch, block_size, 1)
-        # TODO: figure out if I need pos embedding just for the trajectory,
-        #  do I train on the full trajectory each time or just a step in it (sampled from the experience replay)?
-        # TODO: timesteps: (batch, 1, 1) - remove all timesteps?
-        # timesteps = torch.arange(0, input_ids.shape[1], dtype=torch.long, device=input_ids.device)
+        # goals: optional - (batch, block_size, 1)
 
         batch_size = input_ids.shape[0]
         block_size = input_ids.shape[1]
@@ -277,6 +275,11 @@ class DtGPT(nn.Module):
 
         if labels is not None and self.model_type == 'reward_conditioned':
             rtg_embeddings = self.ret_emb(rtgs.unsqueeze(-1))  # (batch, block_size, n_embd)
+            # Modify RTG embedding
+            # gs with goal embeddings (add or concat)
+            if goal is not None:
+                goal_embeddings = self.goal_emb(goal)  # (batch, n_embd)
+                rtg_embeddings = rtg_embeddings + goal_embeddings
             action_embeddings = self.action_embeddings(labels)  # (batch, block_size, n_embd)
 
             token_embeddings = torch.zeros(
@@ -287,6 +290,10 @@ class DtGPT(nn.Module):
             token_embeddings[:, 2::3, :] = action_embeddings[:, -input_ids.shape[1] + int(targets is None):, :]
         elif labels is None and self.model_type == 'reward_conditioned':  # only happens at very first timestep of evaluation
             rtg_embeddings = self.ret_emb(rtgs.type(torch.float32))
+            # Modify RTG embeddings with goal embeddings (add or concat)
+            if goal is not None:
+                goal_embeddings = self.goal_emb(goal)  # (batch, n_embd)
+                rtg_embeddings = rtg_embeddings + goal_embeddings
             token_embeddings = torch.zeros((batch_size, input_ids.shape[1] * 2, self.config.n_embd),
                                            dtype=torch.float32, device=state_embeddings.device)
             token_embeddings[:, ::2, :] = rtg_embeddings  # really just [:,0,:]
