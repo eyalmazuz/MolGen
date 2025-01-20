@@ -3,7 +3,7 @@ import gc
 import time
 from itertools import cycle
 from typing import Any, Optional, Callable
-
+from tqdm import tqdm
 import torch
 
 import wandb
@@ -57,7 +57,7 @@ def pretrain_model(
             print(f"No checkpoint found at {checkpoint_dir}, starting training from scratch!")
 
     epoch = init_step // len(train_dataloader)
-    for step in range(init_step, max_steps):
+    for step in tqdm(range(init_step, max_steps)):
         for micro_step in range(gradient_accumulation_steps):
             # Handle distributed training if applicable
             if is_distributed_run():
@@ -95,7 +95,7 @@ def pretrain_model(
         if (step + 1) % len(train_dataloader) == 0 and is_master_process():
             epoch += 1
             # Print EMA loss
-            print(f"epoch {epoch}, step {step}: EMA loss = {ema_loss:.4f} time {dt*1000:.2f}ms")
+            print(f"epoch {epoch}, step {step}: EMA loss = {ema_loss:.4f} time {dt*1000:.2f}ms (per step)")
 
         # if step % eval_interval == 0 and is_master_process():
             model.eval()
