@@ -6,6 +6,7 @@ import numpy as np
 from tqdm import tqdm
 from typing import Any
 
+import wandb
 import torch
 import selfies as sf
 
@@ -15,7 +16,7 @@ from molgen.utils.plot_utils import save_plot
 
 class Trainer:
 
-    def __init__(self, model, train_dataset, test_dataset, reward_func, config, wandb_run=None):
+    def __init__(self, model, train_dataset, test_dataset, reward_func, config, device: str = "cuda", wandb_log=False):
         self.model = model
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
@@ -25,13 +26,14 @@ class Trainer:
         self.eos_token_id = train_dataset.dataset.tokenizer.eos_token_id
         self.pad_token_id = train_dataset.dataset.tokenizer.pad_token_id
         self.ignore_token_id = train_dataset.collate_fn.ignore_index
-        self.wandb_run = wandb_run
+        self.wandb_log = wandb_log
+        self.device = device
         self.optimizer = None
 
         # take over whatever gpus are on the system
-        if torch.cuda.is_available():
-            self.device = torch.cuda.current_device()
-            self.model = torch.nn.DataParallel(self.model).to(self.device)
+        # if torch.cuda.is_available():
+        #     self.device = torch.cuda.current_device()
+        #     self.model = torch.nn.DataParallel(self.model).to(self.device)
 
     def save_checkpoint(self, epoch):
         ckpt_name = f"epoch_{epoch}.pth" if self.test_dataset is None else f"best.pth"
@@ -92,7 +94,7 @@ class Trainer:
                     batch = {k: v.to(self.device) for k, v in batch.items()}    # place data on the correct device
                 x = batch["input_ids"]  # states
                 y = batch["labels"]     # actions
-                r = batch["rtg"]        # rtgs (reward-to-go)
+                r = batch["rtgs"]       # rtgs (reward-to-go)
                 a = batch["attention_mask"]
 
                 # forward the model
@@ -138,8 +140,13 @@ class Trainer:
             # if not is_train:
             episode_loss = total_loss.item() / len(loader)
             print(f"\nMean Epoch Loss: {episode_loss:.4f}")
-            if self.wandb_run:
-                self.wandb_run.log({'training_loss': episode_loss, 'epoch': epoch})
+            if self.wandb_log:
+                wandb.log(
+                    {
+                        'training_loss': episode_loss,
+                        'epoch': epoch
+                    }
+                )
 
             return episode_loss
 
@@ -164,12 +171,12 @@ class Trainer:
                 self.save_checkpoint(epoch)
 
             # -- pass in target returns
-            model_type = self.model.module.model_type if hasattr(self.model, "module") else self.model.model_type
-            if model_type == 'naive':
-                eval_return = self.get_returns(0)
-            elif model_type == 'reward_conditioned':
-                # TODO: return should be based on the reward function, for now put 1 for a scaled reward
-                eval_return = self.get_returns(1)
+            # model_type = self.model.module.model_type if hasattr(self.model, "module") else self.model.model_type
+            # if model_type == 'naive':
+            #     eval_return = self.get_returns(0)
+            # elif model_type == 'reward_conditioned':
+            #     # TODO: return should be based on the reward function, for now put 1 for a scaled reward
+            #     eval_return = self.get_returns(1)
 
         if self.wandb_run is None:
             [print(f"{ep_loss:.5f}") for ep_loss in epoch_losses]  # Debug print
@@ -215,7 +222,7 @@ class Trainer:
                 j += 1
 
                 # if molecule length exceeds block_size and [EOS] token wasn't generated terminate generation
-                if len(state) >= self.model.module.block_size // 3 and not done:
+                if len(state) >= self.model.config.max_seq_len and not done:
                     terminated = True
 
                 if done or terminated:
@@ -250,22 +257,14 @@ class Trainer:
 def run_dt_training(
         model,
         train_dataloader,
-        val_dataloader,
         optimizer,
-        scheduler,
         ctx,
         scaler,
         reward_func,
-        checkpoint_dir: str = "./model/",
-        load_checkpoint: bool = False,
-        max_steps: int = 1000000,
-        grad_clip: float = 1.0,
-        gradient_accumulation_steps: int = 1,
-        eval_interval: int = -1,
-        log_interval: int = -1,
-        wandb_log: bool = True,
+        train_config,
+        test_dataloader=None,
         device: str = "cuda",
-        globals_config: dict[str, Any] | None = None,
+        wandb_log=False,
 ):
-    trainer = Trainer(model, train_dataloader, val_dataloader, reward_func, train_config, wandb_run)
+    trainer = Trainer(model, train_dataloader, test_dataloader, reward_func, train_config, device, wandb_log)
     trainer.train(optimizer)

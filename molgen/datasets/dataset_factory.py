@@ -35,11 +35,11 @@ def get_gpt_dataset(dataset_type: DatasetType, dataset_path, tokenizer, **kwargs
             train_dataset = PreTrainGPTSmilesDataset(train_smiles, tokenizer, **kwargs)
             val_dataset = PreTrainGPTSmilesDataset(val_smiles, tokenizer, **kwargs)
         case DatasetType.DT_SMILES:
-            train_dataset = PreTrainDecisionGPTSmilesDataset(train_smiles, tokenizer, **kwargs)
+            train_dataset = PreTrainDecisionGPTSmilesDataset(smiles, tokenizer, **kwargs)
             val_dataset = PreTrainDecisionGPTSmilesDataset(val_smiles, tokenizer, **kwargs)
         case DatasetType.DT_SELFIES:
             kwargs["string_type"] = "SELFIES"
-            train_dataset = PreTrainDecisionGPTSmilesDataset(train_smiles, tokenizer, **kwargs)
+            train_dataset = PreTrainDecisionGPTSmilesDataset(smiles, tokenizer, **kwargs)
             val_dataset = PreTrainDecisionGPTSmilesDataset(val_smiles, tokenizer, **kwargs)
 
     return train_dataset, val_dataset
