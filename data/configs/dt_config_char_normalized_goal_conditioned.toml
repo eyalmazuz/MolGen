@@ -14,9 +14,9 @@ dtype = "bfloat16"
 compile = true
 device = "cuda"
 seed = 42
-wandb_log = false
+wandb_log = true
 num_workers = 1
-load_checkpoint = false
+load_checkpoint = true
 eval_every = 10
 log_every = 10
 
