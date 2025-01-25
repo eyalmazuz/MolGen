@@ -17,8 +17,8 @@ seed = 42
 wandb_log = true
 num_workers = 1
 load_checkpoint = true
-eval_every = 10
-log_every = 10
+eval_every = 100
+log_every = 100
 
 [model_config]
 vocab_size = 37

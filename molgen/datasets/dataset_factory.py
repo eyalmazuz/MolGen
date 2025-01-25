@@ -25,7 +25,7 @@ def get_dataset(
 
 def get_gpt_dataset(dataset_type: DatasetType, dataset_path, tokenizer, **kwargs) -> tuple[Dataset, Dataset]:
     smiles = load_smiles(dataset_path)
-    train_smiles, val_smiles = get_train_test_split(smiles, test_size=0.2)
+    train_smiles, val_smiles = get_train_test_split(smiles, test_size=0.1)
     match dataset_type.lower():
         case DatasetType.SMILES:
             train_dataset = PreTrainGPTSmilesDataset(train_smiles, tokenizer, **kwargs)

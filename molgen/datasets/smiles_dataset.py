@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import Dataset
 import numpy as np
 import selfies as sf
+from tqdm import tqdm
 
 from molgen.tokenizers.tokenizer import AbstractTokenizer
 from molgen.rewards.reward import AbstractReward
@@ -72,7 +73,9 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
             A list of dictionaries containing precomputed trajectories for all molecules and goals.
         """
         results = []
-        for mol_idx, smiles in enumerate(self.dataset):  # Iterate over molecules
+        for mol_idx, smiles in tqdm(
+                enumerate(self.dataset), desc="Computing molecule trajectories", total=len(self.dataset)
+        ):
             base_item = super().__getitem__(mol_idx)
             trajectory_len = len(base_item["input_ids"])
             states = [base_item["input_ids"][:i + 1] for i in range(trajectory_len)]

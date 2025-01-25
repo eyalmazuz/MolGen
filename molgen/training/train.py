@@ -70,17 +70,20 @@ def pretrain_model(
             else:
                 batch = {k: v.to(device) for k, v in batch.items()}
 
-            with ctx:
-                logits, loss = model(**batch)
-                loss = loss / gradient_accumulation_steps
-            scaler.scale(loss).backward()
+            logits, loss = model(**batch)
+            loss = loss / gradient_accumulation_steps
+            # with ctx:
+            #     logits, loss = model(**batch)
+            #     loss = loss / gradient_accumulation_steps
+            # scaler.scale(loss).backward()
 
         if grad_clip != 0.0:
-            scaler.unscale_(optimizer)
+            # scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
 
-        scaler.step(optimizer)
-        scaler.update()
+        optimizer.step()
+        # scaler.step(optimizer)
+        # scaler.update()
         optimizer.zero_grad(set_to_none=True)
         scheduler.step()
 
@@ -91,13 +94,13 @@ def pretrain_model(
         t1 = time.time()
         dt = t1 - t0
         t0 = t1
-        # if step % log_interval == 0 and is_master_process():
-        if (step + 1) % len(train_dataloader) == 0 and is_master_process():
-            epoch += 1
+        if step % log_interval == 0 and is_master_process():
+            if (step + 1) % len(train_dataloader) == 0:
+                epoch += 1
             # Print EMA loss
             print(f"epoch {epoch}, step {step}: EMA loss = {ema_loss:.4f} time {dt*1000:.2f}ms (per step)")
 
-        # if step % eval_interval == 0 and is_master_process():
+        if step % eval_interval == 0 and is_master_process():
             model.eval()
             losses = torch.zeros(len(val_dataloader))
             for val_step, batch in enumerate(val_dataloader):
@@ -106,8 +109,9 @@ def pretrain_model(
                 else:
                     batch = {k: v.to(device) for k, v in batch.items()}
 
-                with ctx:
-                    logits, loss = model(**batch)
+                logits, loss = model(**batch)
+                # with ctx:
+                #     logits, loss = model(**batch)
                 losses[val_step] = loss.item()
 
             val_loss = losses.mean()
