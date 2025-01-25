@@ -7,9 +7,8 @@ from rdkit.Chem.Crippen import MolLogP  # type: ignore
 
 sys.path.append(os.path.join(RDConfig.RDContribDir, "SA_Score"))
 import sascorer
-from rdkit import DisableLog
-
-DisableLog("rdApp.*")
+from rdkit import RDLogger
+RDLogger.DisableLog('rdApp.*')
 
 
 def calc_novelty(train_set: str | list[str], generated_molecules: list[str]) -> float:

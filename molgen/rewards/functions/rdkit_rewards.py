@@ -7,8 +7,8 @@ from rdkit.Chem.Crippen import MolLogP  # type: ignore
 from rdkit.Chem.QED import qed
 from rdkit.Chem.rdchem import Mol
 from rdkit.RDConfig import RDContribDir
-from rdkit.Contrib.SA_Score import sascorer
-
+sys.path.append(os.path.join(RDContribDir, 'SA_Score'))
+import sascorer
 
 from molgen.rewards.reward import AbstractReward, RewardScale
 
