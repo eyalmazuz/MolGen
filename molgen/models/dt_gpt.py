@@ -369,18 +369,15 @@ def sample(
     has quadratic complexity unlike an RNN that is only linear, and has a finite context window
     of block_size, unlike an RNN that has an infinite context window.
     """
-    try:
-        block_size = model.module.get_block_size()
-    except AttributeError:
-        block_size = model.get_block_size()
+    max_seq_len = model.config.max_seq_len
     model.eval()
     for k in range(steps):
         # x_cond = x if x.size(1) <= block_size else x[:, -block_size:] # crop context if needed
-        x_cond = x if x.size(1) <= model.max_seq_len else x[:, -model.max_seq_len:]  # crop context if needed
+        x_cond = x if x.size(1) <= max_seq_len else x[:, -max_seq_len:]  # crop context if needed
         if actions is not None:
-            actions = actions if actions.size(1) <= model.max_seq_len else actions[:, -model.max_seq_len:]  # crop context if needed
+            actions = actions if actions.size(1) <= max_seq_len else actions[:, -max_seq_len:]  # crop context if needed
 
-        rtgs = rtgs if rtgs.size(1) <= model.max_seq_len else rtgs[:, -model.max_seq_len:]  # crop context if needed
+        rtgs = rtgs if rtgs.size(1) <= max_seq_len else rtgs[:, -max_seq_len:]  # crop context if needed
         logits, _ = model(
             input_ids=x_cond, labels=actions, targets=None, rtgs=rtgs, attention_mask=attention, goal=goal
         )

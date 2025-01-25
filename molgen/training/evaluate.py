@@ -575,7 +575,7 @@ def main():
         bins, success_rates, validity = [], [], []
         for i, (reward_type, rtg_value) in enumerate(args.rtg.items()):    # np.linspace(0.1, 1, 10):
             rtg_value = float(rtg_value)
-            goal_idx = None if len(args.rtg.keys()) > 1 else i
+            goal_idx = i if len(args.rtg.keys()) > 1 else None
             print(f"Generating molecules conditioned on {reward_type} with RTG = {rtg_value:.2f}")
             match reward_type:
                 case "QED":
