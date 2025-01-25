@@ -108,7 +108,7 @@ def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1
             j += 1
 
             # if molecule length exceeds block_size and [EOS] token wasn't generated terminate generation
-            if len(state) >= model.max_seq_len and not done:
+            if len(state) >= model.config.max_seq_len and not done:
                 terminated = True
 
             if done or terminated:
@@ -544,12 +544,12 @@ def main():
     model = get_model(args.model_type, model_config).to("cuda")
 
     tokenizer = get_tokenizer(args.tokenizer_path)
-    reward_func = get_rewards(config["reward"])
+    reward_functions = get_rewards(config["reward"])
 
     # Get train dataset for novelty calculation
     kwargs = {}
     if args.model_type.lower() == ModelType.DT:
-        kwargs.update({"reward_func": reward_func})
+        kwargs.update({"reward_func": reward_functions})
 
 
     train_dataset, val_dataset = get_dataset(
@@ -574,19 +574,20 @@ def main():
     if args.stats:
         bins, success_rates, validity = [], [], []
         for i, (reward_type, rtg_value) in enumerate(args.rtg.items()):    # np.linspace(0.1, 1, 10):
+            reward_func = reward_functions[i] if isinstance(reward_functions, list) else reward_functions
             rtg_value = float(rtg_value)
             goal_idx = i if len(args.rtg.keys()) > 1 else None
-            print(f"Generating molecules conditioned on {reward_type} with RTG = {rtg_value:.2f}")
             match reward_type:
                 case "QED":
-                    assert isinstance(reward_func[i], QEDReward)
+                    assert isinstance(reward_func, QEDReward)
                 case "pLogP":
-                    assert isinstance(reward_func[i], PenalizedLogPReward)
+                    assert isinstance(reward_func, PenalizedLogPReward)
                 case _:
                     raise ValueError(f"Unrecognized reward type: {reward_type}")
 
+            print(f"Generating molecules conditioned on {reward_type} with RTG = {rtg_value:.2f}")
             # Generate 'k' molecules
-            molecules = generate_molecules(model, tokenizer, reward_func[i], args, ret=rtg_value, goal_idx=goal_idx)
+            molecules = generate_molecules(model, tokenizer, reward_func, args, ret=rtg_value, goal_idx=goal_idx)
 
             # Evaluate the generated molecules
             res_folder = '_'.join([
@@ -599,7 +600,7 @@ def main():
                 molecules,
                 train_set=train_dataset,
                 folder_name=os.path.join(args.results_path, res_folder),
-                reward_fn=reward_func[i]
+                reward_fn=reward_func
             )
             bin_validity = len(generated_reward_values["Smiles"]) / args.k
             bin_success_rate = (
