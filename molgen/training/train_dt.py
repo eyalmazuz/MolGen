@@ -47,6 +47,8 @@ class Trainer:
         #     self.model = torch.nn.DataParallel(self.model).to(self.device)
 
     def save_checkpoint(self, epoch):
+        if not os.path.exists(self.save_path):
+            os.makedirs(self.save_path, exist_ok=True)
         ckpt_name = f"epoch_{epoch}.pth" if self.test_dataset is None else f"best.pth"
         raw_model = self.model.module if hasattr(self.model, "module") else self.model
         checkpoint = {
@@ -59,6 +61,9 @@ class Trainer:
 
     def load_checkpoint(self, ckpt_name="latest"):
         checkpoint_dir = self.save_path
+        if not os.path.exists(checkpoint_dir):
+            os.makedirs(checkpoint_dir, exist_ok=True)
+
         if ckpt_name == "latest":
             checkpoint_files = [f for f in os.listdir(checkpoint_dir) if f.startswith("epoch_") and f.endswith(".pth")]
             if len(checkpoint_files) == 0:
