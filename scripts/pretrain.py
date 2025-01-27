@@ -84,7 +84,7 @@ def run_training(args: argparse.Namespace) -> None:
 
     print("Creating Optimizer")
     optimizer = model.configure_optimizers(
-        train_config["weight_decay"], train_config["learning_rate"], train_config["betas"], device
+        train_config["weight_decay"], train_config["learning_rate"], train_config["betas"], train_config["device"]
     )
     # Suppose warmup_epochs is the number of epochs to warm up
     warmup_scheduler = LambdaLR(
@@ -115,40 +115,40 @@ def run_training(args: argparse.Namespace) -> None:
         )
 
     print("Start training")
-    # if args.model_type.lower() == ModelType.DT:
-    #     run_dt_training(
-    #         model,
-    #         train_dataloader,
-    #         optimizer,
-    #         None,
-    #         None,
-    #         reward_func,
-    #         train_config,
-    #         test_dataloader=None,
-    #         device=device,
-    #         wandb_log=train_config["wandb_log"],
-    #     )
-    # else:
-    pretrain_model(
-        model,
-        train_dataloader,
-        val_dataloader,
-        optimizer,
-        scheduler,
-        ctx,
-        scaler,
-        kwargs.get("reward_func", None),
-        args.save_path,
-        train_config["load_checkpoint"],
-        train_config["max_steps"],
-        train_config["grad_clip"],
-        train_config["gradient_accumulation_steps"],
-        train_config["eval_every"],
-        train_config["log_every"],
-        train_config["wandb_log"],
-        device=device,
-        globals_config=globals_config,
-    )
+    if args.model_type.lower() == ModelType.DT:
+        run_dt_training(
+            model,
+            train_dataloader,
+            optimizer,
+            None,
+            None,
+            reward_func,
+            train_config,
+            test_dataloader=None,
+            device=device,
+            wandb_log=train_config["wandb_log"],
+        )
+    else:
+        pretrain_model(
+            model,
+            train_dataloader,
+            val_dataloader,
+            optimizer,
+            scheduler,
+            ctx,
+            scaler,
+            kwargs.get("reward_func", None),
+            args.save_path,
+            train_config["load_checkpoint"],
+            train_config["max_steps"],
+            train_config["grad_clip"],
+            train_config["gradient_accumulation_steps"],
+            train_config["eval_every"],
+            train_config["log_every"],
+            train_config["wandb_log"],
+            device=device,
+            globals_config=globals_config,
+        )
 
     if is_distributed_run():
         destroy_process_group()
