@@ -65,7 +65,7 @@ def pretrain_model(
 
             batch = next(iter_loader)
             # Move batch to device
-            if torch.cuda.is_available():
+            if "cuda" in device:
                 batch = {k: v.pin_memory().to(device, non_blocking=True) for k, v in batch.items()}
             else:
                 batch = {k: v.to(device) for k, v in batch.items()}
