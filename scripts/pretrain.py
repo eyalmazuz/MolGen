@@ -123,6 +123,7 @@ def run_training(args: argparse.Namespace) -> None:
             None,
             None,
             reward_func,
+            args.save_path,
             train_config,
             test_dataloader=None,
             device=device,

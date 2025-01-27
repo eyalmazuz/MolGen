@@ -16,11 +16,22 @@ from molgen.utils.plot_utils import save_plot
 
 class Trainer:
 
-    def __init__(self, model, train_dataset, test_dataset, reward_func, config, device: str = "cuda", wandb_log=False):
+    def __init__(
+            self,
+            model,
+            train_dataset,
+            test_dataset,
+            reward_func,
+            config,
+            save_path=None,
+            device: str = "cuda",
+            wandb_log=False
+    ):
         self.model = model
         self.train_dataset = train_dataset
         self.test_dataset = test_dataset
         self.reward_func = reward_func
+        self.save_path = save_path
         self.config = config
         self.bos_token_id = train_dataset.dataset.tokenizer.bos_token_id
         self.eos_token_id = train_dataset.dataset.tokenizer.eos_token_id
@@ -44,10 +55,10 @@ class Trainer:
             'optimizer_state_dict': self.optimizer.state_dict(),
             'token_counter': self.tokens
         }
-        torch.save(checkpoint, os.path.join(self.config.get("ckpt_path", "."), ckpt_name))
+        torch.save(checkpoint, os.path.join(self.save_path, ckpt_name))
 
     def load_checkpoint(self, ckpt_name="latest"):
-        checkpoint_dir = self.config.get("ckpt_path", ".")
+        checkpoint_dir = self.save_path
         if ckpt_name == "latest":
             checkpoint_files = [f for f in os.listdir(checkpoint_dir) if f.startswith("epoch_") and f.endswith(".pth")]
             if len(checkpoint_files) == 0:
@@ -60,7 +71,7 @@ class Trainer:
                 for file in checkpoint_files
                 if re.search(r"epoch_(\d+)", file)
             ]
-            ckpt_name =  f"epoch_{max(epoch_numbers)}.pth"
+            ckpt_name = f"epoch_{max(epoch_numbers)}.pth"
 
         path = os.path.join(checkpoint_dir, ckpt_name)
         checkpoint = torch.load(path)
@@ -78,7 +89,10 @@ class Trainer:
     def train(self, optimizer):
         model, config = self.model, self.config
         self.optimizer = optimizer
-        epoch_n, token_n = self.load_checkpoint()
+        if self.config.get("load_checkpoint", False):
+            epoch_n, token_n = self.load_checkpoint()
+        else:
+            epoch_n, token_n = 0, 0
 
         def run_epoch(split, epoch_num=0):
             is_train = split == 'train'
@@ -166,8 +180,8 @@ class Trainer:
                 test_loss = run_epoch('test')
 
             # supports early stopping based on the test loss, or save every X epochs if no test set
-            good_model = (self.test_dataset is None and (epoch % 5 == 0)) or test_loss < best_loss
-            if self.config.get("ckpt_path") is not None and good_model:
+            good_model = (epoch > 0 and (self.test_dataset is None and (epoch % 5 == 0))) or test_loss < best_loss
+            if self.save_path is not None and good_model:
                 best_loss = test_loss
                 self.save_checkpoint(epoch)
 
@@ -179,7 +193,7 @@ class Trainer:
             #     # TODO: return should be based on the reward function, for now put 1 for a scaled reward
             #     eval_return = self.get_returns(1)
 
-        if self.wandb_run is None:
+        if not self.wandb_log:
             [print(f"{ep_loss:.5f}") for ep_loss in epoch_losses]  # Debug print
             save_plot({"Loss_per_Epoch": epoch_losses})
 
@@ -267,10 +281,11 @@ def run_dt_training(
         ctx,
         scaler,
         reward_func,
+        save_path,
         train_config,
         test_dataloader=None,
         device: str = "cuda",
         wandb_log=False,
 ):
-    trainer = Trainer(model, train_dataloader, test_dataloader, reward_func, train_config, device, wandb_log)
+    trainer = Trainer(model, train_dataloader, test_dataloader, reward_func, train_config, save_path, device, wandb_log)
     trainer.train(optimizer)
