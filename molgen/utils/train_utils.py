@@ -7,21 +7,14 @@ from molgen.utils.utils import get_local_rank, get_rank, is_distributed_run
 
 
 def setup_torch(seed: int = 0, device: str = "cuda") -> str:
-    torch.manual_seed(seed + is_distributed_run() * get_rank())
+    torch.manual_seed(42 + is_distributed_run() * get_rank())
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
 
     if device == "cuda" and is_distributed_run():
         ddp_local_rank = get_local_rank()
         device = f"cuda:{ddp_local_rank}"
-        print(f"distributed_run & CUDA available using device: {device}")
         torch.cuda.set_device(device)
-    elif device == "cuda" and torch.cuda.is_available():
-        device = torch.cuda.current_device()
-        print(f"CUDA available using device: {device}")
-        torch.cuda.set_device(device)
-    else:
-        print(f"CUDA not available")
 
     return device
 
