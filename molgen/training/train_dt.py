@@ -46,10 +46,13 @@ class Trainer:
         #     self.device = torch.cuda.current_device()
         #     self.model = torch.nn.DataParallel(self.model).to(self.device)
 
-    def save_checkpoint(self, epoch):
+    def save_checkpoint(self, epoch, ckpt_name: str = None):
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path, exist_ok=True)
-        ckpt_name = f"epoch_{epoch}.pth" if self.test_dataset is None else f"best.pth"
+
+        if ckpt_name is None:
+            ckpt_name = f"epoch_{epoch}.pth" if self.test_dataset is None else f"best.pth"
+
         raw_model = self.model.module if hasattr(self.model, "module") else self.model
         checkpoint = {
             'epoch': epoch,
@@ -59,12 +62,12 @@ class Trainer:
         }
         torch.save(checkpoint, os.path.join(self.save_path, ckpt_name))
 
-    def load_checkpoint(self, ckpt_name="latest"):
+    def load_checkpoint(self, ckpt_name: str = None):
         checkpoint_dir = self.save_path
         if not os.path.exists(checkpoint_dir):
             os.makedirs(checkpoint_dir, exist_ok=True)
 
-        if ckpt_name == "latest":
+        if ckpt_name is None:
             checkpoint_files = [f for f in os.listdir(checkpoint_dir) if f.startswith("epoch_") and f.endswith(".pth")]
             if len(checkpoint_files) == 0:
                 print(f"No checkpoints to load, starting training from scratch")
@@ -77,6 +80,9 @@ class Trainer:
                 if re.search(r"epoch_(\d+)", file)
             ]
             ckpt_name = f"epoch_{max(epoch_numbers)}.pth"
+
+        else:
+            ckpt_name = ckpt_name
 
         path = os.path.join(checkpoint_dir, ckpt_name)
         checkpoint = torch.load(path)
@@ -95,7 +101,7 @@ class Trainer:
         model, config = self.model, self.config
         self.optimizer = optimizer
         if self.config.get("load_checkpoint", False):
-            epoch_n, token_n = self.load_checkpoint()
+            epoch_n, token_n = self.load_checkpoint(ckpt_name="latest")
         else:
             epoch_n, token_n = 0, 0
 
@@ -189,6 +195,8 @@ class Trainer:
             if self.save_path is not None and good_model:
                 best_loss = test_loss
                 self.save_checkpoint(epoch)
+
+            self.save_checkpoint(epoch, name="latest")
 
             # -- pass in target returns
             # model_type = self.model.module.model_type if hasattr(self.model, "module") else self.model.model_type
