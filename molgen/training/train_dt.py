@@ -101,7 +101,7 @@ class Trainer:
         model, config = self.model, self.config
         self.optimizer = optimizer
         if self.config.get("load_checkpoint", False):
-            epoch_n, token_n = self.load_checkpoint(ckpt_name="latest")
+            epoch_n, token_n = self.load_checkpoint(ckpt_name="latest.pth")
         else:
             epoch_n, token_n = 0, 0
 
@@ -196,7 +196,7 @@ class Trainer:
                 best_loss = test_loss
                 self.save_checkpoint(epoch)
 
-            self.save_checkpoint(epoch, name="latest")
+            self.save_checkpoint(epoch, ckpt_name="latest.pth")
 
             # -- pass in target returns
             # model_type = self.model.module.model_type if hasattr(self.model, "module") else self.model.model_type
