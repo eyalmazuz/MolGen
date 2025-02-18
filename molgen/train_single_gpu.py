@@ -77,9 +77,9 @@ def single_gpu_training(args) -> None:
                      f"{str(datetime.now().strftime('%m_%d_%H_%M_%S'))}"
         )
 
-    if not os.path.exists(args.checkpoint_dir):
-        os.makedirs(args.checkpoint_dir)
-    train_config["ckpt_path"] = args.checkpoint_dir
+    if not os.path.exists(args.save_path):
+        os.makedirs(args.save_path)
+    train_config["ckpt_path"] = args.save_path
 
     if train_config["compile"]:
         model = torch.compile(model)
