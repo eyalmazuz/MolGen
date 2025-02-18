@@ -18,5 +18,7 @@ def get_pretrain_args() -> argparse.Namespace:
                         help='name of wandb project to upload results')
     parser.add_argument('--wandb-entity', type=str, default='bgu-sise',
                         help='wandb entity associated with the project')
+    parser.add_argument('--wandb-name', type=str, help='wandb run name', default=None)
+
 
     return parser.parse_args()
