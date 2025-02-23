@@ -43,6 +43,7 @@ class GELU(nn.Module):
 class DTGPTConfig:
     vocab_size: int = 32768
     block_size: int = 90
+    max_seq_len: int = block_size // 3
     n_embd: int = 768
     n_head: int = 12
     n_layer: int = 12
@@ -50,6 +51,9 @@ class DTGPTConfig:
     attn_pdrop: float = 0.1
     resid_pdrop: float = 0.1
     model_type: str = "reward_conditioned"
+    bias: bool = True  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    ignore_index: int = -100
+    n_goals: int = 1
     # max_timestep = 25
 
 
@@ -138,7 +142,8 @@ class DtGPT(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-
+        assert config.vocab_size is not None
+        assert config.max_seq_len is not None
         self.config = config
 
         self.model_type = config.model_type
@@ -148,6 +153,7 @@ class DtGPT(nn.Module):
         # self.pos_emb = nn.Parameter(torch.zeros(1, config.block_size, config.n_embd))
         self.pos_emb = nn.Embedding(config.block_size, config.n_embd, dtype=torch.float32)
         # self.global_pos_emb = nn.Parameter(torch.zeros(1, config.max_timestep + 1, config.n_embd))
+        self.goal_emb = nn.Embedding(config.n_goals, config.n_embd, dtype=torch.float32)
         self.drop = nn.Dropout(config.embd_pdrop)
 
         # transformer
@@ -158,6 +164,10 @@ class DtGPT(nn.Module):
 
         self.block_size = config.block_size
         self.apply(self._init_weights)
+        # apply special scaled init to the residual projections, per GPT-2 paper
+        for pn, p in self.named_parameters():
+            if pn.endswith("c_proj.weight"):
+                torch.nn.init.normal_(p, mean=0.0, std=0.02 / math.sqrt(2 * config.n_layer))
 
         logger.info("number of parameters: %e", sum(p.numel() for p in self.parameters()))
 
@@ -165,7 +175,7 @@ class DtGPT(nn.Module):
         # self.state_encoder = nn.Linear(config.block_size // 3 * config.n_embd, config.n_embd)
         self.ret_emb = nn.Sequential(nn.Linear(1, config.n_embd, dtype=torch.float32), nn.Tanh())
 
-        self.action_embeddings = self.tok_emb   # Actions are simply SMILES tokens to add to the state
+        self.action_embeddings = self.tok_emb  # Actions are simply SMILES tokens to add to the state
         nn.init.normal_(self.action_embeddings.weight, mean=0.0, std=0.02)
 
     def get_block_size(self):
@@ -238,65 +248,68 @@ class DtGPT(nn.Module):
     def mean_pooling(model_output, attention_mask):
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(model_output.size())
         return torch.sum(model_output * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
-        # token_embeddings = model_output[0]  # First element of model_output contains all token embeddings
-        # input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
-        # return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
 
     # state, action, and return
-    def forward(self, states, actions, targets=None, rtgs=None, attention_mask=None):
-        # states: (batch, block_size, state_size)
-        # actions: (batch, block_size, 1)
+    def forward(self, input_ids, labels, targets=None, rtgs=None, attention_mask=None, goal=None):
+        # input_ids: (batch, block_size, state_size)
+        # labels: (batch, block_size, 1)
         # targets: (batch, block_size, 1)
         # rtgs: (batch, block_size, 1)
-        # TODO: figure out if I need pos embedding just for the trajectory,
-        #  do I train on the full trajectory each time or just a step in it (sampled from the experience replay)?
-        # TODO: timesteps: (batch, 1, 1) - remove all timesteps?
-        # timesteps = torch.arange(0, states.shape[1], dtype=torch.long, device=states.device)
+        # goals: optional - (batch, block_size, 1)
 
-        batch_size = states.shape[0]
-        block_size = states.shape[1]
+        batch_size = input_ids.shape[0]
+        block_size = input_ids.shape[1]
         assert block_size <= self.block_size, \
             f"Cannot forward sequence of length {block_size}, block size is only {self.block_size}"
-        state_embeddings = self.state_embedding(states)  # (batch_size, block_size, state_size, n_embd)
+        state_embeddings = self.state_embedding(input_ids)  # (batch_size, block_size, state_size, n_embd)
         # TODO: replace mean_pooling with a mini-transformer model
         if attention_mask is not None:
             state_embeddings = self.mean_pooling(state_embeddings, attention_mask)  # (batch_size, block_size, n_embd)
         else:
             state_embeddings = state_embeddings.squeeze(-2)  # (1, 1, n_embd)
 
-        if actions is not None and self.model_type == 'reward_conditioned':
+        if labels is not None and self.model_type == 'reward_conditioned':
             rtg_embeddings = self.ret_emb(rtgs.unsqueeze(-1))  # (batch, block_size, n_embd)
-            action_embeddings = self.action_embeddings(actions)  # (batch, block_size, n_embd)
+            # Modify RTG embedding
+            # gs with goal embeddings (add or concat)
+            if goal is not None:
+                goal_embeddings = self.goal_emb(goal)  # (batch, n_embd)
+                rtg_embeddings = rtg_embeddings + goal_embeddings
+            action_embeddings = self.action_embeddings(labels)  # (batch, block_size, n_embd)
 
             token_embeddings = torch.zeros(
                 (batch_size, block_size * 3 - int(targets is None), self.config.n_embd), dtype=torch.float32,
                 device=state_embeddings.device)
             token_embeddings[:, ::3, :] = rtg_embeddings
             token_embeddings[:, 1::3, :] = state_embeddings
-            token_embeddings[:, 2::3, :] = action_embeddings[:, -states.shape[1] + int(targets is None):, :]
-        elif actions is None and self.model_type == 'reward_conditioned':  # only happens at very first timestep of evaluation
+            token_embeddings[:, 2::3, :] = action_embeddings[:, -input_ids.shape[1] + int(targets is None):, :]
+        elif labels is None and self.model_type == 'reward_conditioned':  # only happens at very first timestep of evaluation
             rtg_embeddings = self.ret_emb(rtgs.type(torch.float32))
-            token_embeddings = torch.zeros((batch_size, states.shape[1] * 2, self.config.n_embd),
+            # Modify RTG embeddings with goal embeddings (add or concat)
+            if goal is not None:
+                goal_embeddings = self.goal_emb(goal)  # (batch, n_embd)
+                rtg_embeddings = rtg_embeddings + goal_embeddings
+            token_embeddings = torch.zeros((batch_size, input_ids.shape[1] * 2, self.config.n_embd),
                                            dtype=torch.float32, device=state_embeddings.device)
             token_embeddings[:, ::2, :] = rtg_embeddings  # really just [:,0,:]
             token_embeddings[:, 1::2, :] = state_embeddings  # really just [:,1,:]
-        elif actions is not None and self.model_type == 'naive':
+        elif labels is not None and self.model_type == 'naive':
             action_embeddings = self.action_embeddings(
-                actions.type(torch.long).squeeze(-1))  # (batch, block_size, n_embd)
+                labels.type(torch.long).squeeze(-1))  # (batch, block_size, n_embd)
 
             token_embeddings = torch.zeros(
-                (batch_size, states.shape[1] * 2 - int(targets is None), self.config.n_embd), dtype=torch.float32,
+                (batch_size, input_ids.shape[1] * 2 - int(targets is None), self.config.n_embd), dtype=torch.float32,
                 device=state_embeddings.device)
             token_embeddings[:, ::2, :] = state_embeddings
-            token_embeddings[:, 1::2, :] = action_embeddings[:, -states.shape[1] + int(targets is None):, :]
-        elif actions is None and self.model_type == 'naive':  # only happens at very first timestep of evaluation
+            token_embeddings[:, 1::2, :] = action_embeddings[:, -input_ids.shape[1] + int(targets is None):, :]
+        elif labels is None and self.model_type == 'naive':  # only happens at very first timestep of evaluation
             token_embeddings = state_embeddings
         else:
             raise NotImplementedError()
 
-        n_blocks = 2 if actions is None else 3  # only happens at very first timestep of evaluation
+        n_blocks = 2 if labels is None else 3  # only happens at very first timestep of evaluation
         pos = torch.arange(
-            0, block_size, dtype=torch.long, device=states.device
+            0, block_size, dtype=torch.long, device=input_ids.device
         ).repeat_interleave(n_blocks).unsqueeze(0)
         pos_emb = self.pos_emb(pos)
 
@@ -305,13 +318,13 @@ class DtGPT(nn.Module):
         x = self.ln_f(x)
         logits = self.head(x)
 
-        if actions is not None and self.model_type == 'reward_conditioned':
+        if labels is not None and self.model_type == 'reward_conditioned':
             logits = logits[:, 1::3, :]  # only keep predictions from state_embeddings
-        elif actions is None and self.model_type == 'reward_conditioned':
+        elif labels is None and self.model_type == 'reward_conditioned':
             logits = logits[:, 1:, :]
-        elif actions is not None and self.model_type == 'naive':
+        elif labels is not None and self.model_type == 'naive':
             logits = logits[:, ::2, :]  # only keep predictions from state_embeddings
-        elif actions is None and self.model_type == 'naive':
+        elif labels is None and self.model_type == 'naive':
             logits = logits  # for completeness
         else:
             raise NotImplementedError()
@@ -319,7 +332,10 @@ class DtGPT(nn.Module):
         # if we are given some desired targets also calculate the loss
         loss = None
         if targets is not None:
-            loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1))
+            loss = F.cross_entropy(
+                logits.reshape(-1, logits.size(-1)), targets.reshape(-1),
+                ignore_index=self.config.ignore_index
+            )
 
         return logits, loss
 
@@ -339,25 +355,27 @@ def top_k_logits(logits, k):
 
 
 @torch.no_grad()
-def sample(model, x, steps, temperature=1.0, sample=False, top_k=None, actions=None, rtgs=None, attention=None):
+def sample(
+        model, x, steps, temperature=1.0, sample=False, top_k=None, actions=None, rtgs=None, attention=None, goal=None
+):
     """
     take a conditioning sequence of indices in x (of shape (b,t)) and predict the next token in
     the sequence, feeding the predictions back into the model each time. Clearly the sampling
     has quadratic complexity unlike an RNN that is only linear, and has a finite context window
     of block_size, unlike an RNN that has an infinite context window.
     """
-    try:
-        block_size = model.module.get_block_size()
-    except AttributeError:
-        block_size = model.get_block_size()
+    max_seq_len = model.config.max_seq_len
     model.eval()
     for k in range(steps):
         # x_cond = x if x.size(1) <= block_size else x[:, -block_size:] # crop context if needed
-        x_cond = x if x.size(1) <= block_size//3 else x[:, -block_size//3:] # crop context if needed
+        x_cond = x if x.size(1) <= max_seq_len else x[:, -max_seq_len:]  # crop context if needed
         if actions is not None:
-            actions = actions if actions.size(1) <= block_size//3 else actions[:, -block_size//3:] # crop context if needed
-        rtgs = rtgs if rtgs.size(1) <= block_size//3 else rtgs[:, -block_size//3:] # crop context if needed
-        logits, _ = model(states=x_cond, actions=actions, targets=None, rtgs=rtgs, attention_mask=attention)
+            actions = actions if actions.size(1) <= max_seq_len else actions[:, -max_seq_len:]  # crop context if needed
+
+        rtgs = rtgs if rtgs.size(1) <= max_seq_len else rtgs[:, -max_seq_len:]  # crop context if needed
+        logits, _ = model(
+            input_ids=x_cond, labels=actions, targets=None, rtgs=rtgs, attention_mask=attention, goal=goal
+        )
         # pluck the logits at the final step and scale by temperature
         logits = logits[:, -1, :] / temperature
         # optionally crop probabilities to only the top k options
