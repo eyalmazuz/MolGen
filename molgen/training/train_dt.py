@@ -45,16 +45,19 @@ class Trainer:
             total_loss = 0
             pbar = tqdm(enumerate(loader), total=len(loader)) if is_train else enumerate(loader)
             for it, batch in pbar:
-                batch = {k: v.pin_memory().to(self.device, non_blocking=True) for k, v in batch.items()}
-                # place data on the correct device
-                x = batch["input_ids"]  # states
-                y = batch["labels"]     # actions
-                r = batch["rtg"]        # rtgs (reward-to-go)
-                a = batch["attention_mask"]
+                if "cuda" in self.device:
+                    batch = {k: v.pin_memory().to(self.device, non_blocking=True) for k, v in batch.items()}
+                else:
+                    batch = {k: v.to(self.device) for k, v in batch.items()}    # place data on the correct device
+                x = batch.get("input_ids")  # states
+                y = batch.get("labels")     # actions
+                r = batch.get("rtgs")       # rtgs (reward-to-go)
+                a = batch.get("attention_mask")
+                g = batch.get("goal")
 
                 # forward the model
                 with torch.set_grad_enabled(is_train):
-                    logits, loss = model(states=x, actions=y, targets=y, rtgs=r, attention_mask=a)
+                    logits, loss = model(input_ids=x, labels=y, targets=y, rtgs=r, attention_mask=a, goal=g)
                     # logits, loss = model(x, y, y, r, t)
                     loss = loss.mean()  # collapse all losses if they are scattered on multiple gpus
                     total_loss += loss
@@ -122,12 +125,12 @@ class Trainer:
                 self.save_checkpoint(ckpt_name=ckpt_name)
 
             # -- pass in target returns
-            model_type = self.model.module.model_type if hasattr(self.model, "module") else self.model.model_type
-            if model_type == 'naive':
-                eval_return = self.get_returns(0)
-            elif model_type == 'reward_conditioned':
-                # TODO: return should be based on the reward function, for now put 1 for a scaled reward
-                eval_return = self.get_returns(1)
+            # model_type = self.model.module.model_type if hasattr(self.model, "module") else self.model.model_type
+            # if model_type == 'naive':
+            #     eval_return = self.get_returns(0)
+            # elif model_type == 'reward_conditioned':
+            #     # TODO: return should be based on the reward function, for now put 1 for a scaled reward
+            #     eval_return = self.get_returns(1)
 
         if self.wandb_run is None:
             [print(f"{ep_loss:.5f}") for ep_loss in epoch_losses]  # Debug print
@@ -143,6 +146,8 @@ class Trainer:
             init_state = torch.tensor([self.bos_token_id], dtype=torch.int64)
             init_state = init_state.to(self.device).unsqueeze(0).unsqueeze(0)
             rtgs = [ret]
+            goal_idx = np.random.choice(self.model.module.config.n_goals)
+            goal = [goal_idx]
             # first state is from env, first rtg is target return, and first timestep is 0
             sampled_action = sample(
                 model=self.model,
@@ -152,6 +157,7 @@ class Trainer:
                 sample=True,
                 actions=None,
                 rtgs=torch.tensor(rtgs, dtype=torch.float32).to(self.device).unsqueeze(0).unsqueeze(-1),
+                goal=torch.tensor(goal, dtype=torch.int64).to(self.device).unsqueeze(0),
                 # timesteps=torch.zeros((1, 1, 1), dtype=torch.int64).to(self.device)
             )
 
@@ -167,13 +173,13 @@ class Trainer:
                 sequence = self.train_dataset.dataset.tokenizer.decode(state, skip_special_tokens=True)[0]
                 if self.train_dataset.dataset.string_type == "SELFIES":
                     sequence = sf.decoder(sequence)
-                reward = self.reward_func(sequence)
+                reward = self.reward_func[goal_idx](sequence)
                 done = action == self.eos_token_id  # mol is complete when [EOS] token is generated
                 reward_sum = reward
                 j += 1
 
                 # if molecule length exceeds block_size and [EOS] token wasn't generated terminate generation
-                if len(state) >= self.model.module.block_size // 3 and not done:
+                if len(state) >= self.model.config.max_seq_len and not done:
                     terminated = True
 
                 if done or terminated:
@@ -186,6 +192,7 @@ class Trainer:
                 all_states = torch.cat([all_states, tensor_state], dim=1)
 
                 rtgs += [rtgs[-1] - reward]
+                goal.append(goal_idx)
                 # all_states has all previous states and rtgs has all previous rtgs (will be cut to block_size in utils.sample)
                 # timestep is just current timestep
                 sampled_action = sample(
@@ -196,7 +203,8 @@ class Trainer:
                     sample=True,
                     actions=torch.tensor(actions, dtype=torch.long).to(self.device).unsqueeze(0),
                     rtgs=torch.tensor(rtgs, dtype=torch.float32).to(self.device).unsqueeze(0),
-                    attention=torch.tensor(np.tril(np.ones(all_states.shape[1:])), dtype=torch.long).to(self.device).unsqueeze(0)
+                    attention=torch.tensor(np.tril(np.ones(all_states.shape[1:])), dtype=torch.long).to(self.device).unsqueeze(0),
+                    goal=torch.tensor(goal, dtype=torch.int64).to(self.device).unsqueeze(0),
                     # timesteps=(min(j, self.config.max_timestep) * torch.ones((1, 1, 1), dtype=torch.int64).to(self.device)))
                 )
         eval_return = sum(T_rewards) / 10.
