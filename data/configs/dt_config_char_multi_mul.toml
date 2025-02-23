@@ -2,7 +2,7 @@
 batch_size = 64
 gradient_accumulation_steps = 30
 learning_rate = 1e-4
-max_steps = 500000
+max_steps = 1000000
 weight_decay = 1e-1
 betas = [0.9, 0.95]
 grad_clip = 1.0
@@ -14,16 +14,20 @@ dtype = "bfloat16"
 compile = true
 device = "cuda"
 seed = 42
+wandb_log = false
+num_workers = 1
+load_checkpoint = false
+eval_every = 10
+log_every = 10
 
 [model_config]
 vocab_size = 37
 block_size = 300
+max_seq_len = 100
 n_embd = 768
 n_head = 12
 n_layer = 12
-embd_pdrop = 0.1
-attn_pdrop = 0.1
-resid_pdrop = 0.1
+dropout = 0.1
 model_type = "reward_conditioned"
 max_timestep = 0
 
@@ -32,9 +36,12 @@ agg = "mul"
 
 [[reward.functions]]
 type = "QED"
+scale.name = "mult"
+scale.factor = 0.5
 
 [[reward.functions]]
 type = "PlogP"
 scale.name = "minmax"
 scale.min_value = -1.0
 scale.max_value = 5.07272
+scale.new_max = 0.5
