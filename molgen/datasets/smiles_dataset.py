@@ -74,27 +74,67 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
                  reward_func: AbstractReward,
                  string_type: Literal["SMILES", "SELFIES"] = "SMILES") -> None:
         super().__init__(dataset_path, tokenizer, string_type)
-        self.reward_func = reward_func
+        self.reward_funcs = reward_func if isinstance(reward_func, list) else [reward_func]
+        self.n_goals = len(self.reward_funcs)
+        self.n_molecules = len(self.dataset)
+        self.reward_memory = [{} for _ in self.reward_funcs]
+        self._trajectories = self._precompute_trajectories()
 
-    def __getitem__(self, idx: int) -> Dict[str, List[str]]:
-        base_item = super().__getitem__(idx)
-        trajectory_len = len(base_item["input_ids"])
-        states = [base_item["input_ids"][:i + 1] for i in range(trajectory_len)]
+    def _precompute_trajectories(self) -> list[dict[str, list[str]]]:
+        """
+        Precompute results for all molecules and goals.
 
-        smiles = self.dataset[idx]
-        if self.string_type == "SMILES":
-            reward_to_go = self.reward_func(smiles)
-            reward_to_go = [reward_to_go] * trajectory_len
-        if self.string_type == "SELFIES":
-            state_selfies = self.tokenizer.decode(states, skip_special_tokens=True)
-            reward_to_go = self.reward_func([sf.decoder(s) for s in state_selfies])
-            reward_to_go[0] = 0
-            reward_to_go = np.subtract(reward_to_go[-1], reward_to_go).tolist()
+        Returns:
+            A list of dictionaries containing precomputed trajectories for all molecules and goals.
+        """
+        results = []
+        for mol_idx, smiles in tqdm(
+                enumerate(self.dataset), desc="Computing molecule trajectories", total=len(self.dataset)
+        ):
+            base_item = super().__getitem__(mol_idx)
+            trajectory_len = len(base_item["input_ids"])
+            states = [base_item["input_ids"][:i + 1] for i in range(trajectory_len)]
 
-        return {
-            "rtg": reward_to_go,                        # trajectory rtg - (block, 1)
-            "input_ids": states,                        # states - (block, state_len)
-            "labels": base_item["labels"],              # actions - (block, 1)
-            "attention_mask": base_item["attention_mask"],
-            "length": trajectory_len
-        }
+            for goal_idx, reward_func in enumerate(self.reward_funcs):  # Iterate over goals
+                if self.string_type == "SMILES":
+                    reward_to_go = reward_func(smiles)
+                    reward_to_go = [reward_to_go] * trajectory_len
+                elif self.string_type == "SELFIES":
+                    state_selfies = self.tokenizer.decode(states, skip_special_tokens=True)
+                    reward_to_go = [
+                        self.reward_memory[goal_idx].setdefault(s, reward_func(sf.decoder(s)))
+                        if (r := self.reward_memory[goal_idx].get(s)) is None else r
+                        for s in state_selfies
+                    ]
+                    reward_to_go[0] = 0
+                    reward_to_go = np.subtract(reward_to_go[-1], reward_to_go).tolist()
+
+                results.append({
+                    "rtgs": reward_to_go.copy(),            # trajectory rtg - (block, 1)
+                    "input_ids": states.copy(),             # states - (block, state_len)
+                    "labels": base_item["labels"].copy(),   # actions - (block, 1)
+                    "attention_mask": [1] * trajectory_len,
+                    "length": trajectory_len,
+                    "goal_idx": goal_idx if self.n_goals > 1 else None,
+                    "mol_idx": mol_idx
+                })
+
+        return results
+
+    def __len__(self) -> int:
+        """
+        Return the total number of samples (n_goals * n_molecules).
+        """
+        return self.n_goals * self.n_molecules
+
+    def __getitem__(self, idx: int) -> dict[str, list[str]]:
+        """
+        Get a precomputed trajectory based on the global index.
+
+        Args:
+            idx: Global index in the range [0, n_goals * n_molecules).
+
+        Returns:
+            A dictionary containing the trajectory data for the corresponding goal and molecule.
+        """
+        return self._trajectories[idx]
