@@ -45,7 +45,7 @@ class Trainer:
             total_loss = 0
             pbar = tqdm(enumerate(loader), total=len(loader)) if is_train else enumerate(loader)
             for it, batch in pbar:
-                if "cuda" in self.device:
+                if torch.cuda.is_available():
                     batch = {k: v.pin_memory().to(self.device, non_blocking=True) for k, v in batch.items()}
                 else:
                     batch = {k: v.to(self.device) for k, v in batch.items()}    # place data on the correct device
