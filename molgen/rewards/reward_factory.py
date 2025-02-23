@@ -20,7 +20,9 @@ def get_rewards(rewards_dict: Dict[str, Any]) -> AbstractReward:
 
     if len(rewards) == 1:
         return rewards[0]
+    elif rewards_dict.get("goal_conditioned", False):
+        return rewards
     else:
-        agg: str = "add" if "agg" not in rewards_dict else rewards_dict["agg"]
+        agg: str = rewards_dict.get("agg", "add")
         return MultiReward(rewards, agg_type=agg)
 
