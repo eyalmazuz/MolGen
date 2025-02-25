@@ -24,6 +24,6 @@ def setup_mixed_precision(device: str, dtype: str):
 
     ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
     ctx = nullcontext() if device == "cpu" else torch.amp.autocast(device_type="cuda", dtype=ptdtype)
-    scaler = torch.cuda.amp.GradScaler(enabled=(dtype=="float16"))
+    scaler = torch.amp.GradScaler('cuda', enabled=(dtype=="float16"))
 
     return ctx, scaler

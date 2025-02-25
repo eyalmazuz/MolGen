@@ -45,14 +45,12 @@ class Trainer:
             total_loss = 0
             pbar = tqdm(enumerate(loader), total=len(loader)) if is_train else enumerate(loader)
             for it, batch in pbar:
-                if torch.cuda.is_available():
-                    batch = {k: v.pin_memory().to(self.device, non_blocking=True) for k, v in batch.items()}
-                else:
-                    batch = {k: v.to(self.device) for k, v in batch.items()}    # place data on the correct device
-                x = batch.get("input_ids")  # states
-                y = batch.get("labels")     # actions
-                r = batch.get("rtgs")       # rtgs (reward-to-go)
-                a = batch.get("attention_mask")
+                batch = {k: v.pin_memory().to(self.device, non_blocking=True) for k, v in batch.items()}
+                # place data on the correct device
+                x = batch["input_ids"]  # states
+                y = batch["labels"]     # actions
+                r = batch["rtgs"]        # rtgs (reward-to-go)
+                a = batch["attention_mask"]
                 g = batch.get("goal")
 
                 # forward the model

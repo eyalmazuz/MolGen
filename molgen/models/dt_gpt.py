@@ -153,7 +153,8 @@ class DtGPT(nn.Module):
         # self.pos_emb = nn.Parameter(torch.zeros(1, config.block_size, config.n_embd))
         self.pos_emb = nn.Embedding(config.block_size, config.n_embd, dtype=torch.float32)
         # self.global_pos_emb = nn.Parameter(torch.zeros(1, config.max_timestep + 1, config.n_embd))
-        self.goal_emb = nn.Embedding(config.n_goals, config.n_embd, dtype=torch.float32)
+        if config.n_goals > 0:
+            self.goal_emb = nn.Embedding(config.n_goals, config.n_embd, dtype=torch.float32)
         self.drop = nn.Dropout(config.embd_pdrop)
 
         # transformer

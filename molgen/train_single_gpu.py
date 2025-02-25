@@ -73,8 +73,8 @@ def single_gpu_training(args) -> None:
             project_name=args.wandb_proj,
             project_entity=args.wandb_entity,
             training_config=train_config,
-            run_name=f"{os.path.basename(args.data_path).split('.')[0]}_"
-                     f"{str(datetime.now().strftime('%m_%d_%H_%M_%S'))}"
+            run_name=args.wandb_name if args.wandb_name is not None
+            else f"{os.path.basename(args.data_path).split('.')[0]}_{str(datetime.now().strftime('%m_%d_%H_%M_%S'))}"
         )
 
     if not os.path.exists(args.save_path):
