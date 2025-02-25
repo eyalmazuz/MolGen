@@ -1,6 +1,8 @@
 import os
 import tomllib
 import wandb
+import cProfile
+
 from datetime import datetime
 
 import torch
@@ -85,7 +87,13 @@ def single_gpu_training(args) -> None:
         model = torch.compile(model)
 
     if model_type == ModelType.DT:
+        profiler = cProfile.Profile()
+        profiler.enable()
         run_dt_training(model, dataloader, optimizer, ctx, scaler, kwargs["reward_func"], train_config, wandb_run=wandb_run)
+        profiler.disable()
+        profile_path = "profile_results.prof"
+        profiler.dump_stats(profile_path)
+        print(f"Profiling results saved to {profile_path}")
     else:
         run_training(model, dataloader, optimizer, ctx, scaler, train_config)
 
