@@ -30,8 +30,7 @@ class Trainer:
             self.device = torch.cuda.current_device()
 
     def save_checkpoint(self, ckpt_name="best.pth"):
-        raw_model = self.model.module if hasattr(self.model, "module") else self.model
-        torch.save(raw_model.state_dict(), os.path.join(self.config.get("ckpt_path", "."), ckpt_name))
+        torch.save(self.model.state_dict(), os.path.join(self.config.get("ckpt_path", "."), ckpt_name))
 
     def train(self, optimizer):
         model, config = self.model, self.config
@@ -121,7 +120,7 @@ class Trainer:
                 self.save_checkpoint(ckpt_name=ckpt_name)
 
             # -- pass in target returns
-            model_type = self.model.module.model_type if hasattr(self.model, "module") else self.model.model_type
+            model_type = self.model.model_type
             if model_type == 'naive':
                 eval_return = self.get_returns(0)
             elif model_type == 'reward_conditioned':
@@ -172,7 +171,7 @@ class Trainer:
                 j += 1
 
                 # if molecule length exceeds block_size and [EOS] token wasn't generated terminate generation
-                if len(state) >= self.model.module.block_size // 3 and not done:
+                if len(state) >= self.model.block_size // 3 and not done:
                     terminated = True
 
                 if done or terminated:
