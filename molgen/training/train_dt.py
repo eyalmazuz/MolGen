@@ -28,7 +28,6 @@ class Trainer:
         # take over whatever gpus are on the system
         if torch.cuda.is_available():
             self.device = torch.cuda.current_device()
-            self.model = torch.nn.DataParallel(self.model).to(self.device)
 
     def save_checkpoint(self, ckpt_name="best.pth"):
         raw_model = self.model.module if hasattr(self.model, "module") else self.model
@@ -89,9 +88,9 @@ class Trainer:
                     # report progress
                     pbar.set_description(f"epoch {epoch_num + 1} of {epochs} | iter {it}: train loss {loss.item():.5f}. lr {lr:e}")
 
-                    del batch
-                    torch.cuda.empty_cache()
-                    gc.collect()
+                    # del batch
+                    # torch.cuda.empty_cache()
+                    # gc.collect()
 
             # if not is_train:
             episode_loss = total_loss.item() / len(loader)
