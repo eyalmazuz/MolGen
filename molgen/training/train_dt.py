@@ -30,8 +30,7 @@ class Trainer:
             self.device = torch.cuda.current_device()
 
     def save_checkpoint(self, ckpt_name="best.pth"):
-        raw_model = self.model.module if hasattr(self.model, "module") else self.model
-        torch.save(raw_model.state_dict(), os.path.join(self.config.get("ckpt_path", "."), ckpt_name))
+        torch.save(self.model.state_dict(), os.path.join(self.config.get("ckpt_path", "."), ckpt_name))
 
     def train(self, optimizer):
         model, config = self.model, self.config
@@ -122,10 +121,9 @@ class Trainer:
                 self.save_checkpoint(ckpt_name=ckpt_name)
 
             # -- pass in target returns
-            # model_type = self.model.module.model_type if hasattr(self.model, "module") else self.model.model_type
-            # if model_type == 'naive':
+            # if self.model.model_type == 'naive':
             #     eval_return = self.get_returns(0)
-            # elif model_type == 'reward_conditioned':
+            # elif self.model.model_type == 'reward_conditioned':
             #     # TODO: return should be based on the reward function, for now put 1 for a scaled reward
             #     eval_return = self.get_returns(1)
 
@@ -143,7 +141,7 @@ class Trainer:
             init_state = torch.tensor([self.bos_token_id], dtype=torch.int64)
             init_state = init_state.to(self.device).unsqueeze(0).unsqueeze(0)
             rtgs = [ret]
-            goal_idx = np.random.choice(self.model.module.config.n_goals)
+            goal_idx = np.random.choice(self.model.config.n_goals)
             goal = [goal_idx]
             # first state is from env, first rtg is target return, and first timestep is 0
             sampled_action = sample(
