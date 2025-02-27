@@ -65,14 +65,15 @@ class Trainer:
     def load_checkpoint(self, ckpt_name: str = None):
         checkpoint_dir = self.save_path
         if not os.path.exists(checkpoint_dir):
+            print(f"Checkpoint folder {checkpoint_dir} not found, starting training from scratch")
             os.makedirs(checkpoint_dir, exist_ok=True)
+            return 0, 0
 
         if ckpt_name is None:
             checkpoint_files = [f for f in os.listdir(checkpoint_dir) if f.startswith("epoch_") and f.endswith(".pth")]
             if len(checkpoint_files) == 0:
                 print(f"No checkpoints to load, starting training from scratch")
-                epoch, tokens = 0, 0
-                return epoch, tokens
+                return 0, 0
 
             epoch_numbers = [
                 int(re.search(r"epoch_(\d+)", file).group(1))
