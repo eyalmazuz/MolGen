@@ -57,10 +57,10 @@ class PenalizedLogPReward(AbstractReward):
 
         else:
             mols = [Chem.MolFromSmiles(s) for s in smiles]
-            plogps = [PenalizedLogPReward.penalized_logp(mol) if mol is not None else -1 for mol in mols]
+            rewards = [PenalizedLogPReward.penalized_logp(mol) if mol is not None else -1 for mol in mols]
 
             if self.scale is not None and not self.eval:
-                rewards = [self.scale(reward) for reward in plogps]
+                rewards = [self.scale(reward) for reward in rewards]
 
             return rewards
 
