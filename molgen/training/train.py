@@ -37,7 +37,6 @@ def pretrain_model(
     best_val_loss = torch.tensor(1e9)
     # Use cycle to create an infinite iterator
     iter_loader = cycle(train_dataloader)
-    t0 = time.time()
     model.train()
 
     init_step = 0
@@ -57,6 +56,7 @@ def pretrain_model(
             print(f"No checkpoint found at {checkpoint_dir}, starting training from scratch!")
 
     epoch = init_step // len(train_dataloader)
+    t0 = time.time()
     for step in tqdm(range(init_step, max_steps)):
         for micro_step in range(gradient_accumulation_steps):
             # Handle distributed training if applicable
@@ -70,20 +70,21 @@ def pretrain_model(
             else:
                 batch = {k: v.to(device) for k, v in batch.items()}
 
-            logits, loss = model(**batch)
-            loss = loss / gradient_accumulation_steps
-            # with ctx:
-            #     logits, loss = model(**batch)
-            #     loss = loss / gradient_accumulation_steps
-            # scaler.scale(loss).backward()
+            # logits, loss = model(**batch)
+            # loss = loss / gradient_accumulation_steps
+            # loss.backward()
+            with ctx:
+                logits, loss = model(**batch)
+                loss = loss / gradient_accumulation_steps
+            scaler.scale(loss).backward()
 
         if grad_clip != 0.0:
-            # scaler.unscale_(optimizer)
+            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
 
-        optimizer.step()
-        # scaler.step(optimizer)
-        # scaler.update()
+        # optimizer.step()
+        scaler.step(optimizer)
+        scaler.update()
         optimizer.zero_grad(set_to_none=True)
         scheduler.step()
 
@@ -109,9 +110,9 @@ def pretrain_model(
                 else:
                     batch = {k: v.to(device) for k, v in batch.items()}
 
-                logits, loss = model(**batch)
-                # with ctx:
-                #     logits, loss = model(**batch)
+                # logits, loss = model(**batch)
+                with ctx:
+                    logits, loss = model(**batch)
                 losses[val_step] = loss.item()
 
             val_loss = losses.mean()
@@ -145,10 +146,7 @@ def pretrain_model(
                     print(f"saving checkpoint to {checkpoint_dir}")
                     if not os.path.exists(checkpoint_dir):
                         os.makedirs(checkpoint_dir, exist_ok=True)
-                    torch.save(checkpoint, os.path.join(checkpoint_dir, "ckpt.pt"))
+                    torch.save(checkpoint, os.path.join(checkpoint_dir, "latest.pt"))
 
         # if reward_func is not None and model.model_type == 'reward_conditioned' and (epoch + 1) % eval_interval == 0:
         #     eval_return = get_returns(1, model, train_dataloader, reward_func, device)
-
-        torch.cuda.empty_cache()
-        gc.collect()
