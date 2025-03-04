@@ -1,13 +1,14 @@
 from typing import Any, Dict, List, Type
 
 from molgen.rewards.reward import AbstractReward
-from molgen.rewards.functions.rdkit_rewards import QEDReward, PenalizedLogPReward
+from molgen.rewards.functions.rdkit_rewards import QEDReward, PenalizedLogPReward, pIC50Reward
 from molgen.rewards.functions.multi_reward import MultiReward
 
 
 name_to_reward: Dict[str, Type[AbstractReward]] = {
         "QED": QEDReward,
         "PlogP": PenalizedLogPReward,
+        "pIC50": pIC50Reward     # Place holder for SSM-DTA
         }
 
 

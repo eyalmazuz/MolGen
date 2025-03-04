@@ -98,3 +98,16 @@ class PenalizedLogPReward(AbstractReward):
       return log_p - sas_score - cycle_score
 
 
+class pIC50Reward(AbstractReward):
+    def __init__(self,
+                 data_path: str,
+                 name: Optional[str] = None,
+                 scale: RewardScale = None) -> None:
+        super(pIC50Reward, self).__init__(name=name, scale=scale)
+        import pandas as pd
+        df = pd.read_csv(data_path)
+        smiles = [Chem.MolToSmiles(Chem.MolFromSmiles(s)) for s in df['smiles'] if Chem.MolFromSmiles is not None]
+        self.smiles_to_pIC50 = dict(zip(smiles, df['KRAS pIC50']))
+
+    def __call__(self, smiles: Union[str, List[str]]) -> Union[float, List[float]]:
+        return self.smiles_to_pIC50[smiles]

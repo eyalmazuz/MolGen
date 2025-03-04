@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import Dataset
 from tqdm.auto import tqdm
 import numpy as np
+import pandas as pd
 import selfies as sf
 
 from molgen.tokenizers.tokenizer import AbstractTokenizer
@@ -56,9 +57,18 @@ class PreTrainGPTSmilesDataset(Dataset):
                     smiles += [s.strip() for s in f.readlines()]
 
         else:
-            print("Loading Data")
-            with open(dataset_path, "r") as f:
-                smiles = [s.strip() for s in f.readlines()]
+            file_extension = os.path.splitext(dataset_path)[-1].lower()
+            if file_extension == ".txt":
+                print("Loading Data")
+                with open(dataset_path, "r") as f:
+                    smiles = [s.strip() for s in f.readlines()]
+            elif file_extension == ".csv":
+                df = pd.read_csv(dataset_path)
+                if "smiles" not in df.columns:
+                    raise ValueError("CSV file must contain a 'smiles' column")
+                smiles = df["smiles"].dropna().astype(str).tolist()
+            else:
+                raise ValueError("Unsupported file format. Only .txt and .csv are supported.")
 
         if self.string_type == "SMILES":
             print("Converting SMILES to Canonical SMILES")

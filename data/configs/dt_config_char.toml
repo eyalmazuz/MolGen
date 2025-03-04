@@ -30,4 +30,5 @@ max_timestep = 0
 [reward]
 
 [[reward.functions]]
-type = "QED"
+type = "pIC50"
+data_path = "C:\\Users\\Or\\PycharmProjects\\Thesis\\MolGen\\data\\datasets\\properties.csv"
