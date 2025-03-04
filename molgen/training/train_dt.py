@@ -120,12 +120,12 @@ class Trainer:
                 self.save_checkpoint(ckpt_name=ckpt_name)
 
             # -- pass in target returns
-            model_type = self.model.model_type
-            if model_type == 'naive':
-                eval_return = self.get_returns(0)
-            elif model_type == 'reward_conditioned':
-                # TODO: return should be based on the reward function, for now put 1 for a scaled reward
-                eval_return = self.get_returns(1)
+            # model_type = self.model.model_type
+            # if model_type == 'naive':
+            #     eval_return = self.get_returns(0)
+            # elif model_type == 'reward_conditioned':
+            #     # TODO: return should be based on the reward function, for now put 1 for a scaled reward
+            #     eval_return = self.get_returns(1)
 
         if self.wandb_run is None:
             [print(f"{ep_loss:.5f}") for ep_loss in epoch_losses]  # Debug print
