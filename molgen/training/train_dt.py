@@ -87,7 +87,7 @@ class Trainer:
                     pbar.set_description(f"epoch {epoch_num + 1} of {epochs} | iter {it}: train loss {loss.item():.5f}. lr {lr:e}")
 
                     # del batch
-                    # torch.cuda.empty_cache()
+                    torch.cuda.empty_cache()
                     # gc.collect()
 
             # if not is_train:
