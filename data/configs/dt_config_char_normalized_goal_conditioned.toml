@@ -29,7 +29,7 @@ n_head = 12
 n_layer = 12
 dropout = 0.1
 model_type = "reward_conditioned"
-max_timestep = 0
+n_goals = 2
 
 [reward]
 goal_conditioned = true
