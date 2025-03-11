@@ -273,21 +273,24 @@ class DtGPT(nn.Module):
         else:
             state_embeddings = state_embeddings.squeeze(-2)  # (1, 1, n_embd)
 
+        # Goal embedding (BERT-style conditioning)
+        if goal is not None:
+            goal_embeddings = self.goal_emb(goal).unsqueeze(1)  # (batch_size, 1, n_embd)
+        else:
+            goal_embeddings = torch.zeros((batch_size, 1, self.config.n_embd), dtype=torch.float32,
+                                          device=state_embeddings.device)
+
         if labels is not None and self.model_type == 'reward_conditioned':
             rtg_embeddings = self.ret_emb(rtgs.unsqueeze(-1))  # (batch, block_size, n_embd)
-            # Modify RTG embedding
-            # gs with goal embeddings (add or concat)
-            if goal is not None:
-                goal_embeddings = self.goal_emb(goal)  # (batch, n_embd)
-                rtg_embeddings = rtg_embeddings + goal_embeddings
             action_embeddings = self.action_embeddings(labels)  # (batch, block_size, n_embd)
 
             token_embeddings = torch.zeros(
                 (batch_size, block_size * 3 - int(targets is None), self.config.n_embd), dtype=torch.float32,
                 device=state_embeddings.device)
-            token_embeddings[:, ::3, :] = rtg_embeddings
-            token_embeddings[:, 1::3, :] = state_embeddings
-            token_embeddings[:, 2::3, :] = action_embeddings[:, -input_ids.shape[1] + int(targets is None):, :]
+            token_embeddings[:, 0, :] = goal_embeddings.squeeze(1)  # First token is goal embedding
+            token_embeddings[:, 1::3, :] = rtg_embeddings
+            token_embeddings[:, 2::3, :] = state_embeddings
+            token_embeddings[:, 3::3, :] = action_embeddings[:, -input_ids.shape[1] + int(targets is None):, :]
         elif labels is None and self.model_type == 'reward_conditioned':  # only happens at very first timestep of evaluation
             rtg_embeddings = self.ret_emb(rtgs.type(torch.float32))
             # Modify RTG embeddings with goal embeddings (add or concat)
@@ -296,8 +299,9 @@ class DtGPT(nn.Module):
                 rtg_embeddings = rtg_embeddings + goal_embeddings
             token_embeddings = torch.zeros((batch_size, input_ids.shape[1] * 2, self.config.n_embd),
                                            dtype=torch.float32, device=state_embeddings.device)
-            token_embeddings[:, ::2, :] = rtg_embeddings  # really just [:,0,:]
-            token_embeddings[:, 1::2, :] = state_embeddings  # really just [:,1,:]
+            token_embeddings[:, 0, :] = goal_embeddings.squeeze(1)
+            token_embeddings[:, 1::2, :] = rtg_embeddings
+            token_embeddings[:, 2::2, :] = state_embeddings
         elif labels is not None and self.model_type == 'naive':
             action_embeddings = self.action_embeddings(
                 labels.type(torch.long).squeeze(-1))  # (batch, block_size, n_embd)
@@ -305,10 +309,16 @@ class DtGPT(nn.Module):
             token_embeddings = torch.zeros(
                 (batch_size, input_ids.shape[1] * 2 - int(targets is None), self.config.n_embd), dtype=torch.float32,
                 device=state_embeddings.device)
-            token_embeddings[:, ::2, :] = state_embeddings
-            token_embeddings[:, 1::2, :] = action_embeddings[:, -input_ids.shape[1] + int(targets is None):, :]
+            token_embeddings[:, 0, :] = goal_embeddings.squeeze(1)
+            token_embeddings[:, 1::2, :] = state_embeddings
+            token_embeddings[:, 2::2, :] = action_embeddings[:, -input_ids.shape[1] + int(targets is None):, :]
         elif labels is None and self.model_type == 'naive':  # only happens at very first timestep of evaluation
-            token_embeddings = state_embeddings
+            token_embeddings = torch.zeros(
+                (batch_size, input_ids.shape[1] + 1, self.config.n_embd), dtype=torch.float32,
+                device=state_embeddings.device
+            )
+            token_embeddings[:, 0, :] = goal_embeddings.squeeze(1)
+            token_embeddings[:, 1:, :] = state_embeddings
         else:
             raise NotImplementedError()
 
@@ -343,7 +353,6 @@ class DtGPT(nn.Module):
             )
 
         return logits, loss
-
 
 def set_seed(seed):
     random.seed(seed)
