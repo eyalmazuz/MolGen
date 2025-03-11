@@ -44,16 +44,14 @@ def load_model(model_config, args):
         raise FileNotFoundError(f"Checkpoint file not found: {args.checkpoint}")
 
     # Initialize model (make sure MolecularGenerator matches your model architecture)
-    model_type = ModelType.from_str(args.model_type)
-
-    model = get_model(model_type, model_config).to(args.device)
+    model = get_model(args.model_type, model_config).to(args.device)
     model.to(args.device)
 
     # Load the model weights from the checkpoint
     checkpoint = torch.load(args.checkpoint, map_location=args.device)
-    model.load_state_dict(checkpoint)
+    model.load_state_dict(checkpoint["model_state_dict"])
     print(f'Model loaded to {args.device}')
-    return model, model_type
+    return model
 
 
 def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1, ret: float = 1.0, goal_idx=None):
@@ -541,7 +539,7 @@ def main():
     model_config = config["model_config"]
 
     # Load the model
-    model = get_model(args.model_type, model_config).to("cuda")
+    model = load_model(model_config, args).to("cuda")
 
     tokenizer = get_tokenizer(args.tokenizer_path)
     reward_functions = get_rewards(config["reward"])
@@ -592,6 +590,7 @@ def main():
             # Evaluate the generated molecules
             res_folder = '_'.join([
                 os.path.split(args.checkpoint)[-1].split('.pth')[0],
+                f"{reward_type}",
                 f"rtg_{rtg_value:.2f}"
             ])
             if args.dataset_type == DatasetType.DT_SELFIES:
@@ -638,7 +637,7 @@ def main():
         #          ha='right', color='black', fontsize=10)
         plt.tight_layout()
 
-        plt.savefig(os.path.join(os.getcwd(), "selfies_plots", f"Success Rate per Target Bin with Validity Annotations.png"))
+        plt.savefig(os.path.join(os.getcwd(), "plots_GoalCond", f"Success Rate per Target Bin with Validity Annotations.png"))
 
 
 if __name__ == "__main__":

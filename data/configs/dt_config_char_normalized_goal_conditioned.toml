@@ -39,6 +39,5 @@ type = "QED"
 
 [[reward.functions]]
 type = "PlogP"
-scale.name = "minmax"
-scale.min_value = -1.0
-scale.max_value = 5.07272
+scale.name = "mult"
+scale.factor = 0.1
