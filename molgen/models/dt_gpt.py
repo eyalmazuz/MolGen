@@ -275,7 +275,9 @@ class DtGPT(nn.Module):
 
         # Goal embedding (BERT-style conditioning)
         if goal is not None:
-            goal_embeddings = self.goal_emb(goal).unsqueeze(1)  # (batch_size, 1, n_embd)
+            goal = goal[:, 0]
+            goal_embeddings = self.goal_emb(goal)  # (batch_size, n_embd)
+            goal_embeddings = goal_embeddings  # (batch_size, 1, n_embd)
         else:
             goal_embeddings = torch.zeros((batch_size, 1, self.config.n_embd), dtype=torch.float32,
                                           device=state_embeddings.device)
@@ -285,21 +287,17 @@ class DtGPT(nn.Module):
             action_embeddings = self.action_embeddings(labels)  # (batch, block_size, n_embd)
 
             token_embeddings = torch.zeros(
-                (batch_size, block_size * 3 - int(targets is None), self.config.n_embd), dtype=torch.float32,
+                (batch_size, block_size * 3 - int(targets is None) + 1, self.config.n_embd), dtype=torch.float32,
                 device=state_embeddings.device)
-            token_embeddings[:, 0, :] = goal_embeddings.squeeze(1)  # First token is goal embedding
+            token_embeddings[:, 0, :] = goal_embeddings  # First token is goal embedding
             token_embeddings[:, 1::3, :] = rtg_embeddings
             token_embeddings[:, 2::3, :] = state_embeddings
             token_embeddings[:, 3::3, :] = action_embeddings[:, -input_ids.shape[1] + int(targets is None):, :]
         elif labels is None and self.model_type == 'reward_conditioned':  # only happens at very first timestep of evaluation
             rtg_embeddings = self.ret_emb(rtgs.type(torch.float32))
-            # Modify RTG embeddings with goal embeddings (add or concat)
-            if goal is not None:
-                goal_embeddings = self.goal_emb(goal)  # (batch, n_embd)
-                rtg_embeddings = rtg_embeddings + goal_embeddings
-            token_embeddings = torch.zeros((batch_size, input_ids.shape[1] * 2, self.config.n_embd),
+            token_embeddings = torch.zeros((batch_size, input_ids.shape[1] * 2 + 1, self.config.n_embd),
                                            dtype=torch.float32, device=state_embeddings.device)
-            token_embeddings[:, 0, :] = goal_embeddings.squeeze(1)
+            token_embeddings[:, 0, :] = goal_embeddings
             token_embeddings[:, 1::2, :] = rtg_embeddings
             token_embeddings[:, 2::2, :] = state_embeddings
         elif labels is not None and self.model_type == 'naive':
@@ -307,9 +305,9 @@ class DtGPT(nn.Module):
                 labels.type(torch.long).squeeze(-1))  # (batch, block_size, n_embd)
 
             token_embeddings = torch.zeros(
-                (batch_size, input_ids.shape[1] * 2 - int(targets is None), self.config.n_embd), dtype=torch.float32,
+                (batch_size, input_ids.shape[1] * 2 - int(targets is None) + 1, self.config.n_embd), dtype=torch.float32,
                 device=state_embeddings.device)
-            token_embeddings[:, 0, :] = goal_embeddings.squeeze(1)
+            token_embeddings[:, 0, :] = goal_embeddings
             token_embeddings[:, 1::2, :] = state_embeddings
             token_embeddings[:, 2::2, :] = action_embeddings[:, -input_ids.shape[1] + int(targets is None):, :]
         elif labels is None and self.model_type == 'naive':  # only happens at very first timestep of evaluation
@@ -317,30 +315,27 @@ class DtGPT(nn.Module):
                 (batch_size, input_ids.shape[1] + 1, self.config.n_embd), dtype=torch.float32,
                 device=state_embeddings.device
             )
-            token_embeddings[:, 0, :] = goal_embeddings.squeeze(1)
+            token_embeddings[:, 0, :] = goal_embeddings
             token_embeddings[:, 1:, :] = state_embeddings
         else:
             raise NotImplementedError()
 
-        n_blocks = 2 if labels is None else 3  # only happens at very first timestep of evaluation
-        pos = torch.arange(
-            0, block_size, dtype=torch.long, device=input_ids.device
-        ).repeat_interleave(n_blocks).unsqueeze(0)
+        pos = torch.arange(0, token_embeddings.shape[1], dtype=torch.long, device=input_ids.device).unsqueeze(0)
         pos_emb = self.pos_emb(pos)
 
-        x = self.drop(token_embeddings + pos_emb[:, :token_embeddings.shape[1], :])
+        x = self.drop(token_embeddings + pos_emb)
         x = self.blocks(x)
         x = self.ln_f(x)
         logits = self.head(x)
 
         if labels is not None and self.model_type == 'reward_conditioned':
-            logits = logits[:, 1::3, :]  # only keep predictions from state_embeddings
+            logits = logits[:, 2::3, :]     # only keep predictions from state_embeddings
         elif labels is None and self.model_type == 'reward_conditioned':
             logits = logits[:, 1:, :]
         elif labels is not None and self.model_type == 'naive':
-            logits = logits[:, ::2, :]  # only keep predictions from state_embeddings
+            logits = logits[:, 1::2, :]     # only keep predictions from state_embeddings
         elif labels is None and self.model_type == 'naive':
-            logits = logits  # for completeness
+            logits = logits
         else:
             raise NotImplementedError()
 
