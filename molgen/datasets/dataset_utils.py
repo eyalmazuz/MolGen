@@ -98,31 +98,39 @@ class PadCollate:
             input_ids = batch.get("input_ids")
             attention_mask = batch.get("attention_mask")
             labels = batch.get("labels")
-            rtg = batch.get("rtgs", None)
+            rtgs = batch.get("rtgs", None)
             goal = batch.get("goal_idx", None)
 
             if len(input_ids) < max_length:
-                if rtg is None:
+                if rtgs is None:
                     input_ids += [self.pad_token_id] * (max_length - len(input_ids))
                 else:
                     input_ids += [[self.pad_token_id] * max_length] * (max_length - len(input_ids))
-                    rtg += [0] * (max_length - len(rtg))
+                    if isinstance(rtgs, list):
+                        for rtg in rtgs:
+                            rtg += [0] * (max_length - len(rtg))
+                    else:
+                        rtgs += [0] * (max_length - len(rtgs))
 
                 if attention_mask is not None:
                     attention_mask += [0] * (max_length - len(attention_mask))
                 labels += [self.ignore_index] * (max_length - len(labels))
 
-            if rtg is not None:
+            if rtgs is not None:
                 input_ids = [state + [self.pad_token_id] * (max_length - len(state)) for state in input_ids]
                 if attention_mask is not None:
                     attention_mask = [
                         [0] * max_length if mask == 0 else [1] * (i + 1) + [0] * (max_length - (i + 1))
                         for i, mask in enumerate(attention_mask)
                     ]
-                batch_rtgs.append(rtg)
+                batch_rtgs.append(rtgs)
 
             if goal is not None:
-                goal = [goal] * max_length
+                if isinstance(goal, list):
+                    for i, g in enumerate(goal):
+                        goal[i] = [g] * max_length
+                else:
+                    goal = [goal] * max_length
                 batch_goals.append(goal)
 
             batch_input_ids.append(input_ids)

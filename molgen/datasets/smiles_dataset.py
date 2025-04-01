@@ -80,6 +80,7 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
             trajectory_len = len(base_item["input_ids"])
             states = [base_item["input_ids"][:i + 1] for i in range(trajectory_len)]
 
+            rtgs = []
             for goal_idx, reward_func in enumerate(self.reward_funcs):  # Iterate over goals
                 if self.string_type == "SMILES":
                     reward_to_go = reward_func(smiles)
@@ -94,15 +95,16 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
                     reward_to_go[0] = 0
                     reward_to_go = np.subtract(reward_to_go[-1], reward_to_go).tolist()
 
-                results.append({
-                    "rtgs": reward_to_go.copy(),            # trajectory rtg - (block, 1)
-                    "input_ids": states.copy(),             # states - (block, state_len)
-                    "labels": base_item["labels"].copy(),   # actions - (block, 1)
-                    "attention_mask": [1] * trajectory_len,
-                    "length": trajectory_len,
-                    "goal_idx": goal_idx if self.n_goals > 1 else None,
-                    "mol_idx": mol_idx
-                })
+                rtgs.append(reward_to_go)
+
+            results.append({
+                "rtgs": rtgs.copy(),                    # trajectory rtg - (block, 1)
+                "input_ids": states.copy(),             # states - (block, state_len)
+                "labels": base_item["labels"].copy(),   # actions - (block, 1)
+                "attention_mask": [1] * trajectory_len,
+                "length": trajectory_len,
+                "goal_idx": list(range(self.n_goals)) if self.n_goals > 1 else None,
+            })
 
         return results
 
@@ -110,7 +112,7 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
         """
         Return the total number of samples (n_goals * n_molecules).
         """
-        return self.n_goals * self.n_molecules
+        return self.n_molecules     # * self.n_goals
 
     def __getitem__(self, idx: int) -> dict[str, list[str]]:
         """
