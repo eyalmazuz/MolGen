@@ -159,10 +159,7 @@ class Trainer:
 
                     # report progress
                     pbar.set_description(f"epoch {epoch_num + 1} of {epochs} | iter {it}: train loss {loss.item():.5f}. lr {lr:e}")
-
-                    # del batch
-                    # torch.cuda.empty_cache()
-                    # gc.collect()
+                    torch.cuda.empty_cache()
 
             # if not is_train:
             episode_loss = total_loss.item() / len(loader)

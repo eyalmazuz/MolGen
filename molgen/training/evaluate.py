@@ -1,5 +1,6 @@
 import os
 import json
+import math
 import tomllib
 import argparse
 from tqdm import tqdm
@@ -209,7 +210,7 @@ def calc_set_stat(mol_set: List[Chem.rdchem.Mol],
 
 def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
                    generated_scores: Union[List[float], Dict[str, List[float]]],
-                   top_k: int = 5,
+                   top_k: int = 10,
                    score_name: str = 'qed',
                    get_max: bool = True,
                    save_path: str = None) -> Dict[str, float]:
@@ -246,7 +247,7 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
                     metrics[f'top {i + 1} {name}'] = score[i]
 
             metrics[f'top {i + 1} qed'] = calc_qed(molecule)
-            metrics[f'top {i + 1} plogp'] = calc_logp(molecule)
+            metrics[f'top {i + 1} plogp'] = PenalizedLogPReward()(smiles)
             metrics[f'top {i + 1} sas'] = calc_sas(molecule)
             metrics[f'top {i + 1} len'] = len(smiles)
 
@@ -264,17 +265,31 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
             if score_name != 'qed':
                 metrics[f'top {i + 1} {score_name}'] = score
             metrics[f'top {i + 1} qed'] = calc_qed(molecule)
-            metrics[f'top {i + 1} plogp'] = calc_logp(molecule)
+            metrics[f'top {i + 1} plogp'] = PenalizedLogPReward()(smiles)
             metrics[f'top {i + 1} sas'] = calc_sas(molecule)
             metrics[f'top {i + 1} len'] = len(smiles)
+
+    top_mol_qed = [calc_qed(mol) for mol in top_k_molecules]
+    metrics[f'All top {top_k} qed mean'] = np.mean(top_mol_qed)
+    metrics[f'All top {top_k} qed std'] = np.std(top_mol_qed)
+
+    top_mol_plogp = PenalizedLogPReward()([Chem.MolToSmiles(m) for m in top_k_molecules])
+    metrics[f'All top {top_k} plogp mean'] = np.mean(top_mol_plogp)
+    metrics[f'All top {top_k} plogp std'] = np.std(top_mol_plogp)
 
     return metrics
 
 
+def percent_within_tolerance(values, target, tolerance):
+    within_tol = [abs(v - target) <= tolerance for v in values]
+    return sum(within_tol) / len(values)
+
+
 def get_stats(generated_smiles: List[str],
+              rtg_value: float,
               save_path: str = './data',
               folder_name: str = 'results',
-              top_k: int = 5,
+              top_k: int = 10,
               train_set: Optional[Dataset] = None,
               run_moses: bool = False,
               reward_fn=None,
@@ -303,13 +318,13 @@ def get_stats(generated_smiles: List[str],
                                                               value_range=(0, 1),
                                                               desc='QED')
 
-    generated_plogp_values, generated_plogp_stats = calc_set_stat(generated_molecules,
-                                                                  calc_logp,
+    generated_plogp_values, generated_plogp_stats = calc_set_stat(valid_generated_smiles,
+                                                                  PenalizedLogPReward(),
                                                                   lst=False,
                                                                   value_range=(-2, 10),
                                                                   desc='pLogP')
 
-    if reward_fn is not None and str(reward_fn) != 'QED':
+    if reward_fn is not None and 'QED' not in str(reward_fn):
         print(f'Calculating {reward_fn}')
         generated_reward_values, generated_reward_stats = calc_set_stat(valid_generated_smiles,
                                                                         reward_fn,
@@ -375,7 +390,7 @@ def get_stats(generated_smiles: List[str],
     #                        color='green',
     #                        shade=True)
 
-    if reward_fn is not None and str(reward_fn) != 'QED':
+    if reward_fn is not None and 'QED' not in str(reward_fn):
         top_k_metrics = get_top_k_mols(generated_molecules,
                                        generated_reward_values,
                                        top_k=top_k,
@@ -397,8 +412,17 @@ def get_stats(generated_smiles: List[str],
         **top_k_metrics
     }
 
-    if reward_fn is not None and str(reward_fn) != 'QED':
+    if reward_fn is not None and 'QED' not in str(reward_fn):
         stats = {**stats, **generated_reward_stats}
+
+    print('Calculating SuccessRates')
+    stats['SR - QED'] = percent_within_tolerance(generated_qed_values, rtg_value, tolerance=0.05)
+    if reward_fn is not None and 'QED' not in str(reward_fn):
+        tolerance = 10 ** math.ceil(
+            math.log10(max(generated_reward_values) - min(generated_reward_values))
+        ) * 0.05
+        stats[f'SR - {reward_fn}'] = percent_within_tolerance(generated_reward_values, rtg_value, tolerance)
+
 
     print('Calculating diversity')
     generated_diversity_score = calc_diversity(generated_smiles)
@@ -512,7 +536,10 @@ def generate_density_plots(
 
 def main():
     parser = argparse.ArgumentParser(description="Generate molecules using a pre-trained model.")
-    parser.add_argument('--checkpoint', type=str, required=True, help='Path to the pre-trained model checkpoint file.')
+    parser.add_argument('--checkpoint', type=str, required=False, help='Path to the pre-trained model checkpoint file.')
+    parser.add_argument('--smiles', type=str, required=False,
+                        help='Path to pre-generated SMILES file to evaluate model '
+                             '- Either --checkpoint or --smiles must be provided.')
     parser.add_argument("--data_path", type=str, required=True, help="Path to the training data")
     parser.add_argument("--results_path", type=str, required=True, help="Path to the results folder")
     parser.add_argument('--k', type=int, default=100, help='Number of molecules to generate.')
@@ -531,6 +558,8 @@ def main():
     parser.add_argument("--stats", action="store_true", help="Generate stats")
 
     args = parser.parse_args()
+
+    assert (args.checkpoint or args.smiles), "Either --checkpoint or --smiles must be provided"
     args.rtg = json.loads(args.rtg)
 
     with open(args.config_path, "rb") as fd:
@@ -539,7 +568,8 @@ def main():
     model_config = config["model_config"]
 
     # Load the model
-    model = load_model(model_config, args).to("cuda")
+    if args.checkpoint:
+        model = load_model(model_config, args).to("cuda")
 
     tokenizer = get_tokenizer(args.tokenizer_path)
     reward_functions = get_rewards(config["reward"])
@@ -558,8 +588,8 @@ def main():
         tests = ["rtg = 1.00", "rtg = 0.65", "rtg = 0.35"]# os.listdir(args.results_path)
 
         reward_fns = {
-            "QED": calc_qed,
-            "pLogP": calc_logp
+            "QED": QEDReward(),
+            "pLogP": PenalizedLogPReward()
         }
 
         generate_density_plots(
@@ -583,13 +613,17 @@ def main():
                 case _:
                     raise ValueError(f"Unrecognized reward type: {reward_type}")
 
-            print(f"Generating molecules conditioned on {reward_type} with RTG = {rtg_value:.2f}")
-            # Generate 'k' molecules
-            molecules = generate_molecules(model, tokenizer, reward_func, args, ret=rtg_value, goal_idx=goal_idx)
+            if args.checkpoint:
+                print(f"Generating molecules conditioned on {reward_type} with RTG = {rtg_value:.2f}")
+                # Generate 'k' molecules
+                molecules = generate_molecules(model, tokenizer, reward_func, args, ret=rtg_value, goal_idx=goal_idx)
+            elif args.smiles:
+                molecules = pd.read_csv(args.smiles, header=None).values.tolist()
+                molecules = [mol[0] if isinstance(mol, list) else mol for mol in molecules]
 
             # Evaluate the generated molecules
             res_folder = '_'.join([
-                os.path.split(args.checkpoint)[-1].split('.pth')[0],
+                os.path.split(args.checkpoint)[-1].split('.pth')[0] if args.checkpoint else os.path.split(args.smiles)[-1].split('.text')[0],
                 f"{reward_type}",
                 f"rtg_{rtg_value:.2f}"
             ])
@@ -597,6 +631,7 @@ def main():
                 molecules = [sf.decoder(s) for s in tqdm(molecules, desc=f"decoding selfies")]
             generated_reward_values = get_stats(
                 molecules,
+                rtg_value=rtg_value,
                 train_set=train_dataset,
                 folder_name=os.path.join(args.results_path, res_folder),
                 reward_fn=reward_func
