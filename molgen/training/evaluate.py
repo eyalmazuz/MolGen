@@ -616,7 +616,7 @@ def main():
             if args.checkpoint:
                 print(f"Generating molecules conditioned on {reward_type} with RTG = {rtg_value:.2f}")
                 # Generate 'k' molecules
-                molecules = generate_molecules(model, tokenizer, reward_func, args, ret=rtg_value, goal_idx=goal_idx)
+                molecules = generate_molecules(model, tokenizer, reward_func, args, ret=rtg_value, goal_idx=goal_idx) # None)
             elif args.smiles:
                 molecules = pd.read_csv(args.smiles, header=None).values.tolist()
                 molecules = [mol[0] if isinstance(mol, list) else mol for mol in molecules]
@@ -637,42 +637,42 @@ def main():
                 reward_fn=reward_func
             )
             bin_validity = len(generated_reward_values["Smiles"]) / args.k
-            bin_success_rate = (
-                np.sum(
-                    (generated_reward_values[str(reward_func)] >= rtg_value - 0.05)
-                    & (generated_reward_values[str(reward_func)] <= rtg_value + 0.05)
-                ) / len(generated_reward_values[str(reward_func)])
-            )
-            bins.append(f"{rtg_value - 0.05:.2f}-{min(rtg_value + 0.05, 1.0):.2f}")
-            success_rates.append(bin_success_rate)
-            validity.append(bin_validity)
+            # bin_success_rate = (
+            #     np.sum(
+            #         (generated_reward_values[str(reward_func)] >= rtg_value - 0.05)
+            #         & (generated_reward_values[str(reward_func)] <= rtg_value + 0.05)
+            #     ) / len(generated_reward_values[str(reward_func)])
+            # )
+            # bins.append(f"{rtg_value - 0.05:.2f}-{min(rtg_value + 0.05, 1.0):.2f}")
+            # success_rates.append(bin_success_rate)
+            # validity.append(bin_validity)
 
-        plot_data = pd.DataFrame({
-            "rtg_bins": bins,
-            "success_rate": success_rates,
-            "validity": validity
-        })
-
-        plt.figure(figsize=(12, 8))
-        ax = sns.barplot(x='rtg_bins', y='success_rate', data=plot_data)
-
-
-        # Add annotations (validity values) above the bars
-        for i in range(len(plot_data)):
-            ax.text(i, plot_data['success_rate'][i] + 0.02, f"{plot_data['validity'][i]:.2f}",
-                    ha='center', color='black', weight='bold')
-
-        plt.xticks(rotation=45, ha='right')
-
-        # Add labels and title
-        plt.xlabel('Target Bin')
-        plt.ylabel('Success Rate')
-        plt.title('Success Rate per Target Bin with Validity Annotations')
-        # plt.text(3.5, 0.95, 'Note: Numbers above bars are validity ratios',
-        #          ha='right', color='black', fontsize=10)
-        plt.tight_layout()
-
-        plt.savefig(os.path.join(os.getcwd(), "plots_GoalCond", f"Success Rate per Target Bin with Validity Annotations.png"))
+        # plot_data = pd.DataFrame({
+        #     "rtg_bins": bins,
+        #     "success_rate": success_rates,
+        #     "validity": validity
+        # })
+        #
+        # plt.figure(figsize=(12, 8))
+        # ax = sns.barplot(x='rtg_bins', y='success_rate', data=plot_data)
+        #
+        #
+        # # Add annotations (validity values) above the bars
+        # for i in range(len(plot_data)):
+        #     ax.text(i, plot_data['success_rate'][i] + 0.02, f"{plot_data['validity'][i]:.2f}",
+        #             ha='center', color='black', weight='bold')
+        #
+        # plt.xticks(rotation=45, ha='right')
+        #
+        # # Add labels and title
+        # plt.xlabel('Target Bin')
+        # plt.ylabel('Success Rate')
+        # plt.title('Success Rate per Target Bin with Validity Annotations')
+        # # plt.text(3.5, 0.95, 'Note: Numbers above bars are validity ratios',
+        # #          ha='right', color='black', fontsize=10)
+        # plt.tight_layout()
+        #
+        # plt.savefig(os.path.join(os.getcwd(), "plots_GoalCond", f"Success Rate per Target Bin with Validity Annotations.png"))
 
 
 if __name__ == "__main__":

@@ -280,6 +280,13 @@ class DtGPT(nn.Module):
             if goal is not None:
                 goal_embeddings = self.goal_emb(goal)  # (batch, n_embd)
                 rtg_embeddings = rtg_embeddings + goal_embeddings
+            # else:
+            #     goal_0 = torch.tensor([0] * block_size, dtype=torch.int64).to("cuda").unsqueeze(0)
+            #     goal_1 = torch.tensor([1] * block_size, dtype=torch.int64).to("cuda").unsqueeze(0)
+            #     goal_embbed0 = self.goal_emb(goal_0)    # (batch, n_embd)
+            #     goal_embbed1 = self.goal_emb(goal_1)    # (batch, n_embd)
+            #     goal_embeddings = torch.stack([goal_embbed0, goal_embbed1], dim=0).mean(dim=0)
+            #     rtg_embeddings = rtg_embeddings + goal_embeddings
             action_embeddings = self.action_embeddings(labels)  # (batch, block_size, n_embd)
 
             token_embeddings = torch.zeros(
@@ -294,6 +301,13 @@ class DtGPT(nn.Module):
             if goal is not None:
                 goal_embeddings = self.goal_emb(goal)  # (batch, n_embd)
                 rtg_embeddings = rtg_embeddings + goal_embeddings
+            # else:
+            #     goal_0 = torch.tensor([0] * block_size, dtype=torch.int64).to("cuda").unsqueeze(0)
+            #     goal_1 = torch.tensor([1] * block_size, dtype=torch.int64).to("cuda").unsqueeze(0)
+            #     goal_embbed0 = self.goal_emb(goal_0)    # (batch, n_embd)
+            #     goal_embbed1 = self.goal_emb(goal_1)    # (batch, n_embd)
+            #     goal_embeddings = torch.stack([goal_embbed0, goal_embbed1], dim=0).mean(dim=0)
+            #     rtg_embeddings = rtg_embeddings + goal_embeddings
             token_embeddings = torch.zeros((batch_size, input_ids.shape[1] * 2, self.config.n_embd),
                                            dtype=torch.float32, device=state_embeddings.device)
             token_embeddings[:, ::2, :] = rtg_embeddings  # really just [:,0,:]
