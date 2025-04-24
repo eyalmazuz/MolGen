@@ -259,11 +259,13 @@ class DtGPT(nn.Module):
         # input_ids: (batch, block_size, state_size)
         # labels: (batch, block_size, 1)
         # targets: (batch, block_size, 1)
-        # rtgs: (batch, block_size, 1)
-        # goals: optional - (batch, block_size, 1)
+        # rtgs: (batch, n_goals, block_size)
+        # goals: optional - (batch, n_goals, block_size)
 
         batch_size = input_ids.shape[0]
         block_size = input_ids.shape[1]
+        n_goals = rtgs.shape[1]
+        n_layers = n_goals + 2
         assert block_size <= self.block_size, \
             f"Cannot forward sequence of length {block_size}, block size is only {self.block_size}"
         state_embeddings = self.state_embedding(input_ids)  # (batch_size, block_size, state_size, n_embd)
@@ -274,44 +276,35 @@ class DtGPT(nn.Module):
             state_embeddings = state_embeddings.squeeze(-2)  # (1, 1, n_embd)
 
         if labels is not None and self.model_type == 'reward_conditioned':
-            rtg_embeddings = self.ret_emb(rtgs.unsqueeze(-1))  # (batch, block_size, n_embd)
-            # Modify RTG embedding
-            # gs with goal embeddings (add or concat)
-            if goal is not None:
-                goal_embeddings = self.goal_emb(goal)  # (batch, n_embd)
-                rtg_embeddings = rtg_embeddings + goal_embeddings
-            # else:
-            #     goal_0 = torch.tensor([0] * block_size, dtype=torch.int64).to("cuda").unsqueeze(0)
-            #     goal_1 = torch.tensor([1] * block_size, dtype=torch.int64).to("cuda").unsqueeze(0)
-            #     goal_embbed0 = self.goal_emb(goal_0)    # (batch, n_embd)
-            #     goal_embbed1 = self.goal_emb(goal_1)    # (batch, n_embd)
-            #     goal_embeddings = torch.stack([goal_embbed0, goal_embbed1], dim=0).mean(dim=0)
-            #     rtg_embeddings = rtg_embeddings + goal_embeddings
-            action_embeddings = self.action_embeddings(labels)  # (batch, block_size, n_embd)
-
             token_embeddings = torch.zeros(
-                (batch_size, block_size * 3 - int(targets is None), self.config.n_embd), dtype=torch.float32,
+                (batch_size, block_size * (2 + n_goals) - int(targets is None), self.config.n_embd), dtype=torch.float32,
                 device=state_embeddings.device)
-            token_embeddings[:, ::3, :] = rtg_embeddings
-            token_embeddings[:, 1::3, :] = state_embeddings
-            token_embeddings[:, 2::3, :] = action_embeddings[:, -input_ids.shape[1] + int(targets is None):, :]
+
+            for i in range(n_goals):
+                rtg_embeddings = self.ret_emb(rtgs[:, i, :].unsqueeze(-1))  # (batch, block_size, n_embd)
+                # Modify RTG embedding
+                # gs with goal embeddings (add or concat)
+                if goal is not None:
+                    goal_embeddings = self.goal_emb(goal[:, i, :])  # (batch, n_embd)
+                    rtg_embeddings = rtg_embeddings + goal_embeddings
+                token_embeddings[:, i::n_layers, :] = rtg_embeddings
+
+            action_embeddings = self.action_embeddings(labels)  # (batch, block_size, n_embd)
+            token_embeddings[:, n_goals::n_layers, :] = state_embeddings
+            token_embeddings[:, n_goals + 1::n_layers, :] = action_embeddings[:, -input_ids.shape[1] + int(targets is None):, :]
+
         elif labels is None and self.model_type == 'reward_conditioned':  # only happens at very first timestep of evaluation
-            rtg_embeddings = self.ret_emb(rtgs.type(torch.float32))
-            # Modify RTG embeddings with goal embeddings (add or concat)
-            if goal is not None:
-                goal_embeddings = self.goal_emb(goal)  # (batch, n_embd)
-                rtg_embeddings = rtg_embeddings + goal_embeddings
-            # else:
-            #     goal_0 = torch.tensor([0] * block_size, dtype=torch.int64).to("cuda").unsqueeze(0)
-            #     goal_1 = torch.tensor([1] * block_size, dtype=torch.int64).to("cuda").unsqueeze(0)
-            #     goal_embbed0 = self.goal_emb(goal_0)    # (batch, n_embd)
-            #     goal_embbed1 = self.goal_emb(goal_1)    # (batch, n_embd)
-            #     goal_embeddings = torch.stack([goal_embbed0, goal_embbed1], dim=0).mean(dim=0)
-            #     rtg_embeddings = rtg_embeddings + goal_embeddings
-            token_embeddings = torch.zeros((batch_size, input_ids.shape[1] * 2, self.config.n_embd),
+            token_embeddings = torch.zeros((batch_size, block_size * (1 + n_goals), self.config.n_embd),
                                            dtype=torch.float32, device=state_embeddings.device)
-            token_embeddings[:, ::2, :] = rtg_embeddings  # really just [:,0,:]
-            token_embeddings[:, 1::2, :] = state_embeddings  # really just [:,1,:]
+            for i in range(n_goals):
+                rtg_embeddings = self.ret_emb(rtgs[:, i, :].type(torch.float32))
+                # Modify RTG embeddings with goal embeddings (add or concat)
+                if goal is not None:
+                    goal_embeddings = self.goal_emb(goal[:, i, :])  # (batch, n_embd)
+                    rtg_embeddings = rtg_embeddings + goal_embeddings
+                token_embeddings[:, i::n_layers - 1, :] = rtg_embeddings  # really just [:,0,:]
+            token_embeddings[:, n_goals::n_layers - 1, :] = state_embeddings  # really just [:,1,:]
+
         elif labels is not None and self.model_type == 'naive':
             action_embeddings = self.action_embeddings(
                 labels.type(torch.long).squeeze(-1))  # (batch, block_size, n_embd)
@@ -326,7 +319,7 @@ class DtGPT(nn.Module):
         else:
             raise NotImplementedError()
 
-        n_blocks = 2 if labels is None else 3  # only happens at very first timestep of evaluation
+        n_blocks = 2 if labels is None else n_layers  # only happens at very first timestep of evaluation
         pos = torch.arange(
             0, block_size, dtype=torch.long, device=input_ids.device
         ).repeat_interleave(n_blocks).unsqueeze(0)
@@ -338,9 +331,9 @@ class DtGPT(nn.Module):
         logits = self.head(x)
 
         if labels is not None and self.model_type == 'reward_conditioned':
-            logits = logits[:, 1::3, :]  # only keep predictions from state_embeddings
+            logits = logits[:, n_goals::n_layers, :]  # only keep predictions from state_embeddings
         elif labels is None and self.model_type == 'reward_conditioned':
-            logits = logits[:, 1:, :]
+            logits = logits[:, n_goals:, :]
         elif labels is not None and self.model_type == 'naive':
             logits = logits[:, ::2, :]  # only keep predictions from state_embeddings
         elif labels is None and self.model_type == 'naive':

@@ -133,23 +133,12 @@ class Trainer:
                 g = batch["goal"]
 
                 # For each goal, call forward pass with the relevant rtg and goal slices.
-                loss_list = []
                 with torch.set_grad_enabled(is_train):
-                    for i in range(model.config.n_goals):
-                        rtg_i = r[:, i, :]  # shape: (B, T)
-                        goal_i = g[:, i, :]  # shape: (B, T)
-                        # Forward pass for goal i.
-                        logits_i, loss_i = model(
-                            input_ids=x, labels=y, targets=y, rtgs=rtg_i, attention_mask=a, goal=goal_i
-                        )
-                        loss_scalar_i = loss_i.mean().clone()  # collapse all losses if they are scattered on multiple gpus
-                        loss_list.append(loss_scalar_i)
-                    # Stack the per-goal losses into a tensor of shape (n_goals,)
-                    loss_per_goal = torch.stack(loss_list, dim=0)
+                    logits, loss = model(
+                        input_ids=x, labels=y, targets=y, rtgs=r, attention_mask=a, goal=g
+                    )
 
-                loss = self.famo.get_weighted_loss(loss_per_goal)
                 total_loss += loss
-
                 if is_train:
 
                     # backprop and update the parameters
@@ -157,10 +146,6 @@ class Trainer:
                     loss.backward()     # TODO: scaler.scale(loss).backward() - only for mix precision training
                     torch.nn.utils.clip_grad_norm_(model.parameters(), config.get("grad_clip", 1.0))
                     self.optimizer.step()
-
-                    if self.famo.prev_losses is not None:
-                        self.famo.update(self.famo.prev_losses, loss_per_goal.detach())
-                    self.famo.prev_losses = loss_per_goal.detach()
 
                     # decay the learning rate based on our progress
                     if config.get("decay_lr", True):
