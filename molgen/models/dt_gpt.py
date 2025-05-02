@@ -283,11 +283,16 @@ class DtGPT(nn.Module):
         assert block_size <= self.block_size, \
             f"Cannot forward sequence of length {block_size}, block size is only {self.block_size}"
         state_embeddings = self.state_embedding(input_ids)  # (batch_size, block_size, state_size, n_embd)
-        state_embeddings = self.state_transformer(
-            state_embeddings.view(batch_size * block_size, state_size, self.config.n_embd)
-        )
-        state_embeddings = state_embeddings.view(batch_size, block_size, state_size, self.config.n_embd)
-        # TODO: replace mean_pooling with a mini-transformer model
+        x = state_embeddings.view(batch_size * block_size, state_size, self.config.n_embd)
+        if attention_mask is not None:
+            # flatten attention same as state embeddings:
+            flat_mask = attention_mask.view(batch_size * block_size, state_size).to(torch.bool)
+            # src_key_padding_mask expects True == “ignore this position”:
+            x = self.state_transformer(x, src_key_padding_mask=~flat_mask)
+        else:
+            x = self.state_transformer(x)
+
+        state_embeddings = x.view(batch_size, block_size, state_size, self.config.n_embd)
         if attention_mask is not None:
             state_embeddings = self.mean_pooling(state_embeddings, attention_mask)  # (batch_size, block_size, n_embd)
         else:
