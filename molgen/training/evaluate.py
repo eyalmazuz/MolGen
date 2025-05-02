@@ -611,6 +611,7 @@ def main():
             # Load the model
             if args.checkpoint:
                 args.checkpoint = os.path.join(dirname, epoch)
+                print(f"loading model {args.checkpoint}")
                 model = load_model(model_config, args).to("cuda")
             bins, success_rates, validity = [], [], []
         # for i, (reward_type, rtg_value) in enumerate(args.rtg.items()):    # np.linspace(0.1, 1, 10):
