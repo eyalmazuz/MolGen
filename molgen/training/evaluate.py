@@ -54,7 +54,7 @@ def load_model(model_config, args):
     print(f'Model loaded to {args.device}')
     return model
 
-
+import copy
 def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1, ret: float = 1.0, goal_idx=None):
     """
     Generate 'k' molecules using the pre-trained model's sample function.
@@ -76,8 +76,8 @@ def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1
         init_state = torch.tensor([tokenizer.bos_token_id], dtype=torch.int64)
         init_state = init_state.to(args.device).unsqueeze(0).unsqueeze(0)
         # first state is from env, first rtg is target return, and first timestep is 0
-        rtgs = [ret]
-        goal = [goal_idx] if goal_idx is not None else None
+        rtgs = copy.deepcopy(ret)
+        goal = copy.deepcopy(goal_idx) if goal_idx is not None else None
         sampled_action = sample(
             model=model,
             x=init_state,
@@ -85,7 +85,7 @@ def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1
             temperature=temperature,
             sample=True,
             actions=None,
-            rtgs=torch.tensor(rtgs, dtype=torch.float32).to(args.device).unsqueeze(0).unsqueeze(-1),
+            rtgs=torch.tensor(rtgs, dtype=torch.float32).to(args.device).unsqueeze(0),
             goal=torch.tensor(goal, dtype=torch.int64).to(args.device).unsqueeze(0) if goal_idx is not None else None,
             # timesteps=torch.zeros((1, 1, 1), dtype=torch.int64).to(self.device)
         )
@@ -99,11 +99,9 @@ def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1
             action = sampled_action.cpu().numpy()[0, -1]
             actions += [action]
             state.append(action)
-            reward = reward_func(
-                tokenizer.decode(state, skip_special_tokens=True)
-            )[0]
+            # reward = reward_func(tokenizer.decode(state, skip_special_tokens=True))[0]
             done = action == tokenizer.eos_token_id  # mol is complete when [EOS] token is generated
-            reward_sum = reward
+            # reward_sum = reward
             j += 1
 
             # if molecule length exceeds block_size and [EOS] token wasn't generated terminate generation
@@ -119,9 +117,11 @@ def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1
             all_states = torch.nn.functional.pad(all_states, (0, pad_size), value=tokenizer.pad_token_id)
             all_states = torch.cat([all_states, tensor_state], dim=1)
 
-            rtgs += [rtgs[-1]]  # - reward]  # TODO: Check this
+            rtgs[0].append(ret[0][-1])
+            rtgs[1].append(ret[1][-1])
             if goal_idx is not None:
-                goal.append(goal_idx)
+                goal[0].append(goal_idx[0][-1])
+                goal[1].append(goal_idx[1][-1])
             # all_states has all previous states and rtgs has all previous rtgs (will be cut to block_size in utils.sample)
             # timestep is just current timestep # TODO: check the tensor(actions) to verify its correct
             sampled_action = sample(
@@ -282,7 +282,10 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
 
 def percent_within_tolerance(values, target, tolerance):
     within_tol = [abs(v - target) <= tolerance for v in values]
-    return sum(within_tol) / len(values)
+    res = sum(within_tol) / len(values)
+    if isinstance(res, np.ndarray):
+        res = res[0]
+    return res
 
 
 def get_stats(generated_smiles: List[str],
@@ -398,17 +401,20 @@ def get_stats(generated_smiles: List[str],
                                        get_max=("Docking" not in str(reward_fn)),
                                        save_path=generated_path)
     else:
-        top_k_metrics = get_top_k_mols(generated_molecules,
-                                       generated_qed_values,
-                                       top_k=top_k,
-                                       score_name='qed',
-                                       save_path=generated_path)
+        top_k_metrics = {}
+
+    top_k_metrics_qed = get_top_k_mols(generated_molecules,
+                                   generated_qed_values,
+                                   top_k=top_k,
+                                   score_name='qed',
+                                   save_path=generated_path)
 
     stats = {
         **stats,
         **generated_qed_stats,
         **generated_plogp_stats,
         **generated_sas_stats,
+        **top_k_metrics_qed,
         **top_k_metrics
     }
 
@@ -416,7 +422,7 @@ def get_stats(generated_smiles: List[str],
         stats = {**stats, **generated_reward_stats}
 
     print('Calculating SuccessRates')
-    stats['SR - QED'] = percent_within_tolerance(generated_qed_values, rtg_value, tolerance=0.05)
+    stats['SR - QED'] = percent_within_tolerance(generated_qed_values, 0.9, tolerance=0.1)
     if reward_fn is not None and 'QED' not in str(reward_fn):
         tolerance = 10 ** math.ceil(
             math.log10(max(generated_reward_values) - min(generated_reward_values))
@@ -567,10 +573,6 @@ def main():
 
     model_config = config["model_config"]
 
-    # Load the model
-    if args.checkpoint:
-        model = load_model(model_config, args).to("cuda")
-
     tokenizer = get_tokenizer(args.tokenizer_path)
     reward_functions = get_rewards(config["reward"])
 
@@ -600,21 +602,35 @@ def main():
         )
 
     if args.stats:
-        bins, success_rates, validity = [], [], []
-        for i, (reward_type, rtg_value) in enumerate(args.rtg.items()):    # np.linspace(0.1, 1, 10):
-            reward_func = reward_functions[i] if isinstance(reward_functions, list) else reward_functions
-            rtg_value = float(rtg_value)
-            goal_idx = i if len(args.rtg.keys()) > 1 else None
-            match reward_type:
-                case "QED":
-                    assert isinstance(reward_func, QEDReward)
-                case "pLogP":
-                    assert isinstance(reward_func, PenalizedLogPReward)
-                case _:
-                    raise ValueError(f"Unrecognized reward type: {reward_type}")
-
+        if args.checkpoint:
+            dirname = os.path.dirname(args.checkpoint)
+            checkpoints = os.listdir(dirname)
+        else:
+            checkpoints = ['pre_generated']
+        for epoch in checkpoints:
+            # Load the model
             if args.checkpoint:
-                print(f"Generating molecules conditioned on {reward_type} with RTG = {rtg_value:.2f}")
+                args.checkpoint = os.path.join(dirname, epoch)
+                model = load_model(model_config, args).to("cuda")
+            bins, success_rates, validity = [], [], []
+        # for i, (reward_type, rtg_value) in enumerate(args.rtg.items()):    # np.linspace(0.1, 1, 10):
+        #     reward_func = reward_functions[i] if isinstance(reward_functions, list) else reward_functions
+        # rtg_value = float(rtg_value)
+        # goal_idx = i if len(args.rtg.keys()) > 1 else None
+        #     # match reward_type:
+        #     #     case "QED":
+        #     #         assert isinstance(reward_func, QEDReward)
+        #     #     case "pLogP":
+        #     #         assert isinstance(reward_func, PenalizedLogPReward)
+        #     #     case _:
+        #     #         raise ValueError(f"Unrecognized reward type: {reward_type}")
+        #
+            reward_type = "reward_per_block"
+            reward_func = reward_functions
+            rtg_value = [[float(r)] for r in args.rtg.values()]
+            goal_idx = [[0], [1]]
+            if args.checkpoint:
+                # print(f"Generating molecules conditioned on {reward_type} with RTG = {rtg_value:.2f}")
                 # Generate 'k' molecules
                 molecules = generate_molecules(model, tokenizer, reward_func, args, ret=rtg_value, goal_idx=goal_idx) # None)
             elif args.smiles:
@@ -625,13 +641,13 @@ def main():
             res_folder = '_'.join([
                 os.path.split(args.checkpoint)[-1].split('.pth')[0] if args.checkpoint else os.path.split(args.smiles)[-1].split('.text')[0],
                 f"{reward_type}",
-                f"rtg_{rtg_value:.2f}"
+                # f"rtg_{rtg_value:.2f}"
             ])
             if args.dataset_type == DatasetType.DT_SELFIES:
                 molecules = [sf.decoder(s) for s in tqdm(molecules, desc=f"decoding selfies")]
             generated_reward_values = get_stats(
                 molecules,
-                rtg_value=rtg_value,
+                rtg_value=rtg_value[0],
                 train_set=train_dataset,
                 folder_name=os.path.join(args.results_path, res_folder),
                 reward_fn=reward_func
