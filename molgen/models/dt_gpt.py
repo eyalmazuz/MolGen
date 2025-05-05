@@ -183,18 +183,18 @@ class DtGPT(nn.Module):
         self.action_embeddings = self.tok_emb  # Actions are simply SMILES tokens to add to the state
         nn.init.normal_(self.action_embeddings.weight, mean=0.0, std=0.02)
 
-        self.state_transformer_layer = nn.TransformerEncoderLayer(
-            d_model=config.n_embd,
-            nhead=config.n_head,
-            dim_feedforward=config.n_embd * 4,
-            dropout=config.dropout,
-            batch_first=True  # lets us keep (batch, seq, embed)
-        )
-
-        self.state_transformer = nn.TransformerEncoder(
-            self.state_transformer_layer,
-            num_layers=getattr(config, "state_encoder_layers", 1)
-        )
+        # self.state_transformer_layer = nn.TransformerEncoderLayer(
+        #     d_model=config.n_embd,
+        #     nhead=config.n_head,
+        #     dim_feedforward=config.n_embd * 4,
+        #     dropout=config.dropout,
+        #     batch_first=True  # lets us keep (batch, seq, embed)
+        # )
+        #
+        # self.state_transformer = nn.TransformerEncoder(
+        #     self.state_transformer_layer,
+        #     num_layers=getattr(config, "state_encoder_layers", 1)
+        # )
 
     def get_block_size(self):
         return self.block_size
@@ -220,7 +220,7 @@ class DtGPT(nn.Module):
         decay = set()
         no_decay = set()
         # whitelist_weight_modules = (torch.nn.Linear, )
-        whitelist_weight_modules = (torch.nn.Linear, torch.nn.Conv2d, torch.nn.MultiheadAttention)
+        whitelist_weight_modules = (torch.nn.Linear, torch.nn.Conv2d)#, torch.nn.MultiheadAttention)
         blacklist_weight_modules = (torch.nn.LayerNorm, torch.nn.Embedding)
         for mn, m in self.named_modules():
             for pn, p in m.named_parameters():
@@ -283,16 +283,16 @@ class DtGPT(nn.Module):
         assert block_size <= self.block_size, \
             f"Cannot forward sequence of length {block_size}, block size is only {self.block_size}"
         state_embeddings = self.state_embedding(input_ids)  # (batch_size, block_size, state_size, n_embd)
-        x = state_embeddings.view(batch_size * block_size, state_size, self.config.n_embd)
-        if attention_mask is not None:
-            # flatten attention same as state embeddings:
-            flat_mask = attention_mask.view(batch_size * block_size, state_size).to(torch.bool)
-            # src_key_padding_mask expects True == “ignore this position”:
-            x = self.state_transformer(x, src_key_padding_mask=~flat_mask)
-        else:
-            x = self.state_transformer(x)
-
-        state_embeddings = x.view(batch_size, block_size, state_size, self.config.n_embd)
+        # x = state_embeddings.view(batch_size * block_size, state_size, self.config.n_embd)
+        # if attention_mask is not None:
+        #     # flatten attention same as state embeddings:
+        #     flat_mask = attention_mask.view(batch_size * block_size, state_size).to(torch.bool)
+        #     # src_key_padding_mask expects True == “ignore this position”:
+        #     x = self.state_transformer(x, src_key_padding_mask=~flat_mask)
+        # else:
+        #     x = self.state_transformer(x)
+        #
+        # state_embeddings = x.view(batch_size, block_size, state_size, self.config.n_embd)
         if attention_mask is not None:
             state_embeddings = self.mean_pooling(state_embeddings, attention_mask)  # (batch_size, block_size, n_embd)
         else:
