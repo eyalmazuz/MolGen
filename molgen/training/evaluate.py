@@ -147,7 +147,7 @@ def fail_safe(func: Callable[[Chem.rdchem.Mol], float], mol: Chem.rdchem.Mol) ->
         res = func(mol)
     except Exception as e:
         res = None
-        print(f'{mol=}')
+        # print(f'{mol=}')
     return res
 
 
