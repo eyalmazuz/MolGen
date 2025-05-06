@@ -11,7 +11,7 @@ import torch
 import selfies as sf
 
 from molgen.models.dt_gpt import sample
-from molgen.utils.famo import FAMO
+# from molgen.utils.famo import FAMO
 from molgen.utils.plot_utils import save_plot
 
 
@@ -42,12 +42,12 @@ class Trainer:
         self.device = device
         self.optimizer = None
         # Initialize FAMO
-        self.famo = FAMO(
-            num_tasks=model.config.n_goals,
-            min_losses=torch.full((model.config.n_goals,), 1e-8, device=device),
-            lr=config.get("famo_beta", 0.025),
-            gamma=config.get("famo_gamma", 0.001),
-        )
+        # self.famo = FAMO(
+        #     num_tasks=model.config.n_goals,
+        #     min_losses=torch.full((model.config.n_goals,), 1e-8, device=device),
+        #     lr=config.get("famo_beta", 0.025),
+        #     gamma=config.get("famo_gamma", 0.001),
+        # )
 
         # take over whatever gpus are on the system
         # if torch.cuda.is_available():
