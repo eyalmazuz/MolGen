@@ -2,7 +2,7 @@
 batch_size = 64
 gradient_accumulation_steps = 8
 learning_rate = 8e-5
-max_steps = 100000
+max_steps = 400000
 weight_decay = 1e-1
 betas = [0.9, 0.95]
 grad_clip = 1.0
@@ -14,7 +14,7 @@ dtype = "bfloat16"
 compile = false
 device = "cuda"
 seed = 42
-wandb_log = false
+wandb_log = true
 num_workers = 1
 load_checkpoint = false
 eval_every = 10
@@ -27,7 +27,7 @@ max_seq_len = 100
 n_embd = 768
 n_head = 12
 n_layer = 12
-dropout = 0.1
+dropout = 0.2
 model_type = "reward_conditioned"
 n_goals = 2
 
