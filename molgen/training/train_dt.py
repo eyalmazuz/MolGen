@@ -202,7 +202,7 @@ class Trainer:
                 best_loss = test_loss
                 self.save_checkpoint(epoch)
 
-            self.save_checkpoint(epoch, ckpt_name="latest.pth")
+            # self.save_checkpoint(epoch, ckpt_name="latest.pth")
 
             # -- pass in target returns
             # model_type = self.model.module.model_type if hasattr(self.model, "module") else self.model.model_type
