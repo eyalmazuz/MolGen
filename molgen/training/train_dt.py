@@ -132,6 +132,8 @@ class Trainer:
                 a = batch["attention_mask"]
                 g = batch["goal"]
 
+                if (it / pbar.total) < 0.50:
+                    r, g = r[:, 0:1, :], g[:, 0:1, :]
                 # For each goal, call forward pass with the relevant rtg and goal slices.
                 with torch.set_grad_enabled(is_train):
                     logits, loss = model(
