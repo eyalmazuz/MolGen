@@ -9,6 +9,7 @@ from typing import Any
 import wandb
 import torch
 import selfies as sf
+import random
 
 from molgen.models.dt_gpt import sample
 # from molgen.utils.famo import FAMO
@@ -132,8 +133,11 @@ class Trainer:
                 a = batch["attention_mask"]
                 g = batch["goal"]
 
-                if (it / pbar.total) < 0.50:
+                key = random.randint(1, 3)
+                if key == 1:
                     r, g = r[:, 0:1, :], g[:, 0:1, :]
+                elif key == 2:
+                    r, g = r[:, 1:2, :], g[:, 1:2, :]
                 # For each goal, call forward pass with the relevant rtg and goal slices.
                 with torch.set_grad_enabled(is_train):
                     logits, loss = model(
