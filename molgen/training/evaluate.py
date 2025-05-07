@@ -646,13 +646,16 @@ def main():
             ])
             if args.dataset_type == DatasetType.DT_SELFIES:
                 molecules = [sf.decoder(s) for s in tqdm(molecules, desc=f"decoding selfies")]
-            generated_reward_values = get_stats(
-                molecules,
-                rtg_value=rtg_value[0],
-                train_set=train_dataset,
-                folder_name=os.path.join(args.results_path, res_folder),
-                reward_fn=reward_func
-            )
+            try:
+                generated_reward_values = get_stats(
+                    molecules,
+                    rtg_value=rtg_value[0],
+                    train_set=train_dataset,
+                    folder_name=os.path.join(args.results_path, res_folder),
+                    reward_fn=reward_func
+                )
+            except:
+                continue
             bin_validity = len(generated_reward_values["Smiles"]) / args.k
             # bin_success_rate = (
             #     np.sum(
