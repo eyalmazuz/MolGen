@@ -133,11 +133,8 @@ class Trainer:
                 a = batch["attention_mask"]
                 g = batch["goal"]
 
-                key = random.randint(1, 3)
-                if key == 1:
+                if epoch_num < 2:
                     r, g = r[:, 0:1, :], g[:, 0:1, :]
-                elif key == 2:
-                    r, g = r[:, 1:2, :], g[:, 1:2, :]
                 # For each goal, call forward pass with the relevant rtg and goal slices.
                 with torch.set_grad_enabled(is_train):
                     logits, loss = model(
