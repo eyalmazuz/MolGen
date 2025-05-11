@@ -649,10 +649,10 @@ def main():
             try:
                 generated_reward_values = get_stats(
                     molecules,
-                    rtg_value=rtg_value[0],
+                    rtg_value=rtg_value[-1],
                     train_set=train_dataset,
                     folder_name=os.path.join(args.results_path, res_folder),
-                    reward_fn=reward_func
+                    reward_fn=reward_func[-1]
                 )
             except:
                 continue
