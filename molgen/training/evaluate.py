@@ -281,7 +281,7 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
 
 
 def percent_within_tolerance(values, target, tolerance):
-    within_tol = [abs(v - target) <= tolerance for v in values]
+    within_tol = [v >= target - tolerance for v in values]
     res = sum(within_tol) / len(values)
     if isinstance(res, np.ndarray):
         res = res[0]
@@ -393,6 +393,12 @@ def get_stats(generated_smiles: List[str],
     #                        color='green',
     #                        shade=True)
 
+    top_k_metrics_qed = get_top_k_mols(generated_molecules,
+                                   generated_qed_values,
+                                   top_k=top_k,
+                                   score_name='qed',
+                                   save_path=generated_path)
+
     if reward_fn is not None and 'QED' not in str(reward_fn):
         top_k_metrics = get_top_k_mols(generated_molecules,
                                        generated_reward_values,
@@ -400,21 +406,15 @@ def get_stats(generated_smiles: List[str],
                                        score_name=str(reward_fn),
                                        get_max=("Docking" not in str(reward_fn)),
                                        save_path=generated_path)
+        top_k_metrics.update({k: v for k, v in top_k_metrics_qed.items() if 'qed' in k})
     else:
-        top_k_metrics = {}
-
-    top_k_metrics_qed = get_top_k_mols(generated_molecules,
-                                   generated_qed_values,
-                                   top_k=top_k,
-                                   score_name='qed',
-                                   save_path=generated_path)
+        top_k_metrics = top_k_metrics_qed
 
     stats = {
         **stats,
         **generated_qed_stats,
         **generated_plogp_stats,
         **generated_sas_stats,
-        **top_k_metrics_qed,
         **top_k_metrics
     }
 
@@ -424,9 +424,7 @@ def get_stats(generated_smiles: List[str],
     print('Calculating SuccessRates')
     stats['SR - QED'] = percent_within_tolerance(generated_qed_values, 0.9, tolerance=0.1)
     if reward_fn is not None and 'QED' not in str(reward_fn):
-        tolerance = 10 ** math.ceil(
-            math.log10(max(generated_reward_values) - min(generated_reward_values))
-        ) * 0.05
+        tolerance = 0.5 if rtg_value > 1 else 0.05
         stats[f'SR - {reward_fn}'] = percent_within_tolerance(generated_reward_values, rtg_value, tolerance)
 
 
@@ -649,7 +647,7 @@ def main():
             try:
                 generated_reward_values = get_stats(
                     molecules,
-                    rtg_value=rtg_value[-1],
+                    rtg_value=rtg_value[-1][0],
                     train_set=train_dataset,
                     folder_name=os.path.join(args.results_path, res_folder),
                     reward_fn=reward_func[-1]
