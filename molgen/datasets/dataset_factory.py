@@ -67,7 +67,7 @@ def load_smiles(dataset_path: str) -> list[str]:
 
     else:
         file_extension = os.path.splitext(dataset_path)[-1].lower()
-        if file_extension == ".txt":
+        if file_extension == ".txt" or file_extension == ".text":
             print("Loading Data")
             with open(dataset_path, "r") as f:
                 smiles = [s.strip() for s in f.readlines()]
