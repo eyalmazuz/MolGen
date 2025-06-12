@@ -29,7 +29,7 @@ n_head = 12
 n_layer = 16
 dropout = 0.2
 model_type = "reward_conditioned"
-n_goals = 2
+n_goals = 3
 
 [reward]
 goal_conditioned = true
@@ -39,3 +39,7 @@ type = "QED"
 
 [[reward.functions]]
 type = "PlogP"
+
+[[reward.functions]]
+type = "pIC50"
+data_path = "C:\\Users\\Or\\PycharmProjects\\Thesis\\MolGen\\data\\datasets\\properties.csv"

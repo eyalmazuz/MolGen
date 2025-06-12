@@ -1,6 +1,7 @@
 import os
 import sys
 
+import pandas as pd
 import networkx as nx
 from rdkit import Chem
 from rdkit.Chem.Crippen import MolLogP  # type: ignore
@@ -87,3 +88,17 @@ class PenalizedLogPReward(AbstractReward):
         sas_score = sascorer.calculateScore(molecule)
         cycle_score = PenalizedLogPReward.num_long_cycles(molecule)
         return log_p - sas_score - cycle_score
+
+
+class pIC50Reward(AbstractReward):
+    def __init__(self,
+                 data_path: str,
+                 name: str | None = None,
+                 scale: RewardScale | None = None) -> None:
+        super(pIC50Reward, self).__init__(name=name, scale=scale)
+        df = pd.read_csv(data_path)
+        smiles = [Chem.MolToSmiles(Chem.MolFromSmiles(s)) for s in df['smiles'] if Chem.MolFromSmiles is not None]
+        self.smiles_to_pIC50 = dict(zip(smiles, df['KRAS pIC50']))
+
+    def __call__(self, smiles: str | list[str]) -> float | list[float]:
+        return self.smiles_to_pIC50[smiles]
