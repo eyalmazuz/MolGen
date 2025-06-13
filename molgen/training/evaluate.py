@@ -626,7 +626,7 @@ def main():
             reward_type = "reward_per_block"
             reward_func = reward_functions
             rtg_value = [[float(r)] for r in args.rtg.values()]
-            goal_idx = [[0], [1]]
+            goal_idx = [[i] for i in range(len(reward_func))]   # [[0], [1]]
             if args.checkpoint:
                 # print(f"Generating molecules conditioned on {reward_type} with RTG = {rtg_value:.2f}")
                 # Generate 'k' molecules
