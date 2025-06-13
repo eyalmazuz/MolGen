@@ -117,11 +117,9 @@ def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1
             all_states = torch.nn.functional.pad(all_states, (0, pad_size), value=tokenizer.pad_token_id)
             all_states = torch.cat([all_states, tensor_state], dim=1)
 
-            rtgs[0].append(ret[0][-1])
-            rtgs[1].append(ret[1][-1])
-            if goal_idx is not None:
-                goal[0].append(goal_idx[0][-1])
-                goal[1].append(goal_idx[1][-1])
+            [r.append(r[-1]) for r in rtgs]
+            if goal_idx is not None and goal is not None:
+                [g.append(g[-1]) for g in goal]
             # all_states has all previous states and rtgs has all previous rtgs (will be cut to block_size in utils.sample)
             # timestep is just current timestep # TODO: check the tensor(actions) to verify its correct
             sampled_action = sample(
@@ -467,6 +465,7 @@ def get_stats(generated_smiles: List[str],
         print(f'{k=} {len(v)=}')
     df = pd.DataFrame(data)
     df.to_csv(f'{generated_path}/generated_smiles.csv', index=False)
+    df.drop_duplicates(subset=['Smiles']).to_csv(f'{generated_path}/unique_generated_smiles.csv', index=False)
 
     if scaffold is not None:
         with open(f'{generated_path}/scaffold.txt', 'w') as f:
