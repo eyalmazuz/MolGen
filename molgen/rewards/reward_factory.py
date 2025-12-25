@@ -1,3 +1,9 @@
+import sys
+import six
+
+sys.modules['rdkit.six'] = six
+from tdc import Oracle
+
 from typing import Any, Union
 
 from molgen.rewards.functions.multi_reward import MultiReward
@@ -7,7 +13,8 @@ from molgen.rewards.reward import AbstractReward
 name_to_reward: dict[str, type[AbstractReward]] = {
     "QED": QEDReward,
     "PlogP": PenalizedLogPReward,
-    "pIC50": pIC50Reward     # Place holder for SSM-DTA integration
+    "pIC50": pIC50Reward,     # Place holder for SSM-DTA integration
+    "Oracle": Oracle,
 }
 
 
