@@ -200,11 +200,11 @@ class Trainer:
                 test_loss = run_epoch('test')
 
             # supports early stopping based on the test loss, or save every X epochs if no test set
-            good_model = (epoch > 2 and (self.test_dataset is None and (epoch % 1 == 0))) or test_loss < best_loss
+            # good_model = (epoch > 2 and (self.test_dataset is None and (epoch % 1 == 0))) or test_loss < best_loss   #always true if no test set, otherwise only true if test loss improves
+            good_model = (epoch > 2 and (self.test_dataset is None and (epoch % 1 == 0))) and test_loss < best_loss
             if self.save_path is not None and good_model:
                 best_loss = test_loss
-                self.save_checkpoint(epoch)
-
+                self.save_checkpoint(epoch) # ALWAYS saves with name "epoch_{epoch}.pth"
             # self.save_checkpoint(epoch, ckpt_name="latest.pth")
 
             # -- pass in target returns
