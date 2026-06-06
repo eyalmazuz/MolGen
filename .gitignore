@@ -129,3 +129,10 @@ dmypy.json
 .pyre/
 
 data/
+
+# Local experiment outputs
+*.out
+plots/
+run_evaluate
+run_molgen
+wandb/
