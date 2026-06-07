@@ -10,6 +10,7 @@ from tqdm import tqdm
 from molgen.tokenizers.tokenizer import AbstractTokenizer
 from molgen.rewards.reward import AbstractReward
 
+import random
 
 class PreTrainGPTSmilesDataset(Dataset):
     def __init__(
@@ -84,7 +85,7 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
             for goal_idx, reward_func in enumerate(self.reward_funcs):  # Iterate over goals
                 if self.string_type == "SMILES":
                     reward_to_go = reward_func(smiles)
-                    reward_to_go = [reward_to_go] * trajectory_len
+                    reward_to_go = [reward_to_go] * trajectory_len   # empty list size trajectory_len
                 elif self.string_type == "SELFIES":
                     state_selfies = self.tokenizer.decode(states, skip_special_tokens=True)
                     reward_to_go = [
@@ -103,7 +104,7 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
                 "labels": base_item["labels"].copy(),   # actions - (block, 1)
                 "attention_mask": [1] * trajectory_len,
                 "length": trajectory_len,
-                "goal_idx": list(range(self.n_goals)) if self.n_goals > 1 else None,
+                # "goal_idx": list(range(self.n_goals)) if self.n_goals > 1 else None, 
             })
 
         return results
@@ -124,4 +125,19 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
         Returns:
             A dictionary containing the trajectory data for the corresponding goal and molecule.
         """
-        return self._trajectories[idx]
+        #making it dinamic for multiple goals
+        trajectory = self._trajectories[idx]
+        num_goals = random.randint(1, self.n_goals)  # Randomly select a number of goals to include in the trajectory
+        all_goals = list(range(self.n_goals))
+        selected_goals = random.sample(all_goals, num_goals)
+        selected_goals.sort()  # Sort the selected goals to maintain a consistent order
+
+        fillterd_rtgs = [trajectory["rtgs"][goal_idx] for goal_idx in selected_goals]
+        return {
+            "rtgs": fillterd_rtgs,                    # trajectory rtg - (block, num_selected_goals)
+            "input_ids": trajectory["input_ids"],     # states - (block, state_len)
+            "labels": trajectory["labels"],           # actions - (block, 1)
+            "attention_mask": trajectory["attention_mask"],
+            "length": trajectory["length"],
+            "goal_idx": selected_goals,               # indices of the selected goals
+        }
