@@ -183,19 +183,6 @@ class DtGPT(nn.Module):
         self.action_embeddings = self.tok_emb  # Actions are simply SMILES tokens to add to the state
         nn.init.normal_(self.action_embeddings.weight, mean=0.0, std=0.02)
 
-        # self.state_transformer_layer = nn.TransformerEncoderLayer(
-        #     d_model=config.n_embd,
-        #     nhead=config.n_head,
-        #     dim_feedforward=config.n_embd * 4,
-        #     dropout=config.dropout,
-        #     batch_first=True  # lets us keep (batch, seq, embed)
-        # )
-        #
-        # self.state_transformer = nn.TransformerEncoder(
-        #     self.state_transformer_layer,
-        #     num_layers=getattr(config, "state_encoder_layers", 1)
-        # )
-
     def get_block_size(self):
         return self.block_size
 
@@ -267,32 +254,31 @@ class DtGPT(nn.Module):
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(model_output.size())
         return torch.sum(model_output * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
 
-    # state, action, and return
     def forward(self, input_ids, labels, targets=None, rtgs=None, attention_mask=None, goal=None):
         # input_ids: (batch, block_size, state_size)
-        # labels: (batch, block_size, 1)
-        # targets: (batch, block_size, 1)
+        # labels: (batch, block_size) or (batch, block_size, 1)
+        # targets: (batch, block_size) or (batch, block_size, 1)
         # rtgs: (batch, n_goals, block_size)
-        # goals: optional - (batch, n_goals, block_size)
+        # goal: optional - (batch, n_goals)
+        # attry number of goals , no padding
 
-        batch_size = input_ids.shape[0]
+        if labels is not None and torch.is_tensor(labels) and labels.dim() == 3 and labels.shape[-1] == 1:
+            labels = labels.squeeze(-1) # (batch, block_size) need to check if this is the right shape for action embedding lookup
+        if targets is not None and torch.is_tensor(targets) and targets.dim() == 3 and targets.shape[-1] == 1:
+            targets = targets.squeeze(-1)
+
+        batch_size = input_ids.shape[0] # should be 1 for now
         block_size = input_ids.shape[1]
         state_size = input_ids.shape[2]
         n_goals = rtgs.shape[1]
+        # assert rtgs.shape[2] == block_size, "rtgs must have length equal to input sequence length"
         n_layers = n_goals + 2
+
+
+
         assert block_size <= self.block_size, \
             f"Cannot forward sequence of length {block_size}, block size is only {self.block_size}"
         state_embeddings = self.state_embedding(input_ids)  # (batch_size, block_size, state_size, n_embd)
-        # x = state_embeddings.view(batch_size * block_size, state_size, self.config.n_embd)
-        # if attention_mask is not None:
-        #     # flatten attention same as state embeddings:
-        #     flat_mask = attention_mask.view(batch_size * block_size, state_size).to(torch.bool)
-        #     # src_key_padding_mask expects True == “ignore this position”:
-        #     x = self.state_transformer(x, src_key_padding_mask=~flat_mask)
-        # else:
-        #     x = self.state_transformer(x)
-        #
-        # state_embeddings = x.view(batch_size, block_size, state_size, self.config.n_embd)
         if attention_mask is not None:
             state_embeddings = self.mean_pooling(state_embeddings, attention_mask)  # (batch_size, block_size, n_embd)
         else:
@@ -305,11 +291,9 @@ class DtGPT(nn.Module):
 
             for i in range(n_goals):
                 rtg_embeddings = self.ret_emb(rtgs[:, i, :].unsqueeze(-1))  # (batch, block_size, n_embd)
-                # Modify RTG embedding
-                # gs with goal embeddings (add or concat)
                 if goal is not None:
-                    goal_embeddings = self.goal_emb(goal[:, i, :])  # (batch, n_embd)
-                    rtg_embeddings = rtg_embeddings + goal_embeddings
+                    goal_embeddings = self.goal_emb(goal[:, i])  # (batch, n_embd)
+                    rtg_embeddings = rtg_embeddings + goal_embeddings.unsqueeze(1)
                 token_embeddings[:, i::n_layers, :] = rtg_embeddings
 
             action_embeddings = self.action_embeddings(labels)  # (batch, block_size, n_embd)
@@ -323,8 +307,8 @@ class DtGPT(nn.Module):
                 rtg_embeddings = self.ret_emb(rtgs[:, i, :].unsqueeze(-1).type(torch.float32))
                 # Modify RTG embeddings with goal embeddings (add or concat)
                 if goal is not None:
-                    goal_embeddings = self.goal_emb(goal[:, i, :])  # (batch, n_embd)
-                    rtg_embeddings = rtg_embeddings + goal_embeddings
+                    goal_embeddings = self.goal_emb(goal[:, i])  # (batch, n_embd)
+                    rtg_embeddings = rtg_embeddings + goal_embeddings.unsqueeze(1)
                 token_embeddings[:, i::n_layers - 1, :] = rtg_embeddings  # really just [:,0,:]
             token_embeddings[:, n_goals::n_layers - 1, :] = state_embeddings  # really just [:,1,:]
 
@@ -356,7 +340,7 @@ class DtGPT(nn.Module):
         if labels is not None and self.model_type == 'reward_conditioned':
             logits = logits[:, n_goals::n_layers, :]  # only keep predictions from state_embeddings
         elif labels is None and self.model_type == 'reward_conditioned':
-            logits = logits[:, n_goals:, :]
+            logits = logits[:, n_goals::(n_layers - 1), :]
         elif labels is not None and self.model_type == 'naive':
             logits = logits[:, ::2, :]  # only keep predictions from state_embeddings
         elif labels is None and self.model_type == 'naive':
