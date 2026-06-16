@@ -254,105 +254,190 @@ class DtGPT(nn.Module):
         input_mask_expanded = attention_mask.unsqueeze(-1).expand(model_output.size())
         return torch.sum(model_output * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
 
-    def forward(self, input_ids, labels, targets=None, rtgs=None, attention_mask=None, goal=None):
+    def forward(self, input_ids, labels, targets=None, rtgs=None, attention_mask=None, goal=None, goal_mask=None):
         # input_ids: (batch, block_size, state_size)
         # labels: (batch, block_size) or (batch, block_size, 1)
         # targets: (batch, block_size) or (batch, block_size, 1)
         # rtgs: (batch, n_goals, block_size)
         # goal: optional - (batch, n_goals)
-        # attry number of goals , no padding
+        # goal_mask: optional - (batch, n_goals)
+        
+        batch_size = input_ids.shape[0]
+        block_size = input_ids.shape[1]
+        state_size = input_ids.shape[2]
 
         if labels is not None and torch.is_tensor(labels) and labels.dim() == 3 and labels.shape[-1] == 1:
-            labels = labels.squeeze(-1) # (batch, block_size) need to check if this is the right shape for action embedding lookup
+            labels = labels.squeeze(-1)
         if targets is not None and torch.is_tensor(targets) and targets.dim() == 3 and targets.shape[-1] == 1:
             targets = targets.squeeze(-1)
 
-        batch_size = input_ids.shape[0] # should be 1 for now
-        block_size = input_ids.shape[1]
-        state_size = input_ids.shape[2]
-        n_goals = rtgs.shape[1]
-        # assert rtgs.shape[2] == block_size, "rtgs must have length equal to input sequence length"
-        n_layers = n_goals + 2
-
-
-
         assert block_size <= self.block_size, \
             f"Cannot forward sequence of length {block_size}, block size is only {self.block_size}"
-        state_embeddings = self.state_embedding(input_ids)  # (batch_size, block_size, state_size, n_embd)
+
+        # --------------------------------------------------
+        # 2. State embeddings
+        # --------------------------------------------------
+        state_embeddings = self.state_embedding(input_ids)
+        # expected: (batch_size, block_size, state_size, n_embd)
+
         if attention_mask is not None:
-            state_embeddings = self.mean_pooling(state_embeddings, attention_mask)  # (batch_size, block_size, n_embd)
+            state_embeddings = self.mean_pooling(state_embeddings, attention_mask)
+            # expected: (batch_size, block_size, n_embd)
         else:
-            state_embeddings = state_embeddings.squeeze(-2)  # (1, 1, n_embd)
+            state_embeddings = state_embeddings.squeeze(-2)
+            # expected: (batch_size, block_size, n_embd)
 
-        if labels is not None and self.model_type == 'reward_conditioned':
-            token_embeddings = torch.zeros(
-                (batch_size, block_size * (2 + n_goals) - int(targets is None), self.config.n_embd), dtype=torch.float32,
-                device=state_embeddings.device)
+        state_positions = None
 
-            for i in range(n_goals):
-                rtg_embeddings = self.ret_emb(rtgs[:, i, :].unsqueeze(-1))  # (batch, block_size, n_embd)
-                if goal is not None:
-                    goal_embeddings = self.goal_emb(goal[:, i])  # (batch, n_embd)
-                    rtg_embeddings = rtg_embeddings + goal_embeddings.unsqueeze(1)
-                token_embeddings[:, i::n_layers, :] = rtg_embeddings
+        # --------------------------------------------------
+        # 3. Reward-conditioned model: dynamic goal packing
+        # --------------------------------------------------
+        if self.model_type == 'reward_conditioned':
+            assert rtgs is not None, "rtgs is required for reward_conditioned model"
+            assert rtgs.dim() == 3, f"rtgs should be (batch, n_goals, block_size), got {rtgs.shape}"
+            assert rtgs.shape[0] == batch_size, "rtgs batch size mismatch"
+            assert rtgs.shape[2] == block_size, \
+                f"rtgs must have length equal to input sequence length, got {rtgs.shape[2]} vs {block_size}"
 
-            action_embeddings = self.action_embeddings(labels)  # (batch, block_size, n_embd)
-            token_embeddings[:, n_goals::n_layers, :] = state_embeddings
-            token_embeddings[:, n_goals + 1::n_layers, :] = action_embeddings[:, -input_ids.shape[1] + int(targets is None):, :]
+            # For now, dynamic packing supports batch_size=1
+            assert batch_size == 1, "dynamic goal packing currently supports batch_size=1"
 
-        elif labels is None and self.model_type == 'reward_conditioned':  # only happens at very first timestep of evaluation
-            token_embeddings = torch.zeros((batch_size, block_size * (1 + n_goals), self.config.n_embd),
-                                           dtype=torch.float32, device=state_embeddings.device)
-            for i in range(n_goals):
-                rtg_embeddings = self.ret_emb(rtgs[:, i, :].unsqueeze(-1).type(torch.float32))
-                # Modify RTG embeddings with goal embeddings (add or concat)
-                if goal is not None:
-                    goal_embeddings = self.goal_emb(goal[:, i])  # (batch, n_embd)
-                    rtg_embeddings = rtg_embeddings + goal_embeddings.unsqueeze(1)
-                token_embeddings[:, i::n_layers - 1, :] = rtg_embeddings  # really just [:,0,:]
-            token_embeddings[:, n_goals::n_layers - 1, :] = state_embeddings  # really just [:,1,:]
+            n_goals = rtgs.shape[1]
 
-        elif labels is not None and self.model_type == 'naive':
-            action_embeddings = self.action_embeddings(
-                labels.type(torch.long).squeeze(-1))  # (batch, block_size, n_embd)
+            # If no mask is provided, use all goals at all timesteps
+            if goal_mask is None:
+                goal_mask = torch.ones(
+                    (batch_size, n_goals, block_size),
+                    dtype=torch.bool,
+                    device=input_ids.device
+                )
 
-            token_embeddings = torch.zeros(
-                (batch_size, input_ids.shape[1] * 2 - int(targets is None), self.config.n_embd), dtype=torch.float32,
-                device=state_embeddings.device)
-            token_embeddings[:, ::2, :] = state_embeddings
-            token_embeddings[:, 1::2, :] = action_embeddings[:, -input_ids.shape[1] + int(targets is None):, :]
-        elif labels is None and self.model_type == 'naive':  # only happens at very first timestep of evaluation
-            token_embeddings = state_embeddings
+            assert goal_mask.shape == (batch_size, n_goals, block_size), \
+                f"goal_mask should be {(batch_size, n_goals, block_size)}, got {goal_mask.shape}"
+
+            # If goal ids are not provided, use canonical ids: 0, 1, 2, ...
+            if goal is None:
+                goal = torch.arange(n_goals, device=input_ids.device).unsqueeze(0)
+
+            assert goal.shape == (batch_size, n_goals), \
+                f"goal and rtgs must have the same number of goals; goal should be {(batch_size, n_goals)}, got {goal.shape}"
+
+            tokens = []
+            pos_ids = []
+            state_positions = []
+
+            if labels is not None:
+                action_embeddings = self.action_embeddings(labels.long())
+                # (batch_size, block_size, n_embd)
+            for t in range(block_size):
+                # Add active goals in fixed canonical order: R1, R2, R3...
+                for g in range(n_goals):
+                    if goal_mask[0, g, t]:
+                        rtg_value = rtgs[:, g, t].unsqueeze(-1).float()
+                        # (batch_size, 1)
+
+                        rtg_embedding = self.ret_emb(rtg_value)
+                        # (batch_size, n_embd)
+
+                        goal_embedding = self.goal_emb(goal[:, g].long())
+                        # (batch_size, n_embd)
+
+                        rtg_embedding = rtg_embedding + goal_embedding
+
+                        tokens.append(rtg_embedding)
+                        pos_ids.append(t)
+
+                # Add state
+                state_positions.append(len(tokens))
+                tokens.append(state_embeddings[:, t, :])
+                pos_ids.append(t)
+
+                # Add action only when labels exist
+                if labels is not None:
+                    tokens.append(action_embeddings[:, t, :])
+                    pos_ids.append(t)
+
+            token_embeddings = torch.stack(tokens, dim=1)
+            # (batch_size, packed_len, n_embd)
+
+            pos = torch.tensor(pos_ids, dtype=torch.long, device=input_ids.device).unsqueeze(0)
+            pos_emb = self.pos_emb(pos)
+
+        # --------------------------------------------------
+        # 4. Naive model: keep old behavior
+        # --------------------------------------------------
+        elif self.model_type == 'naive':
+            if labels is not None:
+                action_embeddings = self.action_embeddings(labels.long())
+                # (batch_size, block_size, n_embd)
+
+                token_embeddings = torch.zeros(
+                    (batch_size, block_size * 2 - int(targets is None), self.config.n_embd),
+                    dtype=torch.float32,
+                    device=state_embeddings.device
+                )
+
+                token_embeddings[:, ::2, :] = state_embeddings
+                token_embeddings[:, 1::2, :] = action_embeddings[:, -block_size + int(targets is None):, :]
+
+                n_blocks = 2
+
+                if targets is None:
+                    # sequence length is block_size*2 - 1
+                    pos = torch.arange(
+                        0, block_size, dtype=torch.long, device=input_ids.device
+                    ).repeat_interleave(n_blocks).unsqueeze(0)
+                    pos = pos[:, :token_embeddings.shape[1]]
+                else:
+                    pos = torch.arange(
+                        0, block_size, dtype=torch.long, device=input_ids.device
+                    ).repeat_interleave(n_blocks).unsqueeze(0)
+
+                pos_emb = self.pos_emb(pos)
+
+            else:
+                # first timestep of evaluation
+                token_embeddings = state_embeddings
+
+                pos = torch.arange(
+                    0, block_size, dtype=torch.long, device=input_ids.device
+                ).unsqueeze(0)
+
+                pos_emb = self.pos_emb(pos)
+
         else:
             raise NotImplementedError()
 
-        n_blocks = n_layers - 1 if labels is None else n_layers  # only happens at very first timestep of evaluation
-        pos = torch.arange(
-            0, block_size, dtype=torch.long, device=input_ids.device
-        ).repeat_interleave(n_blocks).unsqueeze(0)
-        pos_emb = self.pos_emb(pos)
-
+        # --------------------------------------------------
+        # 5. Transformer
+        # --------------------------------------------------
         x = self.drop(token_embeddings + pos_emb[:, :token_embeddings.shape[1], :])
         x = self.blocks(x)
         x = self.ln_f(x)
         logits = self.head(x)
 
-        if labels is not None and self.model_type == 'reward_conditioned':
-            logits = logits[:, n_goals::n_layers, :]  # only keep predictions from state_embeddings
-        elif labels is None and self.model_type == 'reward_conditioned':
-            logits = logits[:, n_goals::(n_layers - 1), :]
-        elif labels is not None and self.model_type == 'naive':
-            logits = logits[:, ::2, :]  # only keep predictions from state_embeddings
-        elif labels is None and self.model_type == 'naive':
-            logits = logits  # for completeness
+        # --------------------------------------------------
+        # 6. Keep only logits from state positions
+        # --------------------------------------------------
+        if self.model_type == 'reward_conditioned':
+            logits = logits[:, state_positions, :]
+        elif self.model_type == 'naive':
+            if labels is not None:
+                logits = logits[:, ::2, :]
+            else:
+                logits = logits
+
         else:
             raise NotImplementedError()
 
-        # if we are given some desired targets also calculate the loss
+        # --------------------------------------------------
+        # 7. Loss
+        # --------------------------------------------------
         loss = None
         if targets is not None:
             loss = F.cross_entropy(
-                logits.reshape(-1, logits.size(-1)), targets.reshape(-1),
+                logits.reshape(-1, logits.size(-1)),
+                targets.reshape(-1),
                 ignore_index=self.config.ignore_index
             )
 
@@ -375,7 +460,7 @@ def top_k_logits(logits, k):
 
 @torch.no_grad()
 def sample(
-        model, x, steps, temperature=1.0, sample=False, top_k=None, actions=None, rtgs=None, attention=None, goal=None
+        model, x, steps, temperature=1.0, sample=False, top_k=None, actions=None, rtgs=None, attention=None, goal=None, goal_mask=None
 ):
     """
     take a conditioning sequence of indices in x (of shape (b,t)) and predict the next token in
@@ -392,8 +477,20 @@ def sample(
             actions = actions if actions.size(1) <= max_seq_len else actions[:, -max_seq_len:]  # crop context if needed
 
         rtgs = rtgs if rtgs.size(1) <= max_seq_len else rtgs[:, -max_seq_len:]  # crop context if needed
+        
+        # If goal_mask is not provided but we have goals and rtgs, create a default all-True mask
+        mask_cond = goal_mask
+        if mask_cond is None and goal is not None and rtgs is not None:
+            batch_size = rtgs.shape[0]
+            n_goals = rtgs.shape[1]
+            block_size = x_cond.shape[1]
+            mask_cond = torch.ones((batch_size, n_goals, block_size), dtype=torch.bool, device=x_cond.device)
+        elif mask_cond is not None and mask_cond.size(1) > max_seq_len:
+            # Crop mask_cond to match x_cond if needed
+            mask_cond = mask_cond[:, :, -max_seq_len:]
+        
         logits, _ = model(
-            input_ids=x_cond, labels=actions, targets=None, rtgs=rtgs, attention_mask=attention, goal=goal
+            input_ids=x_cond, labels=actions, targets=None, rtgs=rtgs, attention_mask=attention, goal=goal, goal_mask=mask_cond
         )
         # pluck the logits at the final step and scale by temperature
         logits = logits[:, -1, :] / temperature

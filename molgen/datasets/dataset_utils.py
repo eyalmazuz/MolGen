@@ -93,6 +93,7 @@ class PadCollate:
         batch_labels = []
         batch_rtgs = []
         batch_goals = []
+        batch_goal_masks = []
 
         for batch in batches:
             input_ids = batch.get("input_ids")
@@ -100,6 +101,7 @@ class PadCollate:
             labels = batch.get("labels")
             rtgs = batch.get("rtgs", None)
             goal = batch.get("goal_idx", None)
+            goal_mask = batch.get("goal_mask", None)
 
             if len(input_ids) < max_length:
                 if rtgs is None:
@@ -111,6 +113,10 @@ class PadCollate:
                             rtg += [0] * (max_length - len(rtg))
                     else:
                         rtgs += [0] * (max_length - len(rtgs))
+
+                if goal_mask is not None:
+                    for mask in goal_mask:
+                        mask += [0] * (max_length - len(mask))
 
                 if attention_mask is not None:
                     attention_mask += [0] * (max_length - len(attention_mask))
@@ -133,6 +139,9 @@ class PadCollate:
                     goal = [goal] * max_length
                 batch_goals.append(goal)
 
+            if goal_mask is not None:
+                batch_goal_masks.append(goal_mask)
+
             batch_input_ids.append(input_ids)
             batch_labels.append(labels)
             if attention_mask is not None:
@@ -150,6 +159,8 @@ class PadCollate:
             return_dict["targets"] = return_dict["labels"]
         if len(batch_goals) > 0:
             return_dict["goal"] = torch.tensor(np.array(batch_goals), dtype=torch.int64)
+        if len(batch_goal_masks) > 0:
+            return_dict["goal_mask"] = torch.tensor(np.array(batch_goal_masks), dtype=torch.bool)
 
         return return_dict
 

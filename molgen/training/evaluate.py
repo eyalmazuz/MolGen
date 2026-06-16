@@ -78,6 +78,13 @@ def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1
         # first state is from env, first rtg is target return, and first timestep is 0
         rtgs = copy.deepcopy(ret)
         goal = copy.deepcopy(goal_idx) if goal_idx is not None else None
+        
+        # Create goal_mask: if we have goals, use all-True mask for all goals
+        goal_mask = None
+        if goal_idx is not None and goal is not None:
+            # Initial mask will be expanded by sample() as needed
+            goal_mask = None  # Let sample() create the default mask
+        
         sampled_action = sample(
             model=model,
             x=init_state,
@@ -87,6 +94,7 @@ def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1
             actions=None,
             rtgs=torch.tensor(rtgs, dtype=torch.float32).to(args.device).unsqueeze(0),
             goal=torch.tensor(goal, dtype=torch.int64).to(args.device).unsqueeze(0) if goal_idx is not None else None,
+            goal_mask=goal_mask,
             # timesteps=torch.zeros((1, 1, 1), dtype=torch.int64).to(self.device)
         )
 
@@ -133,6 +141,7 @@ def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1
                 attention=torch.tensor(np.tril(np.ones(all_states.shape[1:])), dtype=torch.long).to(
                     args.device).unsqueeze(0),
                 goal=torch.tensor(goal, dtype=torch.int64).to(args.device).unsqueeze(0) if goal_idx is not None else None,
+                goal_mask=goal_mask,
                 # timesteps=(min(j, self.config.max_timestep) * torch.ones((1, 1, 1), dtype=torch.int64).to(self.device)))
             )
 
