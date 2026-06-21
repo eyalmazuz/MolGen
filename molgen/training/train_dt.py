@@ -121,58 +121,122 @@ class Trainer:
             loader = self.train_dataset if is_train else self.test_dataset
 
             total_loss = 0
+            accumulation_steps = config.get("gradient_accumulation_steps", 1)
+            if is_train:
+                self.optimizer.zero_grad()
+
             pbar = tqdm(enumerate(loader), total=len(loader)) if is_train else enumerate(loader)
+            # accumulation_steps = config.get("gradient_accumulation_steps", 1)
+            
+            lr = config["learning_rate"]
+            optimizer_steps = 0
+            # if is_train:
+            #     self.optimizer.zero_grad(set_to_none=True)
             for it, batch in pbar:
-                if "cuda" in self.device:
-                    batch = {k: v.pin_memory().to(self.device, non_blocking=True) for k, v in batch.items()}
-                else:
-                    batch = {k: v.to(self.device) for k, v in batch.items()}    # place data on the correct device
+                def to_device(val):
+                    if isinstance(val, torch.Tensor):
+                        if "cuda" in self.device:
+                            return val.pin_memory().to(self.device, non_blocking=True)
+                        return val.to(self.device)
+                    elif isinstance(val, list):
+                        return [to_device(item) for item in val]
+                    return val
+
+                batch = {k: to_device(v) for k, v in batch.items()}    # place data on the correct device
                 x = batch["input_ids"]  # states
                 y = batch["labels"]     # actions
-                r = batch["rtgs"]       # rtgs (reward-to-go)
-                a = batch["attention_mask"]
-                g = batch["goal"]
+                # r = batch["rtgs"]       # rtgs (reward-to-go) is a list 
+                # a = batch["attention_mask"]
+                # g = batch["goal"]
+                a = batch.get("attention_mask", None)
+                r_list = batch.get("rtgs", None)       
+                g_list = batch.get("goal", batch.get("goal_idx", None))
+                gm_list = batch.get("goal_mask", None)
 
-                if epoch_num < 2:
-                    r, g = r[:, 0:1, :], g[:, 0:1, :]
-                # For each goal, call forward pass with the relevant rtg and goal slices.
+                batch_size = x.size(0)
+                batch_loss = 0.0
+
+                # if epoch_num < 2:
+                #     r, g = r[:, 0:1, :], g[:, 0:1, :]
+                # # For each goal, call forward pass with the relevant rtg and goal slices.
+                # with torch.set_grad_enabled(is_train):
+                #     logits, loss = model(
+                #         input_ids=x, labels=y, targets=y, rtgs=r, attention_mask=a, goal=g
+                #     )
                 with torch.set_grad_enabled(is_train):
-                    logits, loss = model(
-                        input_ids=x, labels=y, targets=y, rtgs=r, attention_mask=a, goal=g
-                    )
+                    for i in range(batch_size):
+                        # add "Batch=1"
+                        x_i = x[i].unsqueeze(0)
+                        y_i = y[i].unsqueeze(0)
+                        a_i = a[i].unsqueeze(0) if a is not None else None
+                        
+                        r_i = r_list[i].unsqueeze(0) if r_list is not None else None
+                        g_i = g_list[i].unsqueeze(0) if g_list is not None else None
+                        gm_i = gm_list[i].unsqueeze(0) if gm_list is not None else None
+                        #cut off the rtg and goal to only include the first element for the first two epochs
+                        if epoch_num < 2 and r_i is not None and g_i is not None:
+                            r_i = r_i[:, 0:1, :]
+                            g_i = g_i[:, 0:1]
+                            gm_i = gm_i[:, 0:1, :]
 
-                total_loss += loss
+                        # model forward pass for a single sample in the batch
+                        logits, sample_loss = model(
+                            input_ids=x_i, labels=y_i, targets=y_i, rtgs=r_i, attention_mask=a_i, goal=g_i , goal_mask=gm_i)#TODO: goal_mask is currently only implemented for the SMILES dataset, will need to be added to the SELFIES dataset and passed in here as well if we want to use it for that dataset
+                        
+                        batch_loss += sample_loss
+
+                # total_loss += loss.detach()
+                # if is_train:
+                #     display_loss = loss.item()
+                #     loss = loss / accumulation_steps
+                #     # total_loss += loss.detach()
+
+                #     with torch.set_grad_enabled(is_train):
+                #         loss.backward()  # TODO: scaler.scale(loss).backward() - only for mix precision training
+                batch_loss = batch_loss / batch_size
+                total_loss += batch_loss.detach()
+
                 if is_train:
+                    display_loss = batch_loss.item()
+                    scaled_loss = batch_loss / accumulation_steps
 
-                    # backprop and update the parameters
-                    model.zero_grad()
-                    loss.backward()     # TODO: scaler.scale(loss).backward() - only for mix precision training
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), config.get("grad_clip", 1.0))
-                    self.optimizer.step()
+                    with torch.set_grad_enabled(is_train):
+                        scaled_loss.backward()
+                    if (it + 1) % accumulation_steps == 0 or (it + 1) == len(loader):
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), config.get("grad_clip", 1.0))
+                        self.optimizer.step()
+                        optimizer_steps += 1
+                        self.optimizer.zero_grad()
 
-                    # decay the learning rate based on our progress
-                    if config.get("decay_lr", True):
-                        self.tokens += (y != self.ignore_token_id).sum()  # number of tokens processed this step (i.e. label is not -100)
-                        warmup_tokens = config.get("warmup_steps", 0)
-                        if self.tokens < warmup_tokens:
-                            # linear warmup
-                            lr_mult = float(self.tokens) / float(max(1, warmup_tokens))
+                        # decay the learning rate based on our progress
+                        if config.get("decay_lr", True):
+                            self.tokens += (y != self.ignore_token_id).sum()  # number of tokens processed this step (i.e. label is not -100)
+                            warmup_tokens = config.get("warmup_steps", 0)
+                            if self.tokens < warmup_tokens:
+                                # linear warmup
+                                lr_mult = float(self.tokens) / float(max(1, warmup_tokens))
+                            else:
+                                # cosine learning rate decay
+                                progress = float(self.tokens - warmup_tokens) / float(
+                                    max(1, config.get("lr_decay_steps", warmup_tokens * 300) - warmup_tokens))
+                                lr_mult = max(0.1, 0.5 * (1.0 + math.cos(math.pi * progress)))
+                            lr = config["learning_rate"] * lr_mult
+                            for param_group in self.optimizer.param_groups:
+                                param_group['lr'] = lr
                         else:
-                            # cosine learning rate decay
-                            progress = float(self.tokens - warmup_tokens) / float(
-                                max(1, config.get("lr_decay_steps", warmup_tokens * 300) - warmup_tokens))
-                            lr_mult = max(0.1, 0.5 * (1.0 + math.cos(math.pi * progress)))
-                        lr = config["learning_rate"] * lr_mult
-                        for param_group in self.optimizer.param_groups:
-                            param_group['lr'] = lr
-                    else:
-                        lr = config["learning_rate"]
+                            lr = config["learning_rate"]
 
-                    # report progress
-                    pbar.set_description(f"epoch {epoch_num + 1} of {epochs} | iter {it}: train loss {loss.item():.5f}. lr {lr:e}")
+                        # report progress
+                        pbar.set_description(f"epoch {epoch_num + 1} of {epochs} | iter {it}: train loss {display_loss:.5f}. lr {lr:e}")
                     torch.cuda.empty_cache()
+                    
 
             # if not is_train:
+            if is_train:
+                print(f"Optimizer steps this epoch: {optimizer_steps}")
+                print(f"Total batches this epoch: {len(loader)}")
+                print(f"Accumulation steps: {accumulation_steps}")
+                
             episode_loss = total_loss.item() / len(loader)
             print(f"\nMean Epoch Loss: {episode_loss:.4f}")
             if self.wandb_log:
