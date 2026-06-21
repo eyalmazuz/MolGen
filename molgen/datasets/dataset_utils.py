@@ -131,14 +131,16 @@ class PadCollate:
                     ]
                 batch_rtgs.append(rtgs)
 
+            # if goal is not None:
+            #     if isinstance(goal, list):
+            #         for i, g in enumerate(goal):
+            #             goal[i] = [g] * max_length
+            #     else:
+            #         goal = [goal] * max_length
+            #     batch_goals.append(goal)
             if goal is not None:
-                if isinstance(goal, list):
-                    for i, g in enumerate(goal):
-                        goal[i] = [g] * max_length
-                else:
-                    goal = [goal] * max_length
                 batch_goals.append(goal)
-
+            
             if goal_mask is not None:
                 batch_goal_masks.append(goal_mask)
 
@@ -155,13 +157,13 @@ class PadCollate:
             return_dict["attention_mask"] = torch.tensor(np.array(batch_attention_mask), dtype=torch.int64)
 
         if len(batch_rtgs) > 0:
-            return_dict["rtgs"] = torch.tensor(np.array(batch_rtgs), dtype=torch.float32)
-            return_dict["targets"] = return_dict["labels"]
-        if len(batch_goals) > 0:
-            return_dict["goal"] = torch.tensor(np.array(batch_goals), dtype=torch.int64)
-        if len(batch_goal_masks) > 0:
-            return_dict["goal_mask"] = torch.tensor(np.array(batch_goal_masks), dtype=torch.bool)
+            return_dict["rtgs"] = [torch.tensor(rtg, dtype=torch.float32) for rtg in batch_rtgs]
+            # return_dict["targets"] = return_dict["labels"]
 
+        if len(batch_goals) > 0:
+            return_dict["goal_idx"] = [torch.tensor(goal, dtype=torch.int64) for goal in batch_goals]
+        if len(batch_goal_masks) > 0:
+            return_dict["goal_mask"] = [torch.tensor(mask, dtype=torch.bool) for mask in batch_goal_masks]
         return return_dict
 
 

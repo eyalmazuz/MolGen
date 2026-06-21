@@ -125,14 +125,19 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
         Returns:
             A dictionary containing the trajectory data for the corresponding goal and molecule.
         """
-        #making it dinamic for multiple goals
+        #making it dynamic for multiple goals
         trajectory = self._trajectories[idx]
         num_goals = random.randint(1, self.n_goals)  # Randomly select a number of goals to include in the trajectory
         all_goals = list(range(self.n_goals))
         selected_goals = random.sample(all_goals, num_goals)
         selected_goals.sort()  # Sort the selected goals to maintain a consistent order
 
-        fillterd_rtgs = [trajectory["rtgs"][goal_idx] for goal_idx in selected_goals]
+        fillterd_rtgs = [trajectory["rtgs"][goal_idx] for goal_idx in selected_goals] #
+        goal_mask = [
+            [1] *  len(trajectory["input_ids"])
+            for _ in selected_goals
+            #goal_mask is a list of lists, where each inner list corresponds to a selected goal and contains 1s for the length of the trajectory
+        ]
         return {
             "rtgs": fillterd_rtgs,                    # trajectory rtg - (block, num_selected_goals)
             "input_ids": trajectory["input_ids"],     # states - (block, state_len)
@@ -140,4 +145,5 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
             "attention_mask": trajectory["attention_mask"],
             "length": trajectory["length"],
             "goal_idx": selected_goals,               # indices of the selected goals
+            "goal_mask": goal_mask,                   # mask for the selected goals
         }
