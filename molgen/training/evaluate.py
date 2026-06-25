@@ -76,7 +76,7 @@ def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1
         init_state = torch.tensor([tokenizer.bos_token_id], dtype=torch.int64)
         init_state = init_state.to(args.device).unsqueeze(0).unsqueeze(0)
         # first state is from env, first rtg is target return, and first timestep is 0
-        rtgs = copy.deepcopy(ret)
+        rtgs = [[r] for r in copy.deepcopy(ret)]
         goal = copy.deepcopy(goal_idx) if goal_idx is not None else None
         
         # Create goal_mask: if we have goals, use all-True mask for all goals
@@ -126,8 +126,6 @@ def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1
             all_states = torch.cat([all_states, tensor_state], dim=1)
 
             [r.append(r[-1]) for r in rtgs]
-            if goal_idx is not None and goal is not None:
-                [g.append(g[-1]) for g in goal]
             # all_states has all previous states and rtgs has all previous rtgs (will be cut to block_size in utils.sample)
             # timestep is just current timestep # TODO: check the tensor(actions) to verify its correct
             sampled_action = sample(
@@ -136,7 +134,7 @@ def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1
                 steps=1,
                 temperature=temperature,
                 sample=True,
-                actions=torch.tensor(actions, dtype=torch.long).to(args.device).unsqueeze(0),
+                actions=None,
                 rtgs=torch.tensor(rtgs, dtype=torch.float32).to(args.device).unsqueeze(0),
                 attention=torch.tensor(np.tril(np.ones(all_states.shape[1:])), dtype=torch.long).to(
                     args.device).unsqueeze(0),
@@ -293,6 +291,16 @@ def percent_within_tolerance(values, target, tolerance):
     if isinstance(res, np.ndarray):
         res = res[0]
     return res
+
+
+def json_numpy_default(obj):
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    raise TypeError(f'Object of type {obj.__class__.__name__} is not JSON serializable')
 
 
 def get_stats(generated_smiles: List[str],
@@ -459,7 +467,7 @@ def get_stats(generated_smiles: List[str],
         os.makedirs(generated_path)
 
     with open(f'{generated_path}/stats.json', 'w') as f:
-        json.dump(stats, f)
+        json.dump(stats, f, default=json_numpy_default)
 
     if not isinstance(generated_reward_values, dict):
         generated_reward_values = {str(reward_fn): generated_reward_values}
@@ -610,7 +618,7 @@ def main():
     if args.stats:
         if args.checkpoint:
             dirname = os.path.dirname(args.checkpoint)
-            checkpoints = os.listdir(dirname)
+            checkpoints = [os.path.basename(args.checkpoint)]
         else:
             checkpoints = ['pre_generated']
         for epoch in checkpoints:
@@ -618,7 +626,7 @@ def main():
             if args.checkpoint:
                 args.checkpoint = os.path.join(dirname, epoch)
                 print(f"loading model {args.checkpoint}")
-                model = load_model(model_config, args).to("cuda")
+                model = load_model(model_config, args)
             bins, success_rates, validity = [], [], []
         # for i, (reward_type, rtg_value) in enumerate(args.rtg.items()):    # np.linspace(0.1, 1, 10):
         #     reward_func = reward_functions[i] if isinstance(reward_functions, list) else reward_functions
@@ -634,8 +642,10 @@ def main():
         #
             reward_type = "reward_per_block"
             reward_func = reward_functions
-            rtg_value = [[float(r)] for r in args.rtg.values()]
-            goal_idx = [[i] for i in range(len(reward_func))]   # [[0], [1]]
+            # rtg_value = [[float(r)] for r in args.rtg.values()]
+            rtg_value = [float(r) for r in args.rtg.values()]   
+            # goal_idx = [[i] for i in range(len(reward_func))]   # [[0], [1]]
+            goal_idx = list(range(len(reward_func)))
             if args.checkpoint:
                 # print(f"Generating molecules conditioned on {reward_type} with RTG = {rtg_value:.2f}")
                 # Generate 'k' molecules
@@ -652,16 +662,13 @@ def main():
             ])
             if args.dataset_type == DatasetType.DT_SELFIES:
                 molecules = [sf.decoder(s) for s in tqdm(molecules, desc=f"decoding selfies")]
-            try:
-                generated_reward_values = get_stats(
-                    molecules,
-                    rtg_value=rtg_value[-1][0],
-                    train_set=train_dataset,
-                    folder_name=os.path.join(args.results_path, res_folder),
-                    reward_fn=reward_func[-1]
-                )
-            except:
-                continue
+            generated_reward_values = get_stats(
+                molecules,
+                rtg_value=rtg_value[-1],
+                train_set=train_dataset,
+                folder_name=os.path.join(args.results_path, res_folder),
+                reward_fn=reward_func[-1]
+            )
             bin_validity = len(generated_reward_values["Smiles"]) / args.k
             # bin_success_rate = (
             #     np.sum(

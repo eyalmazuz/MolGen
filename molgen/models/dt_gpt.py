@@ -299,9 +299,6 @@ class DtGPT(nn.Module):
             assert rtgs.shape[2] == block_size, \
                 f"rtgs must have length equal to input sequence length, got {rtgs.shape[2]} vs {block_size}"
 
-            # For now, dynamic packing supports batch_size=1
-            assert batch_size == 1, "dynamic goal packing currently supports batch_size=1"
-
             n_goals = rtgs.shape[1]
 
             # If no mask is provided, use all goals at all timesteps
@@ -477,6 +474,8 @@ def sample(
             actions = actions if actions.size(1) <= max_seq_len else actions[:, -max_seq_len:]  # crop context if needed
 
         rtgs = rtgs if rtgs.size(1) <= max_seq_len else rtgs[:, -max_seq_len:]  # crop context if needed
+        if attention is not None and attention.size(1) > max_seq_len:
+            attention = attention[:, -max_seq_len:]  # crop context if needed
         
         # If goal_mask is not provided but we have goals and rtgs, create a default all-True mask
         mask_cond = goal_mask
