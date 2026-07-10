@@ -301,7 +301,6 @@ class DtGPT(nn.Module):
 
             n_goals = rtgs.shape[1]
 
-            # If no mask is provided, use all goals at all timesteps
             if goal_mask is None:
                 goal_mask = torch.ones(
                     (batch_size, n_goals, block_size),
@@ -312,52 +311,50 @@ class DtGPT(nn.Module):
             assert goal_mask.shape == (batch_size, n_goals, block_size), \
                 f"goal_mask should be {(batch_size, n_goals, block_size)}, got {goal_mask.shape}"
 
-            # If goal ids are not provided, use canonical ids: 0, 1, 2, ...
             if goal is None:
-                goal = torch.arange(n_goals, device=input_ids.device).unsqueeze(0)
+                goal = torch.arange(n_goals, device=input_ids.device).unsqueeze(0).expand(batch_size, -1)
 
             assert goal.shape == (batch_size, n_goals), \
                 f"goal and rtgs must have the same number of goals; goal should be {(batch_size, n_goals)}, got {goal.shape}"
 
-            tokens = []
-            pos_ids = []
-            state_positions = []
-
             if labels is not None:
                 action_embeddings = self.action_embeddings(labels.long())
-                # (batch_size, block_size, n_embd)
-            for t in range(block_size):
-                # Add active goals in fixed canonical order: R1, R2, R3...
-                for g in range(n_goals):
-                    if goal_mask[0, g, t]:
-                        rtg_value = rtgs[:, g, t].unsqueeze(-1).float()
-                        # (batch_size, 1)
 
-                        rtg_embedding = self.ret_emb(rtg_value)
-                        # (batch_size, n_embd)
+            rtg_embeddings = self.ret_emb(rtgs.float().unsqueeze(-1))
+            goal_embeddings = self.goal_emb(goal.long()).unsqueeze(2)
 
-                        goal_embedding = self.goal_emb(goal[:, g].long())
-                        # (batch_size, n_embd)
+            goal_tokens = rtg_embeddings + goal_embeddings
+            goal_mask_f = goal_mask.unsqueeze(-1).to(dtype=goal_tokens.dtype)
 
-                        rtg_embedding = rtg_embedding + goal_embedding
+            goal_context = (goal_tokens * goal_mask_f).sum(dim=1)
+            goal_context = goal_context / goal_mask_f.sum(dim=1).clamp_min(1.0)
 
-                        tokens.append(rtg_embedding)
-                        pos_ids.append(t)
+            state_embeddings = state_embeddings + goal_context
 
-                # Add state
-                state_positions.append(len(tokens))
-                tokens.append(state_embeddings[:, t, :])
-                pos_ids.append(t)
+            if labels is not None:
+                token_embeddings = torch.zeros(
+                    (batch_size, block_size * 2 - int(targets is None), self.config.n_embd),
+                    dtype=torch.float32,
+                    device=state_embeddings.device,
+                )
+                token_embeddings[:, ::2, :] = state_embeddings
+                token_embeddings[:, 1::2, :] = action_embeddings[:, -block_size + int(targets is None):, :]
 
-                # Add action only when labels exist
-                if labels is not None:
-                    tokens.append(action_embeddings[:, t, :])
-                    pos_ids.append(t)
+                pos = torch.arange(
+                    0, block_size, dtype=torch.long, device=input_ids.device
+                ).repeat_interleave(2).unsqueeze(0)
 
-            token_embeddings = torch.stack(tokens, dim=1)
-            # (batch_size, packed_len, n_embd)
+                if targets is None:
+                    pos = pos[:, :token_embeddings.shape[1]]
 
-            pos = torch.tensor(pos_ids, dtype=torch.long, device=input_ids.device).unsqueeze(0)
+                state_positions = torch.arange(0, token_embeddings.shape[1], 2, device=input_ids.device)
+            else:
+                token_embeddings = state_embeddings
+                pos = torch.arange(
+                    0, block_size, dtype=torch.long, device=input_ids.device
+                ).unsqueeze(0)
+                state_positions = torch.arange(block_size, device=input_ids.device)
+
             pos_emb = self.pos_emb(pos)
 
         # --------------------------------------------------

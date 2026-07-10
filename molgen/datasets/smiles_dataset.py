@@ -130,9 +130,9 @@ class PreTrainDecisionGPTSmilesDataset(PreTrainGPTSmilesDataset):
         num_goals = random.randint(1, self.n_goals)  # Randomly select a number of goals to include in the trajectory
         all_goals = list(range(self.n_goals))
         selected_goals = random.sample(all_goals, num_goals)
-        selected_goals.sort()  # Sort the selected goals to maintain a consistent order
+        selected_goals.sort()
 
-        fillterd_rtgs = [trajectory["rtgs"][goal_idx] for goal_idx in selected_goals] #
+        fillterd_rtgs = [trajectory["rtgs"][goal_idx] for goal_idx in selected_goals]
         goal_mask = [
             [1] *  len(trajectory["input_ids"])
             for _ in selected_goals

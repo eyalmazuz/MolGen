@@ -303,6 +303,20 @@ def json_numpy_default(obj):
     raise TypeError(f'Object of type {obj.__class__.__name__} is not JSON serializable')
 
 
+def to_jsonable(obj):
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, dict):
+        return {str(k): to_jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [to_jsonable(v) for v in obj]
+    return obj
+
+
 def get_stats(generated_smiles: List[str],
               rtg_value: float,
               save_path: str = './data',
@@ -466,8 +480,9 @@ def get_stats(generated_smiles: List[str],
     if not os.path.exists(generated_path):
         os.makedirs(generated_path)
 
+    jsonable_stats = to_jsonable(stats)
     with open(f'{generated_path}/stats.json', 'w') as f:
-        json.dump(stats, f, default=json_numpy_default)
+        json.dump(jsonable_stats, f, default=json_numpy_default)
 
     if not isinstance(generated_reward_values, dict):
         generated_reward_values = {str(reward_fn): generated_reward_values}

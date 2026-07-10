@@ -1,0 +1,22 @@
+[model_config]
+vocab_size = 39
+block_size = 16
+max_seq_len = 8
+n_embd = 32
+n_head = 4
+n_layer = 2
+dropout = 0.0
+model_type = "reward_conditioned"
+n_goals = 2
+ignore_index = -100
+
+[reward]
+goal_conditioned = true
+
+[[reward.functions]]
+type = "QED"
+
+[[reward.functions]]
+type = "PlogP"
+scale.name = "mult"
+scale.factor = 0.1
