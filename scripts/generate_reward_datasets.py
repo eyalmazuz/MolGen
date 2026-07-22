@@ -52,14 +52,44 @@ def canonicalize_smiles(smiles: str) -> tuple[str, bool]:
 
 
 def safe_reward_value(reward_fn, smiles: str) -> float:
+    # Report raw chemical metrics even when training used a scaled reward.
+    previous_eval = reward_fn.eval
     try:
+        reward_fn.eval = True
         value = reward_fn(smiles)
     except Exception:
         return float("nan")
+    finally:
+        reward_fn.eval = previous_eval
 
     if value is None:
         return float("nan")
     return float(value)
+
+
+def model_rtg_from_raw_target(reward_fn, raw_target: float) -> float:
+    """Apply the same reward scaling used to construct training RTGs."""
+    if reward_fn.scale is None:
+        return float(raw_target)
+    return float(reward_fn.scale(raw_target))
+
+
+def permute_goal_inputs(
+    goal_ids: list[int],
+    rtg_values: list[float],
+    goal_mask: list[bool],
+    permutation: list[int],
+) -> tuple[list[int], list[float], list[bool]]:
+    """Permute goals while preserving every (goal id, RTG, mask) association."""
+    if not (len(goal_ids) == len(rtg_values) == len(goal_mask) == len(permutation)):
+        raise ValueError("Goal IDs, RTGs, masks, and permutation must have equal lengths")
+    if sorted(permutation) != list(range(len(goal_ids))):
+        raise ValueError("permutation must contain every goal position exactly once")
+    return (
+        [goal_ids[i] for i in permutation],
+        [rtg_values[i] for i in permutation],
+        [goal_mask[i] for i in permutation],
+    )
 
 
 def decode_sequence(tokenizer, token_ids: list[int], dataset_type: DatasetType) -> str:
@@ -72,13 +102,6 @@ def decode_sequence(tokenizer, token_ids: list[int], dataset_type: DatasetType) 
     return decoded
 
 
-def build_goal_mask(n_goals: int, active_goal_indices: list[int]) -> list[bool]:
-    mask = [False] * n_goals
-    for idx in active_goal_indices:
-        mask[idx] = True
-    return mask
-
-
 def make_condition_specs(n_goals: int) -> list[dict[str, Any]]:
     if n_goals < 2:
         raise ValueError(f"Expected at least 2 goals, got {n_goals}")
@@ -86,17 +109,17 @@ def make_condition_specs(n_goals: int) -> list[dict[str, Any]]:
     return [
         {
             "generation_condition": "reward_A_only",
-            "goal_mask": build_goal_mask(n_goals, [0]),
+            "active_goal_ids": [0],
             "output_file": "generated_reward_A.csv",
         },
         {
             "generation_condition": "reward_B_only",
-            "goal_mask": build_goal_mask(n_goals, [1]),
+            "active_goal_ids": [1],
             "output_file": "generated_reward_B.csv",
         },
         {
             "generation_condition": "reward_A_and_B",
-            "goal_mask": build_goal_mask(n_goals, [0, 1]),
+            "active_goal_ids": [0, 1],
             "output_file": "generated_reward_A_and_B.csv",
         },
     ]
@@ -109,7 +132,7 @@ def generate_conditioned_smiles(
     reward_functions,
     dataset_type: DatasetType,
     generation_condition: str,
-    goal_mask_1d: list[bool],
+    active_goal_ids: list[int],
     reward_targets: list[float],
     num_molecules: int,
     batch_size: int,
@@ -117,17 +140,35 @@ def generate_conditioned_smiles(
     temperature: float,
     device: str,
 ) -> list[dict[str, Any]]:
-    n_goals = len(goal_mask_1d)
-    full_reward_targets = list(reward_targets[:2]) + [0.0] * max(0, n_goals - 2)
-    goal_ids = torch.arange(n_goals, device=device, dtype=torch.long).unsqueeze(0)
-    goal_template = torch.tensor(goal_mask_1d, dtype=torch.bool, device=device).view(1, n_goals, 1)
-    rtg_template = torch.tensor(full_reward_targets, dtype=torch.float32, device=device).view(1, n_goals, 1)
+    total_goals = model.config.n_goals
+    if not active_goal_ids:
+        raise ValueError("At least one goal must be active")
+    if len(set(active_goal_ids)) != len(active_goal_ids):
+        raise ValueError("Active goal IDs must be unique")
+    if min(active_goal_ids) < 0 or max(active_goal_ids) >= total_goals:
+        raise ValueError(f"Active goal IDs must be in [0, {total_goals})")
+
+    raw_reward_targets = list(reward_targets[:2]) + [0.0] * max(0, total_goals - 2)
+    all_model_rtg_targets = [
+        model_rtg_from_raw_target(reward_functions[i], raw_reward_targets[i])
+        for i in range(total_goals)
+    ]
+    active_model_rtgs = [all_model_rtg_targets[i] for i in active_goal_ids]
+    active_goal_mask = [True] * len(active_goal_ids)
 
     rows: list[dict[str, Any]] = []
     remaining = num_molecules
 
     while remaining > 0:
         current_batch = min(batch_size, remaining)
+        n_active_goals = len(active_goal_ids)
+        permutation = torch.randperm(n_active_goals).tolist()
+        ordered_goal_ids, ordered_rtgs, ordered_goal_mask = permute_goal_inputs(
+            active_goal_ids, active_model_rtgs, active_goal_mask, permutation
+        )
+        goal_ids = torch.tensor(ordered_goal_ids, device=device, dtype=torch.long).unsqueeze(0)
+        goal_template = torch.tensor(ordered_goal_mask, dtype=torch.bool, device=device).view(1, n_active_goals, 1)
+        rtg_template = torch.tensor(ordered_rtgs, dtype=torch.float32, device=device).view(1, n_active_goals, 1)
         sequences = [[tokenizer.bos_token_id] for _ in range(current_batch)]
         finished = torch.zeros(current_batch, dtype=torch.bool, device=device)
 
@@ -172,7 +213,10 @@ def generate_conditioned_smiles(
                 "generation_condition": generation_condition,
                 "reward_A_target": float(reward_targets[0]),
                 "reward_B_target": float(reward_targets[1]),
-                "goal_mask": json.dumps(goal_mask_1d),
+                "reward_A_model_rtg": float(all_model_rtg_targets[0]),
+                "reward_B_model_rtg": float(all_model_rtg_targets[1]),
+                "goal_ids": json.dumps(ordered_goal_ids),
+                "goal_mask": json.dumps(ordered_goal_mask),
                 "is_valid": bool(is_valid),
                 "reward_A_actual": np.nan,
                 "reward_B_actual": np.nan,
@@ -245,7 +289,7 @@ def main() -> None:
             reward_functions=reward_functions,
             dataset_type=dataset_type,
             generation_condition=spec["generation_condition"],
-            goal_mask_1d=spec["goal_mask"],
+            active_goal_ids=spec["active_goal_ids"],
             reward_targets=reward_targets,
             num_molecules=args.num_molecules,
             batch_size=args.batch_size,
@@ -261,6 +305,9 @@ def main() -> None:
                 "generation_condition",
                 "reward_A_target",
                 "reward_B_target",
+                "reward_A_model_rtg",
+                "reward_B_model_rtg",
+                "goal_ids",
                 "goal_mask",
                 "is_valid",
                 "reward_A_actual",
