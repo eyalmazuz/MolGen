@@ -178,6 +178,13 @@ def generate_conditioned_smiles(
             rtgs = rtg_template.repeat(current_batch, 1, seq_len)
             goal = goal_ids.repeat(current_batch, 1)
             goal_mask = goal_template.repeat(current_batch, 1, seq_len)
+            previous_actions = None
+            if seq_len > 1:
+                previous_actions = torch.tensor(
+                    [seq[1:] for seq in sequences],
+                    dtype=torch.long,
+                    device=device,
+                )
 
             next_tokens = sample(
                 model=model,
@@ -185,7 +192,7 @@ def generate_conditioned_smiles(
                 steps=1,
                 temperature=temperature,
                 sample=True,
-                actions=None,
+                actions=previous_actions,
                 rtgs=rtgs,
                 attention=None,
                 goal=goal,

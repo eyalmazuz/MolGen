@@ -134,7 +134,7 @@ def generate_molecules(model, tokenizer, reward_func, args, temperature: int = 1
                 steps=1,
                 temperature=temperature,
                 sample=True,
-                actions=None,
+                actions=torch.tensor(actions, dtype=torch.long, device=args.device).unsqueeze(0),
                 rtgs=torch.tensor(rtgs, dtype=torch.float32).to(args.device).unsqueeze(0),
                 attention=torch.tensor(np.tril(np.ones(all_states.shape[1:])), dtype=torch.long).to(
                     args.device).unsqueeze(0),
