@@ -156,6 +156,15 @@ def fail_safe(func: Callable[[Chem.rdchem.Mol], float], mol: Chem.rdchem.Mol) ->
     return res
 
 
+def fail_safe_with_context(func: Callable[[str], float], smiles: str, label: str) -> float | None:
+    try:
+        return func(smiles)
+    except Exception as exc:
+        print(f"{label} failed for SMILES: {smiles}")
+        print(exc)
+        return None
+
+
 def calc_set_stat(mol_set: List[Chem.rdchem.Mol],
                   func: Callable[[Chem.rdchem.Mol], float],
                   value_range=(0, 1),
@@ -169,7 +178,8 @@ def calc_set_stat(mol_set: List[Chem.rdchem.Mol],
 
     if isinstance(batch_rewards, dict):
         transformed_batch_rewards = []
-        for fn, values in zip(func.reward_fns, batch_rewards.values()):
+        reward_fns = getattr(func, "reward_fns", getattr(func, "rewards", []))
+        for fn, values in zip(reward_fns, batch_rewards.values()):
             if fn.multiplier is not None:
                 transformed_batch_rewards.append(list(map(fn.multiplier, values)))
             else:
@@ -252,7 +262,11 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
                     metrics[f'top {i + 1} {name}'] = score[i]
 
             metrics[f'top {i + 1} qed'] = calc_qed(molecule)
-            metrics[f'top {i + 1} plogp'] = PenalizedLogPReward()(smiles)
+            metrics[f'top {i + 1} plogp'] = fail_safe_with_context(
+                PenalizedLogPReward(),
+                smiles,
+                f'top {i + 1} plogp',
+            )
             metrics[f'top {i + 1} sas'] = calc_sas(molecule)
             metrics[f'top {i + 1} len'] = len(smiles)
 
@@ -270,7 +284,11 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
             if score_name != 'qed':
                 metrics[f'top {i + 1} {score_name}'] = score
             metrics[f'top {i + 1} qed'] = calc_qed(molecule)
-            metrics[f'top {i + 1} plogp'] = PenalizedLogPReward()(smiles)
+            metrics[f'top {i + 1} plogp'] = fail_safe_with_context(
+                PenalizedLogPReward(),
+                smiles,
+                f'top {i + 1} plogp',
+            )
             metrics[f'top {i + 1} sas'] = calc_sas(molecule)
             metrics[f'top {i + 1} len'] = len(smiles)
 
@@ -278,7 +296,11 @@ def get_top_k_mols(generated_molecules: List[Chem.rdchem.Mol],
     metrics[f'All top {top_k} qed mean'] = np.mean(top_mol_qed)
     metrics[f'All top {top_k} qed std'] = np.std(top_mol_qed)
 
-    top_mol_plogp = PenalizedLogPReward()([Chem.MolToSmiles(m) for m in top_k_molecules])
+    top_mol_plogp = [
+        fail_safe_with_context(PenalizedLogPReward(), Chem.MolToSmiles(m), 'aggregate top-k plogp')
+        for m in top_k_molecules
+    ]
+    top_mol_plogp = [value for value in top_mol_plogp if value is not None]
     metrics[f'All top {top_k} plogp mean'] = np.mean(top_mol_plogp)
     metrics[f'All top {top_k} plogp std'] = np.std(top_mol_plogp)
 
@@ -342,6 +364,9 @@ def get_stats(generated_smiles: List[str],
         generated_path = os.path.join(save_path, folder_name)
 
     generated_reward_values = {}
+    generated_reward_stats = {}
+    reward_name = str(reward_fn) if reward_fn is not None else None
+    has_extra_reward = reward_name not in (None, 'QED', 'PenalizedLogPReward', 'PlogP')
 
     print('Calculating QED')
     generated_qed_values, generated_qed_stats = calc_set_stat(generated_molecules,
@@ -356,11 +381,11 @@ def get_stats(generated_smiles: List[str],
                                                                   value_range=(-2, 10),
                                                                   desc='pLogP')
 
-    if reward_fn is not None and 'QED' not in str(reward_fn):
+    if has_extra_reward:
         print(f'Calculating {reward_fn}')
         generated_reward_values, generated_reward_stats = calc_set_stat(valid_generated_smiles,
                                                                         reward_fn,
-                                                                        lst=True,
+                                                                        lst=hasattr(reward_fn, 'rewards') or hasattr(reward_fn, 'reward_fns'),
                                                                         value_range=(0, 1),
                                                                         desc=f'{str(reward_fn)}')
 
@@ -428,7 +453,7 @@ def get_stats(generated_smiles: List[str],
                                    score_name='qed',
                                    save_path=generated_path)
 
-    if reward_fn is not None and 'QED' not in str(reward_fn):
+    if has_extra_reward:
         top_k_metrics = get_top_k_mols(generated_molecules,
                                        generated_reward_values,
                                        top_k=top_k,
@@ -447,12 +472,12 @@ def get_stats(generated_smiles: List[str],
         **top_k_metrics
     }
 
-    if reward_fn is not None and 'QED' not in str(reward_fn):
+    if has_extra_reward:
         stats = {**stats, **generated_reward_stats}
 
     print('Calculating SuccessRates')
     stats['SR - QED'] = percent_within_tolerance(generated_qed_values, 0.9, tolerance=0.1)
-    if reward_fn is not None and 'QED' not in str(reward_fn):
+    if has_extra_reward:
         tolerance = 0.5 if rtg_value > 1 else 0.05
         stats[f'SR - {reward_fn}'] = percent_within_tolerance(generated_reward_values, rtg_value, tolerance)
 
@@ -486,6 +511,8 @@ def get_stats(generated_smiles: List[str],
 
     if not isinstance(generated_reward_values, dict):
         generated_reward_values = {str(reward_fn): generated_reward_values}
+    if not has_extra_reward:
+        generated_reward_values = {}
     data = {**{'Smiles': valid_generated_smiles},
             **generated_reward_values,
             **{'QED': generated_qed_values},

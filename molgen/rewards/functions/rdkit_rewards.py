@@ -87,6 +87,9 @@ class PenalizedLogPReward(AbstractReward):
         log_p = MolLogP(molecule)
         sas_score = sascorer.calculateScore(molecule)
         cycle_score = PenalizedLogPReward.num_long_cycles(molecule)
+        if sas_score is None:
+            smiles = Chem.MolToSmiles(molecule) if molecule is not None else "<none>"
+            raise ValueError(f"SAS scorer returned None for molecule: {smiles}")
         return log_p - sas_score - cycle_score
 
 

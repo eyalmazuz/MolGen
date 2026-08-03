@@ -39,12 +39,19 @@ def load_checkpoint(model, checkpoint_path: str, device: str):
     if not Path(checkpoint_path).exists():
         raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
 
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    print(f"Loading checkpoint on CPU: {checkpoint_path}", flush=True)
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    print("Checkpoint loaded; applying model weights", flush=True)
     model.load_state_dict(checkpoint["model_state_dict"])
+    model = model.to(device)
+    print(f"Model moved to {device}", flush=True)
     return model
 
 
 def canonicalize_smiles(smiles: str) -> tuple[str, bool]:
+    smiles = smiles.strip()
+    if not smiles:
+        return smiles, False
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return smiles, False
@@ -102,6 +109,34 @@ def decode_sequence(tokenizer, token_ids: list[int], dataset_type: DatasetType) 
     return decoded
 
 
+def build_generation_state_tensors(
+    sequences: list[list[int]],
+    pad_token_id: int,
+    device: str,
+    state_representation: str,
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    """Build generation states either as current tokens or training-style prefixes."""
+    if state_representation == "current-token":
+        return (
+            torch.tensor(sequences, dtype=torch.long, device=device).unsqueeze(-1),
+            None,
+        )
+
+    if state_representation != "prefix":
+        raise ValueError(f"Unknown state representation: {state_representation}")
+
+    sequence_tensor = torch.tensor(sequences, dtype=torch.long, device=device)
+    seq_len = sequence_tensor.size(1)
+    prefix_mask = torch.tril(
+        torch.ones((seq_len, seq_len), dtype=torch.bool, device=device)
+    )
+    input_ids = sequence_tensor.unsqueeze(1).expand(-1, seq_len, -1).clone()
+    input_ids.masked_fill_(~prefix_mask.unsqueeze(0), pad_token_id)
+    attention = prefix_mask.to(dtype=torch.long).unsqueeze(0).expand(len(sequences), -1, -1)
+
+    return input_ids, attention
+
+
 def make_condition_specs(n_goals: int) -> list[dict[str, Any]]:
     if n_goals < 2:
         raise ValueError(f"Expected at least 2 goals, got {n_goals}")
@@ -139,6 +174,8 @@ def generate_conditioned_smiles(
     max_generation_length: int,
     temperature: float,
     device: str,
+    randomize_goal_order: bool,
+    state_representation: str,
 ) -> list[dict[str, Any]]:
     total_goals = model.config.n_goals
     if not active_goal_ids:
@@ -158,11 +195,15 @@ def generate_conditioned_smiles(
 
     rows: list[dict[str, Any]] = []
     remaining = num_molecules
+    generated_count = 0
 
     while remaining > 0:
         current_batch = min(batch_size, remaining)
         n_active_goals = len(active_goal_ids)
-        permutation = torch.randperm(n_active_goals).tolist()
+        if randomize_goal_order:
+            permutation = torch.randperm(n_active_goals).tolist()
+        else:
+            permutation = list(range(n_active_goals))
         ordered_goal_ids, ordered_rtgs, ordered_goal_mask = permute_goal_inputs(
             active_goal_ids, active_model_rtgs, active_goal_mask, permutation
         )
@@ -174,7 +215,12 @@ def generate_conditioned_smiles(
 
         for _ in range(max_generation_length):
             seq_len = len(sequences[0])
-            input_ids = torch.tensor(sequences, dtype=torch.long, device=device).unsqueeze(-1)
+            input_ids, attention = build_generation_state_tensors(
+                sequences=sequences,
+                pad_token_id=tokenizer.pad_token_id,
+                device=device,
+                state_representation=state_representation,
+            )
             rtgs = rtg_template.repeat(current_batch, 1, seq_len)
             goal = goal_ids.repeat(current_batch, 1)
             goal_mask = goal_template.repeat(current_batch, 1, seq_len)
@@ -194,7 +240,7 @@ def generate_conditioned_smiles(
                 sample=True,
                 actions=previous_actions,
                 rtgs=rtgs,
-                attention=None,
+                attention=attention,
                 goal=goal,
                 goal_mask=goal_mask,
             ).squeeze(-1)
@@ -224,6 +270,7 @@ def generate_conditioned_smiles(
                 "reward_B_model_rtg": float(all_model_rtg_targets[1]),
                 "goal_ids": json.dumps(ordered_goal_ids),
                 "goal_mask": json.dumps(ordered_goal_mask),
+                "state_representation": state_representation,
                 "is_valid": bool(is_valid),
                 "reward_A_actual": np.nan,
                 "reward_B_actual": np.nan,
@@ -235,6 +282,12 @@ def generate_conditioned_smiles(
 
             rows.append(row)
 
+        generated_count += current_batch
+        if generated_count == num_molecules or generated_count % max(batch_size * 10, 1) == 0:
+            print(
+                f"{generation_condition}: generated {generated_count}/{num_molecules}",
+                flush=True,
+            )
         remaining -= current_batch
 
     return rows
@@ -256,6 +309,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu", help="Torch device.")
     parser.add_argument("--temperature", type=float, default=1.0, help="Sampling temperature.")
     parser.add_argument(
+        "--state-representation",
+        type=str,
+        default="current-token",
+        choices=["current-token", "prefix"],
+        help="Use the current generator state format or training-style prefix states with attention.",
+    )
+    parser.add_argument(
+        "--preserve-goal-order",
+        action="store_true",
+        help=(
+            "Do not randomize active goal order during generation. "
+            "Use this for sorted-goal baselines/checkpoints trained with fixed goal positions."
+        ),
+    )
+    parser.add_argument(
         "--dataset-type",
         type=str,
         default=DatasetType.DT_SMILES,
@@ -269,6 +337,7 @@ def main() -> None:
     args = parse_args()
     set_seed(args.seed)
 
+    print("Loading config and tokenizer", flush=True)
     config = load_config(args.config_path)
     model_config = config["model_config"]
 
@@ -277,7 +346,8 @@ def main() -> None:
     if not isinstance(reward_functions, list) or len(reward_functions) < 2:
         raise ValueError("This script expects a goal-conditioned model with at least two reward functions.")
 
-    model = get_model(args.model_type, model_config).to(args.device)
+    print("Building model object", flush=True)
+    model = get_model(args.model_type, model_config)
     model = load_checkpoint(model, args.checkpoint, args.device)
     model.eval()
 
@@ -289,7 +359,7 @@ def main() -> None:
     dataset_type = DatasetType(args.dataset_type)
 
     for spec in condition_specs:
-        print(f"Generating {spec['generation_condition']}...")
+        print(f"Generating {spec['generation_condition']}...", flush=True)
         rows = generate_conditioned_smiles(
             model=model,
             tokenizer=tokenizer,
@@ -303,6 +373,8 @@ def main() -> None:
             max_generation_length=args.max_generation_length,
             temperature=args.temperature,
             device=args.device,
+            randomize_goal_order=not args.preserve_goal_order,
+            state_representation=args.state_representation,
         )
 
         df = pd.DataFrame(rows)
@@ -316,6 +388,7 @@ def main() -> None:
                 "reward_B_model_rtg",
                 "goal_ids",
                 "goal_mask",
+                "state_representation",
                 "is_valid",
                 "reward_A_actual",
                 "reward_B_actual",

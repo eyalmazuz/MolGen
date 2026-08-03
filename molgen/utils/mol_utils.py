@@ -40,6 +40,6 @@ def filter_invalid_molecules(mols: list[Chem.rdchem.Mol]) -> list[Chem.rdchem.Mo
     Filters all the invalid SMILES from the list, and invalid SMIELS is a SMILES that couldn't convert to
     a molecule using rdkit's MolFromSmiles method and the result returned was None.
     """
-    mols = list(filter(lambda x: x is not None, mols))
+    mols = list(filter(lambda x: x is not None and x.GetNumAtoms() > 0, mols))
 
     return mols

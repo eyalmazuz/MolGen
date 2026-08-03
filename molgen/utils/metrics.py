@@ -117,6 +117,12 @@ def calc_sas(mol: Chem.rdchem.Mol) -> float | None:
 
 
 def calc_valid_molecules(molecules: list[str]) -> float:
-    valid_molecules = [mol for mol in molecules if Chem.MolFromSmiles(mol) is not None]
+    valid_molecules = []
+    for smiles in molecules:
+        if not isinstance(smiles, str) or not smiles.strip():
+            continue
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is not None and mol.GetNumAtoms() > 0:
+            valid_molecules.append(mol)
 
     return len(valid_molecules) / len(molecules)
