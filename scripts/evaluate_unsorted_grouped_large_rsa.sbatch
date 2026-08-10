@@ -1,0 +1,91 @@
+#!/bin/bash
+#SBATCH --partition rtx3090
+#SBATCH --time 3-00:00:00
+#SBATCH --job-name molgen_eval_rsa
+#SBATCH --output job-%J.out
+#SBATCH --gres=gpu:rtx_3090:1
+#SBATCH --mem=24G
+#SBATCH --cpus-per-task=6
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=evronba@post.bgu.ac.il
+
+set -euo pipefail
+
+module load anaconda
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate molgen
+
+MOLGEN_PYTHON="/home/evronba/.conda/envs/molgen/bin/python"
+if [[ ! -x "$MOLGEN_PYTHON" ]]; then
+    echo "ERROR: expected Python not found at $MOLGEN_PYTHON" >&2
+    exit 1
+fi
+
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export PYTHONPATH="/home/evronba/MolGen:${PYTHONPATH:-}"
+export MPLCONFIGDIR="${SLURM_SCRATCH_DIR:-/tmp}/matplotlib_${SLURM_JOB_ID}"
+export XDG_CACHE_HOME="${SLURM_SCRATCH_DIR:-/tmp}/.cache_${SLURM_JOB_ID}"
+mkdir -p "$MPLCONFIGDIR" "$XDG_CACHE_HOME"
+
+cd /home/evronba/MolGen
+
+CHECKPOINT_PATH="${CHECKPOINT_PATH:-/groups/bshapira_group/molgenarbitrary/unsorted_grouped_large_rsa_checkpoint_or/unsorted_grouped_large_rsa_final.pth}"
+CONFIG_PATH="${CONFIG_PATH:-/home/evronba/MolGen/data/configs/dt_config_char_normalized_goal_conditioned_model_large_rsa.toml}"
+TOKENIZER_PATH="${TOKENIZER_PATH:-/home/evronba/MolGen/data/tokenizers/charTokenizer}"
+OUTPUT_DIR="${OUTPUT_DIR:-/home/evronba/MolGen/data/generated_datasets/unsorted_grouped_large_rsa_eval_5k_scaled_rtg_095_45}"
+NUM_MOLECULES="${NUM_MOLECULES:-5000}"
+BATCH_SIZE="${BATCH_SIZE:-32}"
+REWARD_A_TARGET="${REWARD_A_TARGET:-0.95}"
+REWARD_B_TARGET="${REWARD_B_TARGET:-4.5}"
+MAX_GENERATION_LENGTH="${MAX_GENERATION_LENGTH:-100}"
+SEED="${SEED:-42}"
+DEVICE="${DEVICE:-cuda}"
+TEMPERATURE="${TEMPERATURE:-1.0}"
+PRESERVE_GOAL_ORDER="${PRESERVE_GOAL_ORDER:-false}"
+STATE_REPRESENTATION="${STATE_REPRESENTATION:-prefix}"
+
+if [[ ! -f "$CHECKPOINT_PATH" ]]; then
+    echo "ERROR: checkpoint not found: $CHECKPOINT_PATH" >&2
+    exit 1
+fi
+
+if [[ ! -f "$CONFIG_PATH" ]]; then
+    echo "ERROR: config file not found: $CONFIG_PATH" >&2
+    exit 1
+fi
+
+mkdir -p "$OUTPUT_DIR"
+
+echo "Running explicit RSA A / B / A+B evaluation"
+echo "Checkpoint:     $CHECKPOINT_PATH"
+echo "Config:         $CONFIG_PATH"
+echo "Tokenizer:      $TOKENIZER_PATH"
+echo "Output dir:     $OUTPUT_DIR"
+echo "Num molecules:  $NUM_MOLECULES"
+echo "Batch size:     $BATCH_SIZE"
+echo "Reward targets: A=$REWARD_A_TARGET B=$REWARD_B_TARGET"
+echo "Temperature:    $TEMPERATURE"
+echo "Preserve order: $PRESERVE_GOAL_ORDER"
+echo "State repr:     $STATE_REPRESENTATION"
+
+EXTRA_GENERATION_ARGS=()
+if [[ "$PRESERVE_GOAL_ORDER" == "true" ]]; then
+    EXTRA_GENERATION_ARGS+=(--preserve-goal-order)
+fi
+
+"$MOLGEN_PYTHON" -m scripts.generate_reward_datasets \
+    --checkpoint "$CHECKPOINT_PATH" \
+    --config-path "$CONFIG_PATH" \
+    --tokenizer-path "$TOKENIZER_PATH" \
+    --output-dir "$OUTPUT_DIR" \
+    --num-molecules "$NUM_MOLECULES" \
+    --batch-size "$BATCH_SIZE" \
+    --model-type DT \
+    --reward-a-target "$REWARD_A_TARGET" \
+    --reward-b-target "$REWARD_B_TARGET" \
+    --max-generation-length "$MAX_GENERATION_LENGTH" \
+    --seed "$SEED" \
+    --device "$DEVICE" \
+    --temperature "$TEMPERATURE" \
+    --state-representation "$STATE_REPRESENTATION" \
+    "${EXTRA_GENERATION_ARGS[@]}"
