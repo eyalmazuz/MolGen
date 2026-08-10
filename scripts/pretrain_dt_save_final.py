@@ -51,6 +51,7 @@ def main() -> None:
         dataset_path=args.data_path,
         tokenizer=tokenizer,
         reward_func=reward_func,
+        max_seq_len=model_config["max_seq_len"],
     )
     train_dataloader, val_dataloader = prepare_data_for_training(
         train_dataset, val_dataset, tokenizer.pad_token_id, train_config
