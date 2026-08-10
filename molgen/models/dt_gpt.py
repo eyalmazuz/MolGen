@@ -54,6 +54,7 @@ class DTGPTConfig:
     bias: bool = True  # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     ignore_index: int = -100
     n_goals: int = 1
+    reward_conditioning: str = "additive"
     # max_timestep = 25
 
 
@@ -271,8 +272,8 @@ class DtGPT(nn.Module):
         if targets is not None and torch.is_tensor(targets) and targets.dim() == 3 and targets.shape[-1] == 1:
             targets = targets.squeeze(-1)
 
-        assert block_size <= self.block_size, \
-            f"Cannot forward sequence of length {block_size}, block size is only {self.block_size}"
+        assert block_size <= self.config.max_seq_len, \
+            f"Cannot forward sequence of length {block_size}, max sequence length is only {self.config.max_seq_len}"
 
         # --------------------------------------------------
         # 2. State embeddings
@@ -320,40 +321,96 @@ class DtGPT(nn.Module):
             if labels is not None:
                 action_embeddings = self.action_embeddings(labels.long())
 
-            rtg_embeddings = self.ret_emb(rtgs.float().unsqueeze(-1))
-            goal_embeddings = self.goal_emb(goal.long()).unsqueeze(2)
+            reward_conditioning = getattr(self.config, "reward_conditioning", "additive")
+            if reward_conditioning == "additive":
+                rtg_embeddings = self.ret_emb(rtgs.float().unsqueeze(-1))
+                goal_embeddings = self.goal_emb(goal.long()).unsqueeze(2)
 
-            goal_tokens = rtg_embeddings + goal_embeddings
-            goal_mask_f = goal_mask.unsqueeze(-1).to(dtype=goal_tokens.dtype)
+                goal_tokens = rtg_embeddings + goal_embeddings
+                goal_mask_f = goal_mask.unsqueeze(-1).to(dtype=goal_tokens.dtype)
 
-            goal_context = (goal_tokens * goal_mask_f).sum(dim=1)
-            goal_context = goal_context / goal_mask_f.sum(dim=1).clamp_min(1.0)
+                goal_context = (goal_tokens * goal_mask_f).sum(dim=1)
+                goal_context = goal_context / goal_mask_f.sum(dim=1).clamp_min(1.0)
 
-            state_embeddings = state_embeddings + goal_context
+                state_embeddings = state_embeddings + goal_context
 
-            if labels is not None:
-                token_embeddings = torch.zeros(
-                    (batch_size, block_size * 2 - int(targets is None), self.config.n_embd),
-                    dtype=torch.float32,
-                    device=state_embeddings.device,
-                )
-                token_embeddings[:, ::2, :] = state_embeddings
-                token_embeddings[:, 1::2, :] = action_embeddings[:, -block_size + int(targets is None):, :]
+                if labels is not None:
+                    token_embeddings = torch.zeros(
+                        (batch_size, block_size * 2 - int(targets is None), self.config.n_embd),
+                        dtype=torch.float32,
+                        device=state_embeddings.device,
+                    )
+                    token_embeddings[:, ::2, :] = state_embeddings
+                    token_embeddings[:, 1::2, :] = action_embeddings[:, -block_size + int(targets is None):, :]
 
-                pos = torch.arange(
-                    0, block_size, dtype=torch.long, device=input_ids.device
-                ).repeat_interleave(2).unsqueeze(0)
+                    pos = torch.arange(
+                        0, block_size, dtype=torch.long, device=input_ids.device
+                    ).repeat_interleave(2).unsqueeze(0)
 
-                if targets is None:
-                    pos = pos[:, :token_embeddings.shape[1]]
+                    if targets is None:
+                        pos = pos[:, :token_embeddings.shape[1]]
 
-                state_positions = torch.arange(0, token_embeddings.shape[1], 2, device=input_ids.device)
+                    state_positions = torch.arange(0, token_embeddings.shape[1], 2, device=input_ids.device)
+                else:
+                    token_embeddings = state_embeddings
+                    pos = torch.arange(
+                        0, block_size, dtype=torch.long, device=input_ids.device
+                    ).unsqueeze(0)
+                    state_positions = torch.arange(block_size, device=input_ids.device)
+
+            elif reward_conditioning == "rsa":
+                sorted_goal, sorted_indices = torch.sort(goal.long(), dim=1)
+                gather_indices = sorted_indices.unsqueeze(-1).expand(-1, -1, block_size)
+                rtgs = torch.gather(rtgs, dim=1, index=gather_indices)
+                goal_mask = torch.gather(goal_mask, dim=1, index=gather_indices)
+
+                rtg_embeddings = self.ret_emb(rtgs.float().unsqueeze(-1))
+                goal_embeddings = self.goal_emb(sorted_goal).unsqueeze(2)
+                reward_embeddings = rtg_embeddings + goal_embeddings
+                reward_embeddings = reward_embeddings * goal_mask.unsqueeze(-1).to(dtype=reward_embeddings.dtype)
+
+                tokens_per_step = n_goals + 2
+
+                if labels is not None:
+                    action_slice_start = -block_size + int(targets is None)
+                    token_embeddings = torch.zeros(
+                        (batch_size, block_size * tokens_per_step - int(targets is None), self.config.n_embd),
+                        dtype=torch.float32,
+                        device=state_embeddings.device,
+                    )
+                    for goal_position in range(n_goals):
+                        token_embeddings[:, goal_position::tokens_per_step, :] = reward_embeddings[:, goal_position, :, :]
+                    token_embeddings[:, n_goals::tokens_per_step, :] = state_embeddings
+                    token_embeddings[:, n_goals + 1::tokens_per_step, :] = action_embeddings[:, action_slice_start:, :]
+
+                    pos = torch.arange(
+                        0, block_size, dtype=torch.long, device=input_ids.device
+                    ).repeat_interleave(tokens_per_step).unsqueeze(0)
+
+                    if targets is None:
+                        pos = pos[:, :token_embeddings.shape[1]]
+
+                    state_positions = torch.arange(n_goals, token_embeddings.shape[1], tokens_per_step, device=input_ids.device)
+                else:
+                    generation_tokens_per_step = n_goals + 1
+                    token_embeddings = torch.zeros(
+                        (batch_size, block_size * generation_tokens_per_step, self.config.n_embd),
+                        dtype=torch.float32,
+                        device=state_embeddings.device,
+                    )
+                    for goal_position in range(n_goals):
+                        token_embeddings[:, goal_position::generation_tokens_per_step, :] = reward_embeddings[:, goal_position, :, :]
+                    token_embeddings[:, n_goals::generation_tokens_per_step, :] = state_embeddings
+                    pos = torch.arange(
+                        0, block_size, dtype=torch.long, device=input_ids.device
+                    ).repeat_interleave(generation_tokens_per_step).unsqueeze(0)
+                    state_positions = torch.arange(n_goals, token_embeddings.shape[1], generation_tokens_per_step, device=input_ids.device)
+
             else:
-                token_embeddings = state_embeddings
-                pos = torch.arange(
-                    0, block_size, dtype=torch.long, device=input_ids.device
-                ).unsqueeze(0)
-                state_positions = torch.arange(block_size, device=input_ids.device)
+                raise ValueError(f"Unknown reward_conditioning: {reward_conditioning}")
+
+            assert token_embeddings.shape[1] <= self.block_size, \
+                f"Cannot forward packed token sequence of length {token_embeddings.shape[1]}, block size is only {self.block_size}"
 
             pos_emb = self.pos_emb(pos)
 
@@ -467,12 +524,14 @@ def sample(
     for k in range(steps):
         # x_cond = x if x.size(1) <= block_size else x[:, -block_size:] # crop context if needed
         x_cond = x if x.size(1) <= max_seq_len else x[:, -max_seq_len:]  # crop context if needed
+        if x_cond.dim() == 3 and x_cond.size(2) > max_seq_len:
+            x_cond = x_cond[:, :, -max_seq_len:]
         if actions is not None:
             actions = actions if actions.size(1) <= max_seq_len else actions[:, -max_seq_len:]  # crop context if needed
 
-        rtgs = rtgs if rtgs.size(1) <= max_seq_len else rtgs[:, -max_seq_len:]  # crop context if needed
+        rtgs = rtgs if rtgs.size(2) <= max_seq_len else rtgs[:, :, -max_seq_len:]  # crop context if needed
         if attention is not None and attention.size(1) > max_seq_len:
-            attention = attention[:, -max_seq_len:]  # crop context if needed
+            attention = attention[:, -max_seq_len:, -max_seq_len:]  # crop context if needed
         
         # If goal_mask is not provided but we have goals and rtgs, create a default all-True mask
         mask_cond = goal_mask
@@ -481,7 +540,7 @@ def sample(
             n_goals = rtgs.shape[1]
             block_size = x_cond.shape[1]
             mask_cond = torch.ones((batch_size, n_goals, block_size), dtype=torch.bool, device=x_cond.device)
-        elif mask_cond is not None and mask_cond.size(1) > max_seq_len:
+        elif mask_cond is not None and mask_cond.size(2) > max_seq_len:
             # Crop mask_cond to match x_cond if needed
             mask_cond = mask_cond[:, :, -max_seq_len:]
         
