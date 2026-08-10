@@ -26,6 +26,14 @@ def get_dataset(
 
 def get_gpt_dataset(dataset_type: DatasetType, dataset_path, tokenizer, **kwargs) -> tuple[Dataset, Dataset]:
     smiles = load_smiles(dataset_path)
+    max_seq_len = kwargs.pop("max_seq_len", None)
+    if max_seq_len is not None:
+        before = len(smiles)
+        smiles = [
+            smile for smile in smiles
+            if len(tokenizer.encode(smile, return_tensors=False)[0]) + 1 <= max_seq_len
+        ]
+        print(f"Filtered {before - len(smiles)} SMILES longer than max_seq_len={max_seq_len}")
     train_smiles, val_smiles = get_train_test_split(smiles, test_size=0.1)
     match dataset_type.lower():
         case DatasetType.SMILES:

@@ -2,6 +2,7 @@ import os
 import gc
 import re
 import math
+import time
 import numpy as np
 from tqdm import tqdm
 from typing import Any
@@ -14,6 +15,37 @@ import random
 from molgen.models.dt_gpt import sample
 # from molgen.utils.famo import FAMO
 from molgen.utils.plot_utils import save_plot
+
+
+def group_batch_by_goal_count(x, y, attention_mask, rtgs, goals, goal_masks):
+    """Yield dense sub-batches whose samples have the same active-goal count.
+
+    Dynamic goals make the goal dimension ragged. Grouping samples by that
+    dimension keeps every tensor dense without padding inactive goals and
+    avoids running one model forward per sample.
+    """
+    if rtgs is None:
+        yield x, y, attention_mask, None, goals, goal_masks
+        return
+
+    groups = {}
+    for sample_idx, sample_rtgs in enumerate(rtgs):
+        groups.setdefault(sample_rtgs.shape[0], []).append(sample_idx)
+
+    for indices in groups.values():
+        index = torch.tensor(indices, dtype=torch.long, device=x.device)
+        group_attention = attention_mask.index_select(0, index) if attention_mask is not None else None
+        group_rtgs = torch.stack([rtgs[i] for i in indices])
+        group_goals = torch.stack([goals[i] for i in indices]) if goals is not None else None
+        group_masks = torch.stack([goal_masks[i] for i in indices]) if goal_masks is not None else None
+        yield (
+            x.index_select(0, index),
+            y.index_select(0, index),
+            group_attention,
+            group_rtgs,
+            group_goals,
+            group_masks,
+        )
 
 
 class Trainer:
@@ -130,6 +162,7 @@ class Trainer:
             
             lr = config["learning_rate"]
             optimizer_steps = 0
+            log_every = config.get("log_every", 10)
             # if is_train:
             #     self.optimizer.zero_grad(set_to_none=True)
             for it, batch in pbar:
@@ -154,46 +187,51 @@ class Trainer:
                 gm_list = batch.get("goal_mask", None)
 
                 batch_size = x.size(0)
-                batch_loss = 0.0
+                weighted_losses = []
 
-                # if epoch_num < 2:
-                #     r, g = r[:, 0:1, :], g[:, 0:1, :]
-                # # For each goal, call forward pass with the relevant rtg and goal slices.
-                # with torch.set_grad_enabled(is_train):
-                #     logits, loss = model(
-                #         input_ids=x, labels=y, targets=y, rtgs=r, attention_mask=a, goal=g
-                #     )
+                # During the first two epochs every sample uses one goal. Slice
+                # before grouping so the whole batch can share a single pass.
+                if epoch_num < 2 and r_list is not None and g_list is not None:
+                    r_list = [sample[:1] for sample in r_list]
+                    g_list = [sample[:1] for sample in g_list]
+                    if gm_list is not None:
+                        gm_list = [sample[:1] for sample in gm_list]
+
+                measure_forward = is_train and it % log_every == 0
+                if measure_forward and "cuda" in self.device:
+                    torch.cuda.synchronize()
+                forward_started_at = time.perf_counter()
+                forward_calls = 0
+                forward_group_sizes = []
+
                 with torch.set_grad_enabled(is_train):
-                    for i in range(batch_size):
-                        # add "Batch=1"
-                        x_i = x[i].unsqueeze(0)
-                        y_i = y[i].unsqueeze(0)
-                        a_i = a[i].unsqueeze(0) if a is not None else None
-                        
-                        r_i = r_list[i].unsqueeze(0) if r_list is not None else None
-                        g_i = g_list[i].unsqueeze(0) if g_list is not None else None
-                        gm_i = gm_list[i].unsqueeze(0) if gm_list is not None else None
-                        #cut off the rtg and goal to only include the first element for the first two epochs
-                        if epoch_num < 2 and r_i is not None and g_i is not None:
-                            r_i = r_i[:, 0:1, :]
-                            g_i = g_i[:, 0:1]
-                            gm_i = gm_i[:, 0:1, :]
+                    for x_group, y_group, a_group, r_group, g_group, gm_group in group_batch_by_goal_count(
+                        x, y, a, r_list, g_list, gm_list
+                    ):
+                        forward_calls += 1
+                        forward_group_sizes.append(x_group.size(0))
+                        _, group_loss = model(
+                            input_ids=x_group,
+                            labels=y_group,
+                            targets=y_group,
+                            rtgs=r_group,
+                            attention_mask=a_group,
+                            goal=g_group,
+                            goal_mask=gm_group,
+                        )
+                        weighted_losses.append(group_loss * x_group.size(0))
 
-                        # model forward pass for a single sample in the batch
-                        logits, sample_loss = model(
-                            input_ids=x_i, labels=y_i, targets=y_i, rtgs=r_i, attention_mask=a_i, goal=g_i , goal_mask=gm_i)#TODO: goal_mask is currently only implemented for the SMILES dataset, will need to be added to the SELFIES dataset and passed in here as well if we want to use it for that dataset
-                        
-                        batch_loss += sample_loss
+                if measure_forward:
+                    if "cuda" in self.device:
+                        torch.cuda.synchronize()
+                    forward_seconds = time.perf_counter() - forward_started_at
+                    pbar.write(
+                        f"[timing] epoch={epoch_num + 1} iter={it} "
+                        f"forward={forward_seconds:.4f}s calls={forward_calls} "
+                        f"group_sizes={forward_group_sizes} samples={batch_size}"
+                    )
 
-                # total_loss += loss.detach()
-                # if is_train:
-                #     display_loss = loss.item()
-                #     loss = loss / accumulation_steps
-                #     # total_loss += loss.detach()
-
-                #     with torch.set_grad_enabled(is_train):
-                #         loss.backward()  # TODO: scaler.scale(loss).backward() - only for mix precision training
-                batch_loss = batch_loss / batch_size
+                batch_loss = torch.stack(weighted_losses).sum() / batch_size
                 total_loss += batch_loss.detach()
 
                 if is_train:
@@ -263,15 +301,12 @@ class Trainer:
             if self.test_dataset is not None:
                 test_loss = run_epoch('test')
 
-            # supports early stopping based on the test loss, or save every X epochs if no test set
-            # good_model = (epoch > 2 and (self.test_dataset is None and (epoch % 1 == 0))) or test_loss < best_loss
-            # if self.save_path is not None and good_model:
-            #     best_loss = test_loss
-            #     self.save_checkpoint(epoch)
-                        # supports early stopping based on the test loss, or save every X epochs if no test set
-            good_model = (epoch > 2 and (self.test_dataset is None and (epoch % 1 == 0))) and test_loss < best_loss
+            # Save every epoch after warmup when no validation set is available;
+            # otherwise keep the best validation checkpoint.
+            good_model = (epoch > 2 and self.test_dataset is None and epoch % 1 == 0) or test_loss < best_loss
             if self.save_path is not None and good_model:
-                best_loss = test_loss
+                if self.test_dataset is not None:
+                    best_loss = test_loss
                 self.save_checkpoint(epoch)
 
             # self.save_checkpoint(epoch, ckpt_name="latest.pth")
