@@ -137,9 +137,19 @@ def build_generation_state_tensors(
     return input_ids, attention
 
 
-def make_condition_specs(n_goals: int) -> list[dict[str, Any]]:
-    if n_goals < 2:
-        raise ValueError(f"Expected at least 2 goals, got {n_goals}")
+def make_condition_specs(n_goals: int, reward_functions=None) -> list[dict[str, Any]]:
+    if n_goals == 1:
+        reward_name = reward_functions[0].__class__.__name__.replace("Reward", "")
+        return [
+            {
+                "generation_condition": f"reward_{reward_name}_only",
+                "active_goal_ids": [0],
+                "output_file": f"generated_reward_{reward_name}.csv",
+            },
+        ]
+
+    if n_goals < 1:
+        raise ValueError(f"Expected at least 1 goal, got {n_goals}")
 
     return [
         {
@@ -185,7 +195,7 @@ def generate_conditioned_smiles(
     if min(active_goal_ids) < 0 or max(active_goal_ids) >= total_goals:
         raise ValueError(f"Active goal IDs must be in [0, {total_goals})")
 
-    raw_reward_targets = list(reward_targets[:2]) + [0.0] * max(0, total_goals - 2)
+    raw_reward_targets = list(reward_targets[:total_goals]) + [0.0] * max(0, total_goals - len(reward_targets))
     all_model_rtg_targets = [
         model_rtg_from_raw_target(reward_functions[i], raw_reward_targets[i])
         for i in range(total_goals)
@@ -265,9 +275,9 @@ def generate_conditioned_smiles(
                 "smiles": canonical_smiles if is_valid else decoded,
                 "generation_condition": generation_condition,
                 "reward_A_target": float(reward_targets[0]),
-                "reward_B_target": float(reward_targets[1]),
+                "reward_B_target": float(reward_targets[1]) if len(reward_targets) > 1 else np.nan,
                 "reward_A_model_rtg": float(all_model_rtg_targets[0]),
-                "reward_B_model_rtg": float(all_model_rtg_targets[1]),
+                "reward_B_model_rtg": float(all_model_rtg_targets[1]) if len(all_model_rtg_targets) > 1 else np.nan,
                 "goal_ids": json.dumps(ordered_goal_ids),
                 "goal_mask": json.dumps(ordered_goal_mask),
                 "state_representation": state_representation,
@@ -278,7 +288,8 @@ def generate_conditioned_smiles(
 
             if is_valid:
                 row["reward_A_actual"] = safe_reward_value(reward_functions[0], row["smiles"])
-                row["reward_B_actual"] = safe_reward_value(reward_functions[1], row["smiles"])
+                if len(reward_functions) > 1:
+                    row["reward_B_actual"] = safe_reward_value(reward_functions[1], row["smiles"])
 
             rows.append(row)
 
@@ -294,7 +305,7 @@ def generate_conditioned_smiles(
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate separate molecule datasets for reward A, reward B, and both.")
+    parser = argparse.ArgumentParser(description="Generate molecule datasets for single-target or goal-conditioned reward models.")
     parser.add_argument("--checkpoint", type=str, required=True, help="Path to the trained checkpoint.")
     parser.add_argument("--config-path", type=str, required=True, help="Path to the model/reward config TOML.")
     parser.add_argument("--tokenizer-path", type=str, required=True, help="Path to the trained tokenizer directory.")
@@ -343,8 +354,8 @@ def main() -> None:
 
     tokenizer = get_tokenizer(args.tokenizer_path)
     reward_functions = get_rewards(config["reward"])
-    if not isinstance(reward_functions, list) or len(reward_functions) < 2:
-        raise ValueError("This script expects a goal-conditioned model with at least two reward functions.")
+    if not isinstance(reward_functions, list):
+        reward_functions = [reward_functions]
 
     print("Building model object", flush=True)
     model = get_model(args.model_type, model_config)
@@ -354,8 +365,8 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    condition_specs = make_condition_specs(model.config.n_goals)
-    reward_targets = [args.reward_a_target, args.reward_b_target]
+    condition_specs = make_condition_specs(model.config.n_goals, reward_functions)
+    reward_targets = [args.reward_a_target, args.reward_b_target][: model.config.n_goals]
     dataset_type = DatasetType(args.dataset_type)
 
     for spec in condition_specs:

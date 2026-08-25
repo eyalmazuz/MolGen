@@ -406,6 +406,39 @@ class DtGPT(nn.Module):
                     ).repeat_interleave(generation_tokens_per_step).unsqueeze(0)
                     state_positions = torch.arange(n_goals, token_embeddings.shape[1], generation_tokens_per_step, device=input_ids.device)
 
+            elif reward_conditioning == "prefix":
+                prefix_rtgs = rtgs[:, :, 0]
+                prefix_mask = goal_mask[:, :, 0].unsqueeze(-1)
+                prefix_embeddings = (
+                    self.ret_emb(prefix_rtgs.float().unsqueeze(-1))
+                    + self.goal_emb(goal.long())
+                )
+                prefix_embeddings = prefix_embeddings * prefix_mask.to(prefix_embeddings.dtype)
+
+                if labels is not None:
+                    stream_length = block_size * 2 - int(targets is None)
+                    state_action_embeddings = torch.zeros(
+                        (batch_size, stream_length, self.config.n_embd),
+                        dtype=state_embeddings.dtype,
+                        device=state_embeddings.device,
+                    )
+                    state_action_embeddings[:, ::2, :] = state_embeddings
+                    action_slice_start = -block_size + int(targets is None)
+                    state_action_embeddings[:, 1::2, :] = action_embeddings[:, action_slice_start:, :]
+                else:
+                    state_action_embeddings = state_embeddings
+
+                token_embeddings = torch.cat(
+                    (prefix_embeddings, state_action_embeddings), dim=1
+                )
+                pos = torch.arange(
+                    token_embeddings.shape[1], dtype=torch.long, device=input_ids.device
+                ).unsqueeze(0)
+                state_positions = n_goals + torch.arange(
+                    0, state_action_embeddings.shape[1], 2 if labels is not None else 1,
+                    device=input_ids.device,
+                )
+
             else:
                 raise ValueError(f"Unknown reward_conditioning: {reward_conditioning}")
 
